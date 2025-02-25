@@ -1,0 +1,13 @@
+Conversation with bot retrieving from the question but improved one where the pronouns are replaced by the actual names
+Using gpt-3.5-turbo for queries and text-embedding-ada-002 for embeddings.
+retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: What is the price of the easygoing set?
+Bot: The Easygoing Set is priced at €96, but with the current 40% off promotion, you can get it for €57.
+User: and the nassau rings?
+Bot: The Born Ready Set includes the Nassau Bracelet, which is a braided design that complements the rest of the set perfectly. The Nassau rings are not included in this set, but you can always mix and match to create your own unique style. With the 40% off discount, it's a great opportunity to add some versatile pieces to your jewelry collection.
+
+Here are the final comments from the conversation:
+ok the rewritting is too dramatic, I will change it

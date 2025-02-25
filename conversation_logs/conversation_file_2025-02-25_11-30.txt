@@ -1,0 +1,64 @@
+Conversation with bot retrieving from the improved with context query
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: how much is the crystal bella?
+Bot: The Crystal Bella is priced at €70, and with the 40% discount, it comes down to €42.
+User: what are they made of?
+Bot: Hey Harper jewelry is made of stainless steel with a 14K gold PVD coating. They are durable and waterproof, designed to handle daily activities like showering, working out, and swimming without fading. Additionally, they offer a lifetime color warranty for their jewelry.
+User: do they sel a lot?
+Bot: Hey Harper is well-regarded for its jewelry, as indicated by customer reviews and the lifetime color warranty they offer. Many satisfied customers, including those experienced with jewelry, recommend Hey Harper for its quality and durability. While specific sales figures aren't provided, the positive reviews and repeat purchases suggest a strong customer base and considerable sales.
+User: what other huggies there are?
+Bot: Here are some of the huggies available from Hey Harper:
+
+1. **Lois Red Huggies** - €59, or €36 with 40% off.
+2. **Holly Huggies** - €42, or €26 with 40% off.
+3. **Maravilla Huggies** - €52, or €32 with 40% off.
+4. **Looped Huggies** - €59, or €29 with 40% off.
+5. **Sphere Huggies** - €59, or €36 with 40% off.
+6. **Spring Huggies** - €65, or €39 with 40% off.
+7. **Teri Huggies** - €47, or €29 with 40% off.
+8. **Radiance Huggies** - €47, or €29 with 40% off.
+
+These huggies come in various styles and are available with discounts as part of promotions.
+User: so many, which come in gold?
+Bot: The huggies from Hey Harper that come in gold include:
+
+1. **Lois Red Huggies**
+2. **Holly Huggies**
+3. **Maravilla Huggies**
+4. **Looped Huggies**
+5. **Sphere Huggies**
+6. **Spring Huggies**
+7. **Teri Huggies**
+8. **Radiance Huggies**
+9. **Perla Huggies** 
+
+All Hey Harper huggies are made with stainless steel and coated with 14K gold PVD, making them durable and waterproof with a lifetime color warranty.
+User: I wan th e chepeast one
+Bot: The cheapest huggies from Hey Harper are the Holly Huggies, priced at €42, and with a 40% discount, they come down to €26.
+User: what is its size?
+Bot: The Holly Huggies have the following size specifications:
+
+- Outside diameter: 1.45cm / 0.57''
+- Inside diameter: 10mm / 0.41''
+- Weight: 1g / 0.002lb
+
+These huggies are lightweight, making them comfortable to wear throughout the day.
+User: what are they made of?
+Bot: Hey Harper's jewelry, including the Holly Huggies, is made of stainless steel with a 14K gold PVD coating. This makes them durable and waterproof, designed to withstand daily activities without fading. They also come with a lifetime color warranty.
+User: ccan you tell me more about thar warranty?
+Bot: Hey Harper offers a lifetime color warranty on their waterproof jewelry. This warranty ensures that the jewelry can withstand daily activities such as showering, working out, and swimming without the color fading. If your jewelry ever loses its color, you can contact Hey Harper's customer support and provide a visible picture of the item to get assistance. They are committed to ensuring your jewelry maintains its appearance over time.
+User: cool but I think I prefer the first I mentioned
+Bot: It sounds like you're interested in the Holly Huggies! They are stylish, lightweight, and coated with 14K gold PVD, making them durable and waterproof. Plus, they come with a lifetime color warranty, ensuring they remain vibrant and beautiful over time. If you have any more questions or need assistance with your purchase, feel free to ask!
+User: no, those were not the first ones I mentioned
+Bot: Apologies for the confusion. If you're referring to a different item as the first one you mentioned, please let me know, and I'll gladly provide you with more details about it!
+User: were the crystal bella
+Bot: The Crystal Bella Huggies are priced at €70, and with the 40% discount, they come down to €42. These huggies are made of stainless steel with a 14K gold PVD coating, ensuring they are durable and waterproof. They also come with a lifetime color warranty to maintain their vibrant look.
+
+Here are the final comments from the conversation:
+better at not hallucinating, still problems with memory

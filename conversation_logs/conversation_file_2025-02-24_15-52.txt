@@ -1,0 +1,11 @@
+Conversation with bot retrieving from the question but improved one where the pronouns are replaced by the actual names
+Using gpt-3.5-turbo for queries and text-embedding-ada-002 for embeddings.
+retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: What is the price of the easygoing necklace?
+Bot: The price of the Easy Silver necklace is €48, but with the 40% discount, it is €29.
+
+Here are the final comments from the conversation:
+Interesting as as to do with the chunks because there was a chunk with specific information about the easygoing, but not the price, and the other chunk had only the easy silver, I do not know why it did not appear an easygoing set chunk with the price but I also made it hard by not saying easygoing set but easygoing necklace

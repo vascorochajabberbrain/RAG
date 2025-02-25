@@ -1,0 +1,43 @@
+Conversation with bot retrieving from the improved with context query
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: how much does it cost the nassau necklace?
+Bot: The Nassau Necklace costs €48, and there is currently a 40% discount available, bringing the price down to €29.
+User: how can I get that discount?
+Bot: You can get the 40% discount on the Nassau Necklace by taking advantage of the current promotion that offers this discount when purchasing three items. Alternatively, there is an ongoing offer of saving 25% when you buy two items.
+User: alright, then i need a bracelet and a ring to pair it, what is the color of the necklace?
+Bot: The Nassau Necklace is coated with 14K gold, giving it a durable, waterproof, golden color. It would pair well with a bracelet and ring in a similar gold tone.
+User: can you suggest some?
+Bot: Certainly! To pair with the Nassau Necklace, which has a 14K gold color, you might consider the following options:
+
+1. **Nassau Bracelet**: This bracelet matches the necklace with its 14K gold PVD coating, making it a perfect complement. It is priced at €44, with a discount available.
+
+2. **Rachel Bracelet**: Another option is the Rachel Bracelet, which also comes with a durable gold tone.
+
+3. **Charlie Ring**: This ring is priced at €44 but is currently available at a discounted rate.
+
+These pieces will complement the golden tone of the Nassau Necklace beautifully.
+User: alright, I want the nassau bracelet and that ring
+Bot: Great choice! The Nassau Bracelet is available with a 14K gold PVD coating, matching the Nassau Necklace perfectly. The bracelet is priced at €44, and you can get it for €27 with the 40% discount.
+
+Additionally, the Charlie Ring, which you've chosen, is also a lovely complement to these pieces. It is priced at €44, and it may also be available with a discount.
+
+You can add these items to your cart and apply any relevant discounts upon checkout.
+User: yes, I want to do that, how much would it be all together?
+Bot: With the Nassau Necklace, Nassau Bracelet, and Charlie Ring all chosen and taking into account the 40% discount applicable when purchasing three items, here is the breakdown:
+
+- Nassau Necklace: Originally €48, now €29 with the 40% discount.
+- Nassau Bracelet: Originally €44, now €27 with the 40% discount.
+- Charlie Ring: Originally €44, now €27 with the 40% discount.
+
+Altogether, the total would be approximately **€83** after applying the discount to each item.
+User: cool! tahnks
+Bot: You're welcome! If you have any more questions or need further assistance, feel free to ask. Enjoy your shopping at Hey Harper!
+
+Here are the final comments from the conversation:
+I saw no problems on applying the gpt-4o. Will now try the mini version, cheaper one

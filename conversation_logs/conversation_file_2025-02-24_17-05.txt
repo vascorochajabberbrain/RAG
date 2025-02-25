@@ -1,0 +1,25 @@
+Conversation with bot retrieving from the question but improved one where the pronouns are replaced by the actual names
+
+    Using gpt-3.5-turbo for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: How much does it cost the nassau neckalace?
+Bot: The Nassau necklace is priced at €54. It is currently available for €33 with a 40% discount.
+User: how can I get that discount?
+Bot: To get the discount on the Nassau Breeze Necklace, you can simply add the necklace to your cart. The discount will be automatically applied at checkout. If you buy 2 items, you'll save 25%, and if you buy 3 items, you'll save 40%. Enjoy your savings!
+User: cool, so, what ring do you suggest me to pair it?
+Bot: I would recommend pairing the Nassau Breeze Necklace with the "Charlie Ring" priced at €44. It has a rating of 4.9 and is currently available for €29 with a 40% discount. The combination of the necklace and this ring would complement each other beautifully.
+User: nice, what is the ring made of?
+Bot: The Nassau Breeze Necklace is made of highly resistant stainless steel with a 14k golden color coating. This makes the necklace daily-life resistant and ensures that the color won't fade over time.
+User: very nice, nest I want the nassau harmony necklace so that everything with the discount shoud be...
+Bot: If you add the Nassau Breeze Necklace for €33 with a 40% discount and the Nassau Harmony Necklace for €30 with a 40% discount, the total cost for both necklaces would be €63. Remember that with the current promotion, buying 2 items will save you 25% in total, and buying 3 items will give you a 40% discount.
+User: I also want the ring
+Bot: Could you please specify which ring from the options you would like to add to your order so I can provide you with the final total with both the Nassau Breeze Necklace and the ring chosen.
+User: the one we talked about
+Bot: I'm sorry for the confusion, but could you please provide me with the name or a description of the ring we previously discussed so I can assist you better?
+
+Here are the final comments from the conversation:
+keeps adding breeze to the nassau necklace... got better in following the converstaion but not that much better. It understood the meaning of the 4.9 althought it got the wrong one, that was for the next product. The rewritting is still not doing what I want always...

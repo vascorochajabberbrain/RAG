@@ -1,0 +1,26 @@
+Conversation with bot retrieving from the question but improved one where the pronouns are replaced by the actual names
+
+    Using gpt-3.5-turbo for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: what is the price of the nassau necklace?
+Bot: The Nassau Necklace is currently priced at €33 with a 40% discount from the original price of €54.
+User: How can I get that discount?
+Bot: To get a discount on the Nassau Necklace, you can purchase multiple items to unlock special discounts. Here's how it works:
+
+- Buy 2 items and get 25% off.
+- Buy 3 items and get 40% off.
+
+Just add the desired quantity of items to your cart, and the appropriate discount will automatically be applied at checkout. This is a great way to save on your purchase if you're considering buying multiple pieces of jewelry.
+User: alright! then I need a ring to pair it, any suggestion?
+Bot: Certainly! You might like the Tiana Ring, which is a stylish choice to pair with the Nassau Necklace. The Tiana Ring is currently priced at €35 with a 40% discount from its original price of €57. This elegant ring could complement your Nassau Necklace beautifully, especially considering both items share a compatible aesthetic that can easily be coordinated.
+User: what is it made of?
+Bot: The Tiana Ring is made of stainless steel with a coating of 14K gold PVD (Physical Vapor Deposition), which makes it durable and waterproof. This high-quality construction ensures that it can withstand daily activities like showering, working out, and swimming without fading.
+User: cool, lastly, I also need a bracelet to make the set, what do you propose?
+Bot: For a beautiful bracelet to complement the Nassau Necklace and Tiana Ring, I recommend the Daphne Bracelet. It is priced at €45 with a 40% discount from the original price of €75. The Daphne Bracelet, like the other pieces, boasts a durable and waterproof design, making it perfect for daily wear. It would elegantly round off your jewelry set with its style and quality.
+
+Here are the final comments from the conversation:
+the answers are smotther and the breeze problem did not occur, will now improve the prompt to improve the query because it was being replaced ina weird way sometimes

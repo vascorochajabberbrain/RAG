@@ -30,9 +30,20 @@ def get_embedding(text_chunks, model_id="text-embedding-ada-002"):
 
 def insert_data(get_points):
     connection = get_qdrant_connection()
-    collection_name = input("Insert into which collection?")
-    operation_info = connection.upsert(
-    collection_name = collection_name,
-    wait = True,
-    points = get_points
-)
+    while True:
+        print("write 'q' if you want to quit the insertion")
+        collection_name = input("Insert into which collection?")
+        if collection_name == "q":
+            return
+        try:
+            operation_info = connection.upsert(
+            collection_name = collection_name,
+            wait = True,
+            points = get_points
+            )
+            return
+        except Exception as e:
+            print(e)
+            print("That collection does not exist, try again")
+
+    

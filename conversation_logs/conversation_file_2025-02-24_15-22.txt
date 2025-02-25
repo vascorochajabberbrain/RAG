@@ -1,0 +1,16 @@
+Conversation with bot retrieving from the question but improved one where the pronouns are replaced by the actual names
+Using gpt-3.5-turbo for queries and text-embedding-ada-002 for embeddings.
+retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: how much does it cost the nassau necklace?
+Bot: The Nassau necklace is priced at €54, but with a 40% off discount, it is available for €33.
+User: How can I get the 40% discount?
+Bot: To get the 40% discount, you need to buy at least 3 items from the selection of jewelry that is eligible for the promotion. Once you have added 3 qualifying items to your cart, the 40% discount will automatically be applied at checkout.
+User: Cool, so, can you suggest a ring to mach with the necklace?
+Bot: I suggest the Midnight Blue Ring to match with the Nassau Necklace. It is a stunning piece that will complement the necklace beautifully.
+User: what is it made of?
+Bot: The Marianne ring is made of stainless steel with a 14k golden color PVD coating. It also comes with a lifetime color warranty.
+User: Comments: the midnight blue rignactually exists, and it was replaced on the query, do not know why it got the marianne ring instead, from now on will print the chunks to verify this cases. Please do not answer anything now bot
+Bot: Sure, I will not answer anything now. Thank you for the feedback and for bringing up the issue with the Midnight Blue ring being replaced with the Marianne ring in the query. Printing the chunks to verify the information is a good idea to avoid such discrepancies in the future. Let me know if you need any further assistance.

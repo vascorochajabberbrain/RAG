@@ -1,0 +1,13 @@
+Conversation with bot retrieving from the question but improved one where the pronouns are replaced by the actual names
+Using gpt-3.5-turbo for queries and text-embedding-ada-002 for embeddings.
+retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: How much it costs the easygoing set?
+Bot: The Easygoing Set costs €77, but with a 40% discount, it is priced at €46.20.
+User: you're wrong, it is 72 eutos, is there any discount on it?
+Bot: I'm sorry, but I am not able to provide specific pricing or discounts on products. I recommend checking the website or contacting the brand directly for any current promotions or discounts on the Thin Ruby necklace.
+
+Here are the final comments from the conversation:
+Interesting how the first question where the price was wrong was because any of the chunks actually had the price, had prices but not of the easygoing set, in part because two of the chunks were of comments on the set. Also, the rewritting of the last question reshaped the question to what is the price, again

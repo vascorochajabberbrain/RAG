@@ -1,0 +1,59 @@
+Conversation with bot retrieving from the improved with context query
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: how much is the nassau
+Bot: The Nassau Necklace is priced at €48, but it's currently available for €29 with a 40% discount. Would you like to know more about it or add it to your cart?
+User: how can i get the discount?
+Bot: You can get the discount by purchasing multiple items! If you buy 2 items, you'll receive a 25% discount, and if you buy 3 or more items, you'll get a 40% discount on your total purchase. Just add the items to your cart, and the discounts will be applied at checkout. Would you like help with anything specific?
+User: alright, then I need a bracelet and ring to mach with it, any suggestion?
+Bot: For a stylish match with the Nassau Necklace, I recommend the following:
+
+1. **Nassau Bracelet** - Priced at €44, available for €27 with a 40% discount. It's a beautiful complement to the necklace.
+   
+2. **Charlie Ring** - Priced at €44, available for €27 with a 40% discount. Its elegant design will pair well with the Nassau Necklace.
+
+Both of these pieces will complete your look beautifully! Would you like to add them to your cart?
+User: cool can be, are they all the same color?
+Bot: Yes, the Nassau Necklace, Nassau Bracelet, and Charlie Ring are all crafted from stainless steel and coated with a durable 14K gold PVD finish, giving them a consistent gold color. This ensures a coordinated look when worn together. Would you like to add them to your cart or need assistance with anything else?
+User: super, how much it will be all?
+Bot: Here's the breakdown for your order:
+
+1. **Nassau Necklace**: €29 (with 40% Off)
+2. **Nassau Bracelet**: €27 (with 40% Off)
+3. **Charlie Ring**: €27 (with 40% Off)
+
+Total before any additional discounts: €83
+
+Since you're buying 3 items, you'll get a 40% discount on the total. 
+
+**Discount amount**: €83 x 40% = €33.20
+
+**Total after discount**: €83 - €33.20 = €49.80
+
+So, the total for all three items will be **€49.80**. Would you like to proceed with the purchase?
+User: that is wrong, the prices you used were already with the discount, the price will be 83
+Bot: I apologize for the confusion! You're correct. The prices for the items without the discount are:
+
+1. **Nassau Necklace**: €48
+2. **Nassau Bracelet**: €44
+3. **Charlie Ring**: €44
+
+Total without any discounts: €48 + €44 + €44 = **€136**.
+
+Since you're buying 3 items, you'll receive a 40% discount off the total:
+
+**Discount amount**: €136 x 40% = €54.40
+
+**Total after discount**: €136 - €54.40 = **€81.60**.
+
+Thank you for your understanding, and would you like to proceed with this order?
+User: no worries, thank you
+Bot: You're welcome! If you have any more questions or need assistance with anything else, feel free to ask. Happy shopping!
+
+Here are the final comments from the conversation:
+weird behaviour with the math, apart from that, the mini version showed no problems

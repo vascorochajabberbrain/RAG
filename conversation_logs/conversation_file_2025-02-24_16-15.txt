@@ -1,0 +1,21 @@
+Conversation with bot retrieving from the question but improved one where the pronouns are replaced by the actual names
+Using gpt-3.5-turbo for queries and text-embedding-ada-002 for embeddings.
+retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: what is the price of the nassau rings?
+Bot: The price of the Nassau Ring is €50, but with a 40% discount, it is €30.
+User: There is no ring, I meant necklace, how much is it?
+Bot: The Nassau Breeze Necklace is priced at €54, but currently on sale for €33 with a 40% discount. It is available for free delivery from February 25th to March 3rd.
+User: no, I wanted the nassau necklace, not the nassau breeze necklace
+Bot: I apologize for the confusion. The Nassau necklace is available for €48 with a 40% discount, making it €29. You can add it to your cart by clicking the "Add" button.
+User: thanks, how do i get that discount?
+Bot: To get the discount, you need to add 2 or 3 qualifying items to your cart. The discount will be automatically applied at checkout. Just make sure you have the required number of items in your cart to qualify for the discount.
+User: ok then I need a bracelet to combine it
+Bot: Great choice! You can add the Daphne Bracelet to complete your look. It's currently on sale with a 40% discount, so you can grab it at a great price. Just click on the "Add" button to include it in your order. Enjoy styling your new jewelry set!
+User: but how much is it?
+Bot: The Dora Huggies are priced at €59, but with a 40% discount, they would be €36.
+
+Here are the final comments from the conversation:
+I guess the chunks are still too confusing

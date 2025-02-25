@@ -1,0 +1,23 @@
+Conversation with bot retrieving only from the question, initial bot with retrieved information of all products individual page.
+Conversation starts next
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: How much it costs the nassau necklace?
+Bot: The Nassau necklace originally costs €48, but with a 40% discount, it is available for €29.
+User: How can i get that discount?
+Bot: To get the discount, you need to follow the promotion rules. If you buy 2 items, you will automatically get a 25% discount. If you buy 3 items, you will automatically get a 40% discount. Simply add the items to your cart and the discount will be applied automatically at checkout.
+User: Cool! so, can you suggest me a ring to mach with the necklace?
+Bot: Absolutely! Based on your love for the beautiful May birthstone necklace, I would recommend the Maya Crystal Ring to match. The elegant design and Swarovski crystal details of the ring will complement your necklace perfectly. Plus, the 40% off discount makes it a great deal. Happy shopping!
+User: that was not the necklace I mentioned, it was the nassau one
+Bot: I apologize for the confusion. Here is the information for the Nassau Breeze Necklace:
+
+- Price: €54
+- Currently on sale for €33 with 40% off
+- Chain length: 44cm / 17.32’’ (can be extended to 48.5cm / 19.1'')
+- Chain width: 3.4mm / 0.13’’
+- Crystal diameter: 3.4mm / 0.13’’
+- Composition: Stainless steel with 14K gold PVD coating (durable and waterproof)
+- Lifetime color warranty
+- Free delivery on February 25th - March 3rd
+
+You can also pay over 3 installments of € 18,00 with Klarna. Additionally, there are discounts available for buying multiple items from the website.

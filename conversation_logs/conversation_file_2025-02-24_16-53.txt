@@ -1,0 +1,22 @@
+Conversation with bot retrieving from the question but improved one where the pronouns are replaced by the actual names
+
+    Using gpt-3.5-turbo for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: What is the price of the nassau necklace?
+Bot: The regular price of the Nassau Necklace is €54. However, it is currently on sale at 40% off, making it €33.
+User: how can I get that discount?
+Bot: To avail of the discount, you can simply add two or three eligible items to your cart. The discount will be automatically applied based on the number of items you have in your cart:
+
+- Buy 2 items: Save 25%
+- Buy 3 items: Save 40%
+
+Once you have added the qualifying items to your cart, the discount will be reflected in the total amount due at checkout. Happy shopping!
+User: Alright, then I need to buy a ring to pair, any suggestion?
+Bot: Based on the feedback you received, I'd recommend pairing the Nassau Silver Necklace with the Midnight Blue Ring. It has received great reviews and has a complimentary design that can create a stylish and coordinated look when worn together. Would you like me to add the Midnight Blue Ring to your cart?
+
+Here are the final comments from the conversation:
+I will add history to our chatbot
