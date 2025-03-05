@@ -3,7 +3,7 @@ from qdrant_client.http.models import PointStruct
 import uuid
 
 from openai_utils import get_openai_client
-from qdrant_utils import get_qdrant_connection
+from qdrant_utils import get_qdrant_connection, create_collection
 
 
 def get_text_chunks(text):
@@ -44,6 +44,11 @@ def insert_data(get_points):
             return
         except Exception as e:
             print(e)
-            print("That collection does not exist, try again")
+            print("That collection does not exist, do you want to create it? or try again? (c/a)")
+            choice = input()
+            if choice == "c":
+                create_collection(collection_name)
+            elif choice == "a":
+                continue
 
     

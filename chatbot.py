@@ -63,20 +63,21 @@ def get_answer(messages, retrieved_info, query):
 
 
 def main():
-    conversation_file = """Conversation with bot retrieving from the improved with context query\n
-    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\n
-    retrieved information of all products individual page.\nConversation starts second next line:\n\n"""
-    
-    # Maybe unecessary for now, but when we want to test different vectorbases it will
     collection_name = input("Which collection should we use:")
     if collection_name == "1":
         collection_name = "hey_harper_1"
+    elif collection_name == "FAQ":
+        collection_name = "en_route_FAQ"
+
+    conversation_file = """Conversation with bot retrieving from `${collection_name}`\n
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\n
+    retrieved information of all products individual page.\nConversation starts second next line:\n\n"""
     
     history = [{"role": "system", "content": """You are the virtual assitant ofHey Harper, a e-commerce store that sells jewelry and clothes.
                  You will receive some context anytime you have to anser a user question, notice that the context may not be helpfull, 
                 use it only when clearly has the information you need to better help the user"""}]
 
-    inital_greeting = "Hi, I am your Hey Harper virtual assistant, please make questions for me to answer"
+    inital_greeting = "Hi, I am your `${collection_name}` virtual assistant, please make questions for me to answer"
     print("Bot: ", inital_greeting)
     conversation = "Bot: " + inital_greeting
     history.append({"role": "assistant", "content": inital_greeting})

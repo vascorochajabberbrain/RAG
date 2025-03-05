@@ -1,0 +1,87 @@
+Conversation with bot retrieving from `${collection_name}`
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your Hey Harper virtual assistant, please make questions for me to answer
+User: what is your return policy?
+Bot: Our return policy allows for returns and exchanges within 30 days of the order delivery date. If the merchandise is defective, you have up to 100 days from delivery to request a return or exchange. It's important to email customer@enroutejewelry.com for authorization before returning any items.
+
+For domestic orders, we provide a return label at no additional cost, making the return process seamless for our customers. However, for international orders, the return or exchange shipping costs are the customer's responsibility.
+
+Refunds will be processed to your original form of payment or as a gift card once we receive the returned item. For domestic orders, refunds typically take 7-10 days after we have received the return.
+User: will the jewelry tarnish?
+Bot: Our jewelry pieces are 18k gold or platinum plated, designed for longevity. To help prevent tarnishing, we recommend avoiding contact with water and chemicals like makeup or hair products. Our gold plating is three times thicker than the industry standard for enhanced durability.
+
+If you're looking for tarnish-free options, consider our waterproof jewelry collection for added peace of mind. You can find it here: [Waterproof Jewelry Collection](https://enroutejewelry.com/collections/waterproof-jewelry).
+User: How do I find my ring size?
+Bot: To determine your ring size, follow these steps:
+
+1. Cut a narrow strip of paper or use a piece of string that can comfortably wrap around your finger.
+2. Wrap the paper or string around the finger where you plan to wear the ring, ensuring it fits snugly without being too tight.
+3. Mark the spot where the two ends meet around your finger.
+4. Lay the paper or string flat against a ruler and measure the distance from the end to the mark you made. This measurement represents the circumference of your finger.
+5. Use the ring size chart available in the product description on our product page to find your ring size based on the circumference. If your measurement falls between two sizes, we recommend choosing the larger size for a more comfortable fit.
+
+The size chart can be found on the product description page for rings.
+User: are they hypoallergic?
+Bot: Yes, all of our jewelry pieces are hypoallergenic, meaning they are lead and nickel free. You can wear our jewelry without worrying about allergic reactions.
+User: I can use the gift card until when?
+Bot: Our gift cards do not have an expiration date, so you can use them anytime at your convenience!
+User: how can I get one?
+Bot: You can purchase a gift card directly from our website. We offer Digital Gift Cards in denominations of $10, $20, $50, $100, $200, $300, and $500. We also have Physical Gift Cards available in denominations of $100, $200, $300, and $500.
+
+Once you've purchased a Digital Gift Card, you will receive an order confirmation via email. A second email will follow with a unique 16-digit gift card number and a link to view the gift card. If you're gifting it to someone else, you can simply forward the email containing the card details and link to the recipient.
+User: can i return a ring?
+Bot: Yes, you can return a ring. We accept returns and exchanges of regular merchandise within 30 days of the order delivery date. If the ring is defective, you have up to 100 days from delivery to request a return or exchange. Please ensure the item is returned in its original condition.
+
+Before returning the ring, email customer@enroutejewelry.com for authorization. Note that international return shipping costs are the customer's responsibility. Once we've received the returned item, we'll issue a refund to your original form of payment or provide a gift card.
+User: even if it is part of a conjunt?
+Bot: Yes, you can return a jewelry set, but please note that the entire set must be returned; individual pieces from the set cannot be returned separately. Make sure to email customer@enroutejewelry.com for authorization before sending back the set.
+User: how much is the shipping price?
+Bot: The shipping fees vary depending on the destination:
+
+- **United States**: The shipping fee is $3.89 USD, with free shipping available for orders over $40 USD. Delivery is estimated within 2-8 business days after departure.
+
+- **UK**: The shipping fee is approximately 4 USD (~3 GBP), with free shipping for orders over 40 USD (~31.5 GBP). Delivery is estimated within 3-5 business days after departure.
+
+- **Germany**: The shipping fee is around 5 EUR, with free shipping for orders over 40 USD (~37 EUR). Delivery is estimated within 5-8 business days after departure.
+
+- **International**: Free shipping is offered for orders over $40 USD, while delivery typically takes 7-21 business days. 
+
+Please ensure all your shipping details are correct to avoid additional charges for reshipping due to invalid addresses. If you have more specific shipping questions, feel free to reach out to us at customer@enroutejewelry.com.
+User: sorry, I meant to return
+Bot: No worries! If you need to return an item, here's a quick guide on our return policy:
+
+- **Time Frame**: You can return regular merchandise within 30 days of the order delivery date. For defective merchandise, you have up to 100 days from delivery to initiate a return or exchange.
+
+- **Process**: Before sending any items back, please email customer@enroutejewelry.com for return authorization. This step is necessary to process your return efficiently.
+
+- **Condition**: Ensure the merchandise is returned in its original condition. Items returned damaged may be rejected and sent back at our discretion.
+
+- **Shipping Fees**: For international returns, you will be responsible for the shipping costs. We do not cover these fees.
+
+- **Refund**: Once we receive the returned item, we'll issue a refund to your original form of payment or provide a gift card. 
+
+If you have customized pieces, please note that they are not eligible for returns or exchanges unless there's a significant delay in the order on our part. If you have any questions, feel free to reach out to us at customer@enroutejewelry.com.
+User: but what are the prices?
+Bot: Here are the shipping fees for different regions:
+
+- **United States**: The shipping fee is $3.89 USD, with free shipping on orders over $40 USD. Delivery is estimated within 2-8 business days after the order is shipped.
+
+- **UK**: The shipping fee is approximately 4 USD (~3 GBP), with free shipping for orders over 40 USD (~31.5 GBP). Delivery is estimated within 3-5 business days after the order is shipped.
+
+- **Germany**: The shipping fee is about 5 EUR, with free shipping for orders over 40 USD (~37 EUR). Delivery is estimated within 5-8 business days after the order is shipped.
+
+- **International**: Free shipping is available for orders over $40 USD, with delivery typically taking 7-21 business days. 
+
+If you have any more questions or need further assistance, feel free to reach out to customer@enroutejewelry.com.
+User: no, the price to return
+Bot: For domestic orders, we offer a seamless return or exchange process by providing a return label at no additional cost to you. This means that we cover the return shipping expenses for orders within our country.
+
+For international orders, the return shipping costs are the customer's responsibility. We are unable to cover these expenses due to the complexities and costs associated with international shipping. If you need more assistance or have any questions, please feel free to contact our customer service team at customer@enroutejewelry.com.
+
+Here are the final comments from the conversation:
+The context of the function that rewrittes the query is sometimes adding problems than solving, will change the way I pass the context
