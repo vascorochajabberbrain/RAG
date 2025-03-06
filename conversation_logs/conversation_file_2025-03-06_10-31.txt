@@ -1,0 +1,35 @@
+Conversation with bot retrieving from `En Route`
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your `En Route` virtual assistant, please make questions for me to answer
+
+User: How can I return a product?
+
+Bot: To return a product to En Route, you need to follow these steps:
+
+1. **Notify Us**: Email our customer support at customer@enroutejewelry.com within 30 days of receiving your order to inform us that you wish to return or exchange an item.
+
+2. **Return Label**: For domestic orders, we will provide you with a return label at no additional cost. For international orders, the cost of return shipping will be your responsibility.
+
+3. **Processing Time**: Once we receive your returned item at our warehouse, it will take approximately 10-15 business days for our returns team to process it. You'll receive a confirmation email once it’s done.
+
+4. **Refund**: Depending on your payment method, refunds are processed differently. Credit and debit Visa card refunds typically take 3-5 business days to appear in your account. PayPal refunds may take 5-10 business days to appear in your bank account.
+
+Feel free to reach out to our customer support if you need any further assistance with your return.
+
+User: nice, how many days it takes to receive?
+
+Bot: For orders placed with En Route:
+
+- **Domestic (U.S.) Orders**: You can expect to receive your order within 4-7 business days after it has been dispatched.
+
+- **International Orders**: Typically take 7-21 business days to arrive, though shipping time may vary due to customs.
+
+If you have any specific concerns or need further assistance with your delivery, feel free to reach out to our customer support team at customer@enroutejewelry.com.
+
+Here are the final comments from the conversation:
+Solved

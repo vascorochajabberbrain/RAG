@@ -1,0 +1,15 @@
+Conversation with bot retrieving from `En Route`
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your `En Route` virtual assistant, please make questions for me to answer
+
+User: Hi, how can i not pay the shipping?
+
+Bot: How can customers qualify for free shipping with En Route Jewelry and Clothing?
+
+Here are the final comments from the conversation:
+Did not work, now will had the .copy() to see if it works, should work

@@ -12,19 +12,20 @@ def make_conversation_file(conversation):
     with open(filename, "w", encoding="utf-8") as file:
         file.write(conversation)
 
-def get_retrieved_info(query, context, collection_name):
+def get_retrieved_info(query, history, collection_name):
     openai_client = get_openai_client()
 
-    content = "From this context: " + context + ", rewrite the query: " + query + """ so that it becomes a self-contained question.
+    content = """Rewrite the next user input, instead of answering, rewritte what the user said so that it becomes a self-contained question.
     Replace vague references and pronouns with the appropriate details from the context.
     Do not add extra information that was not asked in the original query.
     Preserve the intent and structure of the question as much as possible."""
+    messages = history.copy()
+    messages.append({"role": "system", "content": content})
+    messages.append({"role": "user", "content": query})
     
     completion = openai_client.chat.completions.create(
         model="gpt-4o",
-        messages=[
-            {"role": "user", "content": content}
-        ]
+        messages=messages
         )
     new_query = completion.choices[0].message.content
     print("----------------------------------------\nOld query: ", query, "\nNew query: ", new_query, "\n----------------------------------------\n")
@@ -51,9 +52,16 @@ def get_retrieved_info(query, context, collection_name):
         prompt += result.payload['text'] + "\n"
     return prompt
     
-def get_answer(messages, retrieved_info, query):
+def get_answer(history, retrieved_info, query, company):
     openai_client = get_openai_client()
-    messages.append({"role": "system", "content": "The information you may use for this anwser is: " + retrieved_info + " and will try yo answer based on it to the user input"})
+    messages = history.copy()
+    messages.append({"role": "system", "content": f"""You are the virtual assistant of `{company}`, an e-commerce store specializing in jewelry and clothing.  
+You will receive context before answering user questions. However, this context may not always be relevant.  
+Use it **only if it clearly provides helpful information**.  
+
+The available information for this answer is: `{retrieved_info}`.  
+Answer the user's query based on this data when applicable."""
+})
     messages.append({"role": "user", "content": query})
     completion = openai_client.chat.completions.create(
         model="gpt-4o",
@@ -66,18 +74,18 @@ def main():
     collection_name = input("Which collection should we use:")
     if collection_name == "1":
         collection_name = "hey_harper_1"
-    elif collection_name == "FAQ":
+        company = "Hey Harper"
+    elif collection_name == "FAQ" or collection_name == "faq":
         collection_name = "en_route_FAQ"
+        company = "En Route"
 
-    conversation_file = """Conversation with bot retrieving from `${collection_name}`\n
+    conversation_file = f"""Conversation with bot retrieving from `{company}`\n
     Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\n
     retrieved information of all products individual page.\nConversation starts second next line:\n\n"""
     
-    history = [{"role": "system", "content": """You are the virtual assitant ofHey Harper, a e-commerce store that sells jewelry and clothes.
-                 You will receive some context anytime you have to anser a user question, notice that the context may not be helpfull, 
-                use it only when clearly has the information you need to better help the user"""}]
+    history = []
 
-    inital_greeting = "Hi, I am your `${collection_name}` virtual assistant, please make questions for me to answer"
+    inital_greeting = f"Hi, I am your `{company}` virtual assistant, please make questions for me to answer"
     print("Bot: ", inital_greeting)
     conversation = "Bot: " + inital_greeting
     history.append({"role": "assistant", "content": inital_greeting})
@@ -89,13 +97,15 @@ def main():
         if question == "q":
             final_conversation_comments += input("Any final comments?")
             break
-        retrieved_info = get_retrieved_info(question, conversation, collection_name)
 
+        retrieved_info = get_retrieved_info(question, history, collection_name)
         #print("+++++++++++++++++++++++++++++++++++++++++++\nRetrieved chunks:\n", retrieved_info, "+++++++++++++++++++++++++++++++++++++++++++\n")
+        answer = get_answer(history, retrieved_info, question, company)
 
-        answer = get_answer(history, retrieved_info, question)
+        history.append({"role": "user", "content": question})
         print("Bot : ",answer,"\n")
-        conversation += "\nUser: " + question + "\nBot: " + answer
+        print(history)
+        conversation += "\n\nUser: " + question + "\n\nBot: " + answer
         history.append({"role": "assistant", "content": answer})
         #print("searching completed")
 

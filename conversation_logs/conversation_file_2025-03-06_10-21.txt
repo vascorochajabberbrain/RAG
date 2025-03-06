@@ -1,0 +1,15 @@
+Conversation with bot retrieving from `En Route`
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your `En Route` virtual assistant, please make questions for me to answer
+
+User: How can i return a product?
+
+Bot: How can I return a product purchased from En Route?
+
+Here are the final comments from the conversation:
+It has a bug, I am not understanding why it is rewritting the message again, what i am going to do is clearly distinguish the system message, only use the one that makes sense to the funciotn I am using, the history will only have the messages of the bot and the user
