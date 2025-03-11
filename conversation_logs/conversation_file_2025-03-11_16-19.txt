@@ -1,0 +1,59 @@
+Conversation with bot retrieving from `First Shopify Test Store`
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your `First Shopify Test Store` virtual assistant, please make questions for me to answer
+
+User: How much it costs the minimal snowboard?
+
+Bot: The minimum price for a snowboard listed in the available information is \( \$629.95 \).
+
+User: do you sell jewelry?
+
+Bot: Yes, we sell jewelry, including items like necklaces, rings, bracelets, and earrings.
+
+User: can you suggest me a necklace?
+
+Bot: Certainly! Here are a few necklaces you might be interested in:
+
+1. **Round Gold Necklace**: This playful piece features a round pendant and adds a touch of elegance to any outfit. Price ranges from $79.99 to $99.99. You can view it [here](https://jabberbrain-test-store.myshopify.com/products/round-gold-necklace).
+
+2. **Silver Threader Necklace**: Crafted from premium sterling silver, this delicate chain threads through a circle pendant, offering a timeless and sophisticated look. Priced at $14.99. Check it out [here](https://jabberbrain-test-store.myshopify.com/products/silver-threader-necklace).
+
+3. **Dainty Gold Necklace**: This delicate necklace features two pendants, perfect for adding a touch of luxury and sophistication to any outfit. It's priced at $63.99. See more [here](https://jabberbrain-test-store.myshopify.com/products/dainty-gold-neclace).
+
+Let me know if you need more information about any of these options!
+
+User: what is the legacy resource of the round gold necklace?
+
+Bot: The legacy resource ID of the Round Gold Necklace is `9684295876930`.
+
+User: what is its price?
+
+Bot: The Round Gold Necklace is priced between $79.99 and $99.99.
+
+User: very well coming back to the snowboards, I want one that maches my vibe of a software developer
+
+Bot: If you're looking for a snowboard that complements your vibe as a software developer, you might appreciate a board that is both practical and stylish, much like a well-designed piece of software. While specific themes or graphic designs on snowboards that directly relate to software development aren't provided in the data, you may want to consider the following options from our store that offer quality and premium status:
+
+1. **The Multi-location Snowboard**:
+   - Price: $729.95
+   - Tags: Premium, Snow, Snowboard, Sport, Winter
+   - This board represents quality and versatility, much like how developers create software adaptable to various data environments.
+
+2. **The Complete Snowboard**:
+   - Price: $699.95
+   - Tags: Premium, Snow, Snowboard, Sport, Winter
+   - This board offers a full set of features catered to winter sports enthusiasts, similar to a comprehensive software solution.
+
+Both options carry a premium tag, ensuring top-notch material and performance on the slopes, akin to the reliability and sophistication often attributed to robust software solutions.
+
+User: i don't know which one to choose, what are their colors?
+
+Bot: I'm sorry, but the available information does not specify the colors of the snowboards listed. To help make a decision, you could consider other features such as price, design type, or any specific graphics, but for exact color details, checking the product images on the website might be necessary.
+
+Here are the final comments from the conversation:
+made a comment on the need to know the product names to understand questions. Also, clearly retrieving everything from the api can be dangerous, and we need to look for the safety of the data of our clients. Keeps being useful to make a preproccessing of the data retrieved.

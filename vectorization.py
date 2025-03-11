@@ -48,6 +48,7 @@ def insert_data(get_points):
             choice = input()
             if choice == "c":
                 create_collection(collection_name)
+                print("Collection created, now you need to write again the name of the collection to actually insert the data")
             elif choice == "a":
                 continue
 

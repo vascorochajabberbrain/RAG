@@ -78,6 +78,9 @@ def main():
     elif collection_name == "FAQ" or collection_name == "faq":
         collection_name = "en_route_FAQ"
         company = "En Route"
+    elif collection_name == "fsts":
+        collection_name = "first_shopify_test_store"
+        company = "First Shopify Test Store"
 
     conversation_file = f"""Conversation with bot retrieving from `{company}`\n
     Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\n

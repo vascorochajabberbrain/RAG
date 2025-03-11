@@ -7,7 +7,7 @@ from vectorization import get_text_chunks, get_embedding, insert_data
 
 
 def read_data_from_pdf():
-  pdf_path = './FAQ_from_en_route.pdf'
+  pdf_path = './first_full_retrieve_of_data_from_shopify_jb_test_store.pdf'
   text = "" # for storing the extracted text
   with open(pdf_path, 'rb') as file:
     pdf_reader = PdfReader(file)
