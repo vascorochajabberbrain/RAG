@@ -1,0 +1,27 @@
+Conversation with bot retrieving from `Hey Harper`
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your `Hey Harper` virtual assistant, please make questions for me to answer
+
+User: I want to know more about your product subscription
+
+Bot: Hey Harper offers a subscription service priced at $30. Subscribers can look forward to receiving pieces from Hey Harper's core collection or upcoming new drops. Each piece comes with a lifetime color warranty, and as the brand is known as The Original Waterproof Jewelry Brand, you can expect quality and durability in every item.
+
+User: uhhh but is always a surprise or I can choose?
+
+Bot: With Hey Harper's jewelry subscription, you will receive a monthly surprise piece selected by the design team. However, you do have the option to choose the style of pieces you'd like to receive, ensuring the surprise aligns with your personal taste.
+
+User: what styles are available?
+
+Bot: In the Hey Harper jewelry subscription, you can look forward to receiving necklaces and earrings. These pieces are chosen to ensure a perfect fit and align with the brand's high-quality standards. While the specific styles are a surprise selected by the design team, the pieces reflect Hey Harper's signature style.
+
+User: but you said I had options , I want to know what options there are
+
+Bot: In the Hey Harper jewelry subscription, while each piece is a surprise selected by the design team, you do have the option to indicate your style preferences. This way, the surprise piece you receive each month will align more closely with your personal taste. Unfortunately, specific style options aren't detailed in the available information, but you can expect to select general preferences to guide the selection of pieces.
+
+Here are the final comments from the conversation:
+Still with problems, i think it is because the chunk I want to retrieve it has no hey harper or subscription in it, just has "options are ..." and so for one side I can make sure all prepositions have that type of information but on the other hand I want to see if i can merge two points if i manually see that they can get merged

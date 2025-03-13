@@ -40,7 +40,7 @@ def get_retrieved_info(query, history, collection_name):
     search_result = connection.query_points(
         collection_name=collection_name,
         query=embeddings,
-        limit=3
+        limit=6
     )
     #print(search_result)
     #print("Question: " ,query,'\n')
@@ -48,8 +48,9 @@ def get_retrieved_info(query, history, collection_name):
     print("Retrieved chunks:+++++++++++++++++++++++++++++++++++++++++++\n")
     prompt=""
     for result in search_result.points:
-        print("\n", result.payload['text'], "++++++++++++++++++++++++++++++++++++++++++\n")
+        print("--", result.payload['text'])
         prompt += result.payload['text'] + "\n"
+    print()
     return prompt
     
 def get_answer(history, retrieved_info, query, company):
@@ -72,6 +73,22 @@ Answer the user's query based on this data when applicable."""
 
 def main():
     collection_name = input("Which collection should we use:")
+    match collection_name:
+        case "1":
+            collection_name = "hey_harper_1"
+            company = "Hey Harper"
+        case "FAQ" | "faq":
+            collection_name = "en_route_FAQ"
+            company = "En Route"
+        case "fsts":
+            collection_name = "first_shopify_test_store"
+            company = "First Shopify Test Store"
+        case "ps":
+            collection_name = "hey_harper_product_subscriptio_alpha"
+            company = "Hey Harper"
+        case _:  # Default case (optional)
+            company = None  # Or any default behavior
+    '''
     if collection_name == "1":
         collection_name = "hey_harper_1"
         company = "Hey Harper"
@@ -80,7 +97,7 @@ def main():
         company = "En Route"
     elif collection_name == "fsts":
         collection_name = "first_shopify_test_store"
-        company = "First Shopify Test Store"
+        company = "First Shopify Test Store"'''
 
     conversation_file = f"""Conversation with bot retrieving from `{company}`\n
     Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\n

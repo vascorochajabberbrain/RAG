@@ -1,0 +1,55 @@
+Conversation with bot retrieving from `Hey Harper`
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your `Hey Harper` virtual assistant, please make questions for me to answer
+
+User: Hi, I want to know more about your product subscription
+
+Bot: Hey Harper offers a product subscription that gives you a closer look at various jewelry pieces. These pieces are selected from Hey Harper's core collection or upcoming new drops. You can add this subscription to your cart through a specific link on their website. If you're interested in exploring new styles regularly while benefiting from convenience, this subscription could be a great choice for you. Let me know if you need more details!
+
+User: but why is it good for me?
+
+Bot: The Hey Harper subscription could be a great choice for you for several reasons:
+
+1. **Variety and New Styles**: You'll have access to pieces from Hey Harper's core collection as well as upcoming new drops, which is perfect if you love experimenting with different styles or want to stay on top of trends.
+
+2. **Savings**: By opting for the subscription, you can save money. Customers enjoy a 50% discount by paying monthly, making it a more cost-effective way to enhance your jewelry collection.
+
+3. **Convenience**: The subscription is ideal for "the girl who has everything," meaning that it's a great way to continuously refresh your collection without having to think about each purchase.
+
+4. **Quality Assurance**: With a lifetime color warranty, you can be assured that the pieces will maintain their quality over time.
+
+Let me know if you need more information!
+
+User: ah, so it is cheaper this way, got it
+
+Bot: Yes, exactly! By subscribing, you can save 50% on your jewelry selections, making it a more affordable way to expand your collection. At a price of $30, it's a great way to explore and enjoy a variety of pieces. If you have any more questions or need further assistance, feel free to ask!
+
+User: yes 30 dolars for apiece is a good deal, but do I choose the piece?
+
+Bot: With the Hey Harper subscription, you don't choose the piece yourself. Instead, you receive a monthly surprise jewelry piece selected by the design team. This setup brings a delightful element of surprise each month, as you'll receive either a necklace or earrings. It's a great way to discover new styles and enjoy the excitement of not knowing exactly what you'll get, all while ensuring a perfect fit with these jewelry types. If you have any more questions, feel free to ask!
+
+User: hmm.. then how can I know if I am going to like what you send? you might just send what anyone wants...
+
+Bot: The Hey Harper subscription aims to provide a personalized experience by carefully selecting pieces tailored to customers' style preferences. While you don't choose the specific items, the design team curates each selection with customer preferences in mind. This approach helps ensure that you'll receive pieces that align with your taste. Plus, Hey Harper offers a closer look at the types of pieces you can expect, which might give you some reassurance. If you enjoy exploring new styles with a bit of surprise, this subscription could be a great fit for you. If you have more questions or concerns, feel free to ask!
+
+User: but there is any type of options?
+
+Bot: Yes, with the Hey Harper subscription, you have the option to select your preferred style category. You can choose from the following options:
+
+1. **Surprise Me!**: If you're open to any style and love the element of surprise.
+2. **Minimalist**: Opt for simple, elegant pieces that complement any outfit.
+3. **Trendy**: Choose pieces that are more in line with current fashion trends.
+
+This way, you can have some guidance on the type of jewelry you'll be receiving, ensuring it aligns with your personal taste while still enjoying the surprise element. Let me know if you need more information!
+
+User: ah that was the information i was waiting for, very well, then i will perceid with the subscription
+
+Bot: Great choice! By selecting the style option that best suits your taste, you'll enhance your jewelry collection with exciting new pieces every month. If you need any assistance with your subscription or have further questions, feel free to reach out. Enjoy your new jewelry!
+
+Here are the final comments from the conversation:
+the merge did not help that much, improve the preprocessing before the vectorbase will give more benefits

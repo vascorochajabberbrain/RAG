@@ -243,48 +243,28 @@ def crawl(driver, start_url):
     return text
 
 def main():
-    start_url = "https://heyharper.com/eu/en/products"
+    start_url = "https://heyharper.com/us/en/products/surprise-jewelry-subscription-box"
     driver = setup_driver(start_url)
 
 
     try:
-        #id = find_show_more_id(driver)
-        while click_show_more(driver):
-            continue
-        '''
-        while True:
-            try:
-                print("got here? yes, with id = ", id)
-                button = driver.find_element(By.ID, id)
-                print(button)
-                driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                button.click()
-                time.sleep(0.2)
-                continue
-            except Exception as e:
-                print(e)
-                break
-        '''
-        product_urls = get_all_product_urls(driver)
+        
         text = ""
-        #quick fix because all on its own creates an error of too big dimension
-        #text_2 = ""
-        print("--------------it found ", len(product_urls), " products------------------")
-        count = 0
-        for url in product_urls:
-            count += 1
-            driver.get(url)
-            open_all_toggles(driver)
-            #if count < 250:
-            page_text = get_all_text(driver)
-            page_fundamentall_text = clean_up_page_text(page_text)
-            text += page_fundamentall_text
-            #else:
-            #    text_2 += get_all_text(driver)
-        #text=crawl(driver, start_url)
+        
+        open_all_toggles(driver)
+        text += get_all_text(driver)
+        print("scraping done")
 
         chunks=get_text_chunks(text)
-        vectors=get_embedding(chunks)
+        chunksToKeep = []
+        for chunk in chunks:
+            print("chunk: ", chunk)
+            toKeep = input("Do you want to keep this chunk? y/n")
+            if toKeep == "y":
+                chunksToKeep.append(chunk)
+        print("original chunks\n", chunks)
+        print("chunks to keep\n", chunksToKeep)
+        vectors=get_embedding(chunksToKeep)
         insert_data(vectors)
 
         """
