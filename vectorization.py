@@ -58,6 +58,7 @@ def insert_data(get_points, collection_name = None):
     while True:
         if collection_name is not None:
             insert_points(collection_name, get_points)
+            return
         print("write 'q' if you want to quit the insertion")
         collection_name = input("Insert into which collection?")
         if collection_name == "q":

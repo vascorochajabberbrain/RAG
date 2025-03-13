@@ -1,0 +1,49 @@
+Conversation with bot retrieving from `Hey Harper`
+
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.
+
+    retrieved information of all products individual page.
+Conversation starts second next line:
+
+Bot: Hi, I am your `Hey Harper` virtual assistant, please make questions for me to answer
+
+User: I want to know more about the product subscription
+
+Bot: Hey Harper offers a monthly surprise jewelry subscription that allows you to receive a unique jewelry piece each month. Here are some details about the subscription:
+
+1. **Cost and Savings**: The subscription costs $30 per month, and by subscribing, you save 50% off the regular price. You can choose to pay monthly, and there's the flexibility to cancel or pause the subscription anytime without any commitments or additional costs.
+
+2. **Shipping**: For monthly paying subscribers, the jewelry pieces are shipped monthly on the same date as the first order to the given address. If you opt for a prepaid subscription, the pieces will be shipped in the first week of each month.
+
+3. **Jewelry Selection**: Each jewelry piece is selected by Hey Harper’s design team and may include items from the core collection or upcoming new drops. The jewelry is made from stainless steel with a 14K gold PVD coating, ensuring they are durable and waterproof.
+
+4. **Warranty**: Hey Harper offers a lifetime color warranty for their jewelry. If your jewelry loses color, you can contact customer support with a visible picture of your item to claim the warranty.
+
+5. **Delivery**: Currently, the subscription service is available only in the USA and Canada. Additionally, there's free delivery offered from March 17th to 24th.
+
+This subscription is a great way to receive high-quality jewelry monthly, curated by a design team, and at a fraction of the usual price.
+
+User: Alright, a lot o finformation but I did not understand, I cannot choose what i am going to receive?
+
+Bot: With the Hey Harper jewelry subscription, you get to personalize your experience to some extent. You can choose the style of jewelry pieces you'd like to receive each month. The available options are:
+
+- **Minimalist**: Simple, elegant designs.
+- **Trendy**: Fashion-forward, contemporary pieces.
+- **Surprise Me**: A mix, where the design team surprises you with different styles.
+
+While you can't choose the exact piece you'll receive, this allows you to control the overall style direction of your monthly jewelry pieces. Each item is carefully selected by Hey Harper's design team to align with your chosen style.
+
+User: alright, so, how much is it?
+
+Bot: The Hey Harper jewelry subscription costs $30 per month. By subscribing, you save 50% off the regular price. You also have the flexibility to cancel or pause the subscription anytime without any commitments or additional costs.
+
+User: alright and so you then get my money automaticly?
+
+Bot: Yes, when you subscribe to the Hey Harper jewelry subscription, the payment will be processed automatically each month on the same date as your first order. This ensures that your subscription continues without interruption, allowing you to receive a new jewelry piece each month. You have the flexibility to cancel or pause your subscription anytime, easily and for free, if you decide that you no longer wish to continue.
+
+User: alright, thank you
+
+Bot: You're welcome! If you have any more questions or need further assistance, feel free to ask. Enjoy your day!
+
+Here are the final comments from the conversation:
+problem solved, clearly with improvements to add still

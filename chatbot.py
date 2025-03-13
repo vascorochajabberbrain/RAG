@@ -86,6 +86,9 @@ def main():
         case "ps":
             collection_name = "hey_harper_product_subscriptio_alpha"
             company = "Hey Harper"
+        case "pswg":
+            collection_name = "hh_ps_w_grouping"
+            company = "Hey Harper"
         case _:  # Default case (optional)
             company = None  # Or any default behavior
     '''

@@ -7,6 +7,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 import difflib
 import time
 
+from openai_utils import get_openai_client
 from vectorization import get_text_chunks, get_embedding, insert_data
 
 
@@ -242,13 +243,30 @@ def crawl(driver, start_url):
 
     return text
 
+def manual_chunks_filter(chunks):
+    chunksToKeep = []
+    for chunk in chunks:
+        print("chunk: ", chunk)
+        toKeep = input("Do you want to keep this chunk? y/n")
+        if toKeep == "y":
+            chunksToKeep.append(chunk)
+    return chunksToKeep
+
+def list_of_chunks_to_numbered_string(chunks):
+    string = ""
+    for chunk_ix, chunk in enumerate(chunks):
+        #single_chunk_string = f"""Chunk ({chunk['chunk_id']}): {chunk['title']}\nSummary: {chunk['summary']}\n\n"""
+        single_chunk_string = f"""Chunk ({chunk_ix}): {chunk}\n\n"""
+        string += single_chunk_string
+    return string
+
 def main():
     start_url = "https://heyharper.com/us/en/products/surprise-jewelry-subscription-box"
     driver = setup_driver(start_url)
 
-
+    openai_client = get_openai_client()
     try:
-        
+        '''
         text = ""
         
         open_all_toggles(driver)
@@ -256,17 +274,44 @@ def main():
         print("scraping done")
 
         chunks=get_text_chunks(text)
-        chunksToKeep = []
-        for chunk in chunks:
-            print("chunk: ", chunk)
-            toKeep = input("Do you want to keep this chunk? y/n")
-            if toKeep == "y":
-                chunksToKeep.append(chunk)
-        print("original chunks\n", chunks)
-        print("chunks to keep\n", chunksToKeep)
-        vectors=get_embedding(chunksToKeep)
-        insert_data(vectors)
 
+        chunksToKeep = manual_chunks_filter(chunks)
+
+        print("chunks to keep: \n", chunksToKeep)
+        chunksToKeep = ['Hey Harper offers monthly surprise jewelry subscriptions.', 'Customers can choose the style of jewelry pieces they want: Minimalist, Trendy, or Surprise Me.', 'Customers can subscribe and save money by paying monthly.', 'By paying monthly, customers can save 50%.', 'Hey Harper offers free delivery from March 17th to 24th.', 'The subscription costs $30 and can be cancelled or paused anytime without commitments.', "The jewelry pieces are either from Hey Harper's core collection or upcoming new drops.", "Each jewelry piece is chosen by Hey Harper's design team.", 'Customers can choose their style, add their address, and the first piece ships immediately.', 'The subscription service is available only to the USA and Canada.', 'Images displayed are examples of jewelry pieces.', 'Monthly subscription pieces ship monthly on the same date as the first order to the given address.', 'Prepaid subscriptions ship on the first week of each month to the given address.', 'Customers receive a confirmation email with tracking information for each new shipment.', 'Customers can cancel or pause their subscription anytime, easily and for free.', 'All subscription pieces are non-refundable and non-exchangeable.', "Hey Harper's jewelry is made from stainless steel metal with 14K gold PVD coating.", 'The 14K gold PVD coating is durable and waterproof.', 'Hey Harper offers a lifetime color warranty for their jewelry.', "Hey Harper's waterproof jewelry is designed to endure daily routines, including showering, working out, and swimming.", 'If the jewelry loses color, customers can contact customer support with a visible picture of their item to claim the warranty.', 'Hey Harper offers a monthly surprise jewelry piece at a fraction of the price.', 'Customers can pay monthly and cancel anytime easily and for free.', 'Customers can select their subscription style.']
+
+        #assuming there is at least one chunk
+        groupedChunks = [chunksToKeep[0]]
+
+        for chunk in chunksToKeep[1:]:
+            string_of_chunks = list_of_chunks_to_numbered_string(groupedChunks)
+            # TO-DO add the response format to also include an explanation
+            completion = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
+                           You will receive a list of groups of prepositions and a new one.
+                           Each group will be identified by a number.
+                           Please answer onlywith the number of the group in which the new preposition fits well, or -1 if it doesn't fit well in any of them.
+                           I rreally just want you to answer with a umber for me to be able to conver it to an integer on my code. Examples of answers:
+                           2
+                           -1
+                           The groups are:
+                           {string_of_chunks}
+                           New preposition: {chunk}"""}
+                          ]
+            )
+            response = completion.choices[0].message.content
+            print("chunk: ", chunk)
+            print("response: ", response)
+            if response == "-1":
+                groupedChunks.append(chunk)
+            else:
+                groupedChunks[int(response)] += "\n" + chunk
+
+        print("final chunks: ", groupedChunks)
+        vectors=get_embedding(groupedChunks)
+        insert_data(vectors)
+'''
         """
         chunks=get_text_chunks(text_2)
         vectors=get_embedding(chunks)
