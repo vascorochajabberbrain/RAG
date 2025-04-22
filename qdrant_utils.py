@@ -31,6 +31,14 @@ def create_collection(collection_name):
         vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
     )
 
+def duplicate_collection(collection_name, new_collection_name):
+    get_qdrant_connection()
+    _connection.create_collection(
+    collection_name=new_collection_name,
+    vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
+    init_from=models.InitFrom(collection=collection_name),
+)
+
 def insert_points(collection_name, points):
     get_qdrant_connection()
     _connection.upsert(
@@ -53,16 +61,31 @@ def delete_points(collection_name, point_ids):
 
 def get_point_text(collection_name, point_id):
     get_qdrant_connection()
+    print(_connection.retrieve(collection_name=collection_name, ids=[point_id]))
     return _connection.retrieve(collection_name=collection_name, ids=[point_id])[0].payload['text']
 
 #info = _connection.get_collection(collection_name="fruit_example")
 # until here the duplicated code
 
+def add_source(collection_name, source):
+    get_qdrant_connection()
+    _connection.set_payload(
+    collection_name=collection_name,
+    payload={
+        "source": source,
+    },
+    points=models.Filter(
+    ),
+)
+
 
 def main():
     get_qdrant_connection()
-    #collection_name = input("Name of the collection:")
+    collection_name = input("Name of the collection:")
+    new_collection_name = collection_name + "_copy"
     #create_collection(collection_name)
+    duplicate_collection(collection_name, new_collection_name)
+    add_source(collection_name, "https://heyharper.com/us/en/products/surprise-jewelry-subscription-box")
 
 if __name__ == '__main__':
     main()

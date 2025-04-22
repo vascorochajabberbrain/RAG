@@ -40,7 +40,7 @@ def get_retrieved_info(query, history, collection_name):
     search_result = connection.query_points(
         collection_name=collection_name,
         query=embeddings,
-        limit=6
+        limit=3
     )
     #print(search_result)
     #print("Question: " ,query,'\n')

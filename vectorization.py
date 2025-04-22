@@ -35,7 +35,7 @@ def get_text_chunks(text):
         messages= [{"role": "system", "content": prompt},
                    {"role": "user", "content": text}]
         )
-    
+    print(completion.choices[0].message.content)
     return json.loads(completion.choices[0].message.content)
 
 
