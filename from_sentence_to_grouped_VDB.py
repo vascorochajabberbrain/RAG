@@ -79,7 +79,7 @@ def grouping_chunks(descriptions, chunks):
             )
             response = completion.choices[0].message.content
             if response == "-1":
-                dictionary_of_groups[len(dictionary_of_groups)+1] = {
+                dictionary_of_groups[len(dictionary_of_groups)] = {
                     "description": "temporary description",
                     "prepositions": [chunk]
                 }
@@ -92,7 +92,7 @@ def grouping_chunks(descriptions, chunks):
             agreed = input("agree?")
             if agreed == "y":
                 if response == "-1":
-                    dictionary_of_groups[len(dictionary_of_groups)+1] = {
+                    dictionary_of_groups[len(dictionary_of_groups)] = {
                         "description": "temporary description",
                         "prepositions": [chunk]
                     }
@@ -101,7 +101,7 @@ def grouping_chunks(descriptions, chunks):
             else:
                 user_response = input("then what?")
                 if user_response == "-1":
-                    dictionary_of_groups[len(dictionary_of_groups)+1] = {
+                    dictionary_of_groups[len(dictionary_of_groups)] = {
                         "description": "temporary description",
                         "prepositions": [chunk]
                     }
@@ -130,6 +130,28 @@ def get_list_of_chunks(collection_name):
             break
     return all_ids
 
+def get_all_descriptions(dict):
+    descriptions = []
+    for group in dict:
+        descriptions.append(dict[group]["description"])
+    return descriptions
+
+def rewrite_descriptions(dict):
+    all_descriptions = get_all_descriptions(dict)
+    for ix, group in dict.items():
+        completion = get_openai_client().chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": f"""I need you to possibly rewrite the description of this group of sentences. 
+                        Use the sentences themselfs and compare with the other descriptions to better decide what to call this one.
+                        You can return the same description if you think it is the best one.
+                        Here are the descriptions of all the groups: {all_descriptions}
+                        Here is the description of the group to rewrite: {group["description"]}
+                        Here are the prepositions of the group: {group["prepositions"]}
+                        Return only the new description, no explanation"""}]
+        )
+        dict[ix]["description"] = completion.choices[0].message.content
+    return dict
+
 def main():
     sentence_collection_name = "hh_ps_prepositions"
     #sentence_collection_name = input("Which sentence collection should we use:")
@@ -139,9 +161,12 @@ def main():
     for chunkId in chunksIds:
         chunks.append(get_point_text(sentence_collection_name, chunkId))
     print("chunks: ", chunks)
-    first_descriptions = making_description_of_groups(chunks)
+    #first_descriptions = making_description_of_groups(chunks)
+    first_descriptions = ["Different payment month plans, pros and cons", "'Monthly' Plan details", "'6-Month' plan details", "'12-Month' plan details", "Style options of the pieces and selection", "heart box", "general brand positioning on the market and target audience", "shipping info", "included jewelry on the subscription", "policies and warranties", "pieces composition and materials", "others"]
     groupedChunks = grouping_chunks(first_descriptions, chunks)  
-    print("final chunks: ", groupedChunks)
+    print("afet grouping: \n", disctionary_of_chunks_to_string(groupedChunks))
+    groupedChunks = rewrite_descriptions(groupedChunks)
+    print("after rewriting the descritions: \n", disctionary_of_chunks_to_string(groupedChunks))
 
 if __name__ == '__main__':
     main()
