@@ -284,55 +284,6 @@ def manual_chunks_filter(chunks, text):
             chunksToKeep.append(new_chunk)
     return chunksToKeep
 
-def list_of_chunks_to_numbered_string(chunks):
-    string = ""
-    for chunk_ix, chunk in enumerate(chunks):
-        #single_chunk_string = f"""Chunk ({chunk['chunk_id']}): {chunk['title']}\nSummary: {chunk['summary']}\n\n"""
-        single_chunk_string = f"""Chunk ({chunk_ix}): {chunk}\n\n"""
-        string += single_chunk_string
-    return string
-
-def grouping_chunks(chunks):
-    openai_client = get_openai_client()
-    #assuming there is at least one chunk
-    groupedChunks = [chunks[0]]
-
-    for chunk in chunks[1:]:
-            
-            string_of_chunks = list_of_chunks_to_numbered_string(groupedChunks)
-            # TO-DO add the response format to also include an explanation
-            completion = openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
-                           You will receive a list of groups of prepositions and a new one.
-                           Each group will be identified by a number.
-                           Please answer onlywith the number of the group in which the new preposition fits well, or -1 if it doesn't fit well in any of them.
-                           I rreally just want you to answer with a umber for me to be able to conver it to an integer on my code. Examples of answers:
-                           2
-                           -1
-                           The groups are:
-                           {string_of_chunks}
-                           New preposition: {chunk}"""}
-                          ]
-            )
-            response = completion.choices[0].message.content
-            print("grouped chunks: ", string_of_chunks)
-            print("chunk: ", chunk)
-            print("response: ", response)
-            agreed = input("agree?")
-            if agreed == "y":
-                if response == "-1":
-                    groupedChunks.append(chunk)
-                else:
-                    groupedChunks[int(response)] += "\n" + chunk
-            else:
-                user_response = input("then what?")
-                if user_response == "-1":
-                    groupedChunks.append(chunk)
-                else:
-                    groupedChunks[int(user_response)] += "\n" + chunk
-    
-    return groupedChunks
 
 def get_image_knowing_the_src(driver):
     openai_client = get_openai_client()
@@ -379,9 +330,7 @@ def main():
         #chunksToKeep = ['Hey Harper offers monthly surprise jewelry subscriptions.', 'Customers can choose the style of jewelry pieces they want: Minimalist, Trendy, or Surprise Me.', 'Customers can subscribe and save money by paying monthly.', 'By paying monthly, customers can save 50%.', 'Hey Harper offers free delivery from March 17th to 24th.', 'The subscription costs $30 and can be cancelled or paused anytime without commitments.', "The jewelry pieces are either from Hey Harper's core collection or upcoming new drops.", "Each jewelry piece is chosen by Hey Harper's design team.", 'Customers can choose their style, add their address, and the first piece ships immediately.', 'The subscription service is available only to the USA and Canada.', 'Images displayed are examples of jewelry pieces.', 'Monthly subscription pieces ship monthly on the same date as the first order to the given address.', 'Prepaid subscriptions ship on the first week of each month to the given address.', 'Customers receive a confirmation email with tracking information for each new shipment.', 'Customers can cancel or pause their subscription anytime, easily and for free.', 'All subscription pieces are non-refundable and non-exchangeable.', "Hey Harper's jewelry is made from stainless steel metal with 14K gold PVD coating.", 'The 14K gold PVD coating is durable and waterproof.', 'Hey Harper offers a lifetime color warranty for their jewelry.', "Hey Harper's waterproof jewelry is designed to endure daily routines, including showering, working out, and swimming.", 'If the jewelry loses color, customers can contact customer support with a visible picture of their item to claim the warranty.', 'Hey Harper offers a monthly surprise jewelry piece at a fraction of the price.', 'Customers can pay monthly and cancel anytime easily and for free.', 'Customers can select their subscription style.']
         #chunksToKeep = ['Please note that the Heart Jewelry Box is not included.', 'To ensure perfect fit, we are only offering necklaces and earrings. ']
 
-        #groupedChunks = grouping_chunks(chunksToKeep)
         
-        #print("final chunks: ", groupedChunks)
         vectors=get_embedding(chunksToKeep)
         insert_data(vectors)
 

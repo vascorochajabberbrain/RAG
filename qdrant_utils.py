@@ -61,7 +61,7 @@ def delete_points(collection_name, point_ids):
 
 def get_point_text(collection_name, point_id):
     get_qdrant_connection()
-    print(_connection.retrieve(collection_name=collection_name, ids=[point_id]))
+    #print(_connection.retrieve(collection_name=collection_name, ids=[point_id]))
     return _connection.retrieve(collection_name=collection_name, ids=[point_id])[0].payload['text']
 
 #info = _connection.get_collection(collection_name="fruit_example")
@@ -81,11 +81,13 @@ def add_source(collection_name, source):
 
 def main():
     get_qdrant_connection()
-    collection_name = input("Name of the collection:")
-    new_collection_name = collection_name + "_copy"
+    #collection_name = input("Name of the collection:")
+    #new_collection_name = collection_name + "_copy"
+    collection_name = "hey_harper_product_subscriptio_alpha"
+    new_collection_name = "hh_ps_prepositions"
     #create_collection(collection_name)
-    duplicate_collection(collection_name, new_collection_name)
-    add_source(collection_name, "https://heyharper.com/us/en/products/surprise-jewelry-subscription-box")
+    #duplicate_collection(collection_name, new_collection_name)
+    add_source(new_collection_name, "https://heyharper.com/us/en/products/surprise-jewelry-subscription-box")
 
 if __name__ == '__main__':
     main()
