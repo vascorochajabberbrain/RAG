@@ -1,4 +1,5 @@
 import json
+from groupCollection import GroupCollection
 from openai_utils import get_openai_client
 from qdrant_utils import get_point_text, get_qdrant_connection
 
@@ -51,17 +52,16 @@ def initalize_dictionary(descriptions):
         }
     return dictionary_of_groups
 
-def grouping_chunks(descriptions, chunks):
+def grouping_chunks(descriptions, chunks, gc):
     openai_client = get_openai_client()
     #assuming there is at least one chunk
     groupedChunks = [chunks[0]]
 
-    dictionary_of_groups = initalize_dictionary(descriptions)
-    print("dictionary of groups: ", dictionary_of_groups)
+    gc.add_groups(descriptions)
+    gc.print()
 
     for chunk in chunks:
             
-            string_of_chunks = disctionary_of_chunks_to_string(dictionary_of_groups)
             # TO-DO add the response format to also include an explanation
             completion = openai_client.chat.completions.create(
                 model="gpt-4o",
@@ -73,18 +73,16 @@ def grouping_chunks(descriptions, chunks):
                            2
                            -1
                            The groups are:
-                           {string_of_chunks}
+                           {gc.to_string()}
                            New preposition: {chunk}"""}
                           ]
             )
             response = completion.choices[0].message.content
             if response == "-1":
-                dictionary_of_groups[len(dictionary_of_groups)] = {
-                    "description": "temporary description",
-                    "prepositions": [chunk]
-                }
+                gc.add_group("temporary description")
+                gc.add_preposition(len(gc.groups)-1, chunk)
             else:
-                dictionary_of_groups[int(response)]["prepositions"].append(chunk)
+                gc.add_preposition(int(response), chunk)
             #path where I decide
             '''print("grouped chunks:\n", string_of_chunks)
             print("chunk: ", chunk)
@@ -109,7 +107,7 @@ def grouping_chunks(descriptions, chunks):
                     dictionary_of_groups[int(user_response)]["prepositions"].append(chunk)
             '''
     
-    return dictionary_of_groups
+    return gc
 
 def get_list_of_chunks(collection_name):
     connection = get_qdrant_connection()
@@ -136,21 +134,23 @@ def get_all_descriptions(dict):
         descriptions.append(dict[group]["description"])
     return descriptions
 
-def rewrite_descriptions(dict):
-    all_descriptions = get_all_descriptions(dict)
-    for ix, group in dict.items():
+def rewrite_descriptions(gc):
+
+    #get the descriptions of all the groups
+    all_descriptions = gc.get_all_descriptions()
+    for ix in range(len(gc.groups)):
         completion = get_openai_client().chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": f"""I need you to possibly rewrite the description of this group of sentences. 
                         Use the sentences themselfs and compare with the other descriptions to better decide what to call this one.
                         You can return the same description if you think it is the best one.
                         Here are the descriptions of all the groups: {all_descriptions}
-                        Here is the description of the group to rewrite: {group["description"]}
-                        Here are the prepositions of the group: {group["prepositions"]}
+                        Here is the description of the group to rewrite: {gc.get_description(ix)}
+                        Here are the prepositions of the group: {gc.get_prepositions(ix)}
                         Return only the new description, no explanation"""}]
         )
-        dict[ix]["description"] = completion.choices[0].message.content
-    return dict
+        gc.update_description(ix, completion.choices[0].message.content)
+    return gc
 
 def main():
     sentence_collection_name = "hh_ps_prepositions"
@@ -163,10 +163,12 @@ def main():
     print("chunks: ", chunks)
     #first_descriptions = making_description_of_groups(chunks)
     first_descriptions = ["Different payment month plans, pros and cons", "'Monthly' Plan details", "'6-Month' plan details", "'12-Month' plan details", "Style options of the pieces and selection", "heart box", "general brand positioning on the market and target audience", "shipping info", "included jewelry on the subscription", "policies and warranties", "pieces composition and materials", "others"]
-    groupedChunks = grouping_chunks(first_descriptions, chunks)  
-    print("afet grouping: \n", disctionary_of_chunks_to_string(groupedChunks))
-    groupedChunks = rewrite_descriptions(groupedChunks)
-    print("after rewriting the descritions: \n", disctionary_of_chunks_to_string(groupedChunks))
+    
+    gc = GroupCollection()
+    gc = grouping_chunks(first_descriptions, chunks, gc)  
+    gc.print()
+    gc = rewrite_descriptions(gc)
+    gc.print()
 
 if __name__ == '__main__':
     main()
