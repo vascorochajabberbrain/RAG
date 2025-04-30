@@ -108,13 +108,33 @@ def valid_collection_name(collection_name):
 
 def main():
     get_qdrant_connection()
-    #collection_name = input("Name of the collection:")
-    #new_collection_name = collection_name + "_copy"
-    collection_name = "hey_harper_product_subscriptio_alpha"
-    new_collection_name = "hh_ps_prepositions"
-    #create_collection(collection_name)
-    #duplicate_collection(collection_name, new_collection_name)
-    add_source(new_collection_name, "https://heyharper.com/us/en/products/surprise-jewelry-subscription-box")
+    
+    basic_menu_string = """Any action? 
+                   -- "q" for exit
+                   -- "d" to delete a collection
+                   -- "r" to rename a collection
+                   -- "a" to add a source
+                   """
+    action = input(basic_menu_string)
+    
+    while action != "q":
+        match action:
+            case "d":
+                collection_name = input("Name of the collection:")
+                delete_collection(collection_name)
+            case "r":
+                #not sure the payload is well transfered from the old to the new
+                old_collection_name = input("Name of the old collection:")
+                new_collection_name = input("Name of the new collection:")
+                duplicate_collection(old_collection_name, new_collection_name)
+                delete_collection(old_collection_name)
+            case "a":
+                collection_name = input("Name of the collection:")
+                source = input("Source:")
+                add_source(collection_name, source)
+            case _:
+                print("Invalid action")
+        action = input(basic_menu_string)
 
 if __name__ == '__main__':
     main()

@@ -240,8 +240,14 @@ def main():
                 preposition_index = int(input("Which preposition do you want to delete? "))
                 gc.delete_preposition(group_index, preposition_index)
             case "s":
-                # save can be dangerous because if something happens in between the process we might lose the VDB
-                delete_collection(grouped_collection_name)
+                if grouped_collection_name == None:
+                    grouped_collection_name = input("What is the name of the new grouped collection? ")
+                    while not valid_collection_name(grouped_collection_name):
+                        print("Invalid collection name")
+                        grouped_collection_name = input("What is the name of the new grouped collection? ")
+                else:
+                    # save can be dangerous because if something happens in between the process we might lose the VDB
+                    delete_collection(grouped_collection_name)
                 create_collection(grouped_collection_name)
                 insert_points(grouped_collection_name, gc.to_save_points())
             #case "a":
