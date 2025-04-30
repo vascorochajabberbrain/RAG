@@ -1,8 +1,7 @@
 import json
 from groupCollection import GroupCollection
 from openai_utils import get_openai_client
-from qdrant_utils import create_collection, delete_collection, get_point_text, get_qdrant_connection, get_points_from_collection, insert_points
-from vectorization import insert_data
+from qdrant_utils import valid_collection_name, create_collection, delete_collection, get_qdrant_connection, get_points_from_collection, insert_points
 
 
 def making_description_of_groups(chunks):
@@ -173,7 +172,10 @@ def main():
     if sentence_or_grouped_collection == "s":
 
         sentence_collection_name = "hh_ps_prepositions"
-        #sentence_collection_name = input("Which sentence collection should we use:")
+        sentence_collection_name = input("Which sentence collection should we use:")
+        while not valid_collection_name(sentence_collection_name):
+            print("Invalid collection name")
+            sentence_collection_name = input("Which sentence collection should we use:")
 
         chunks = get_list_of_chunks(sentence_collection_name)
         print("chunks: ", chunks)
@@ -234,6 +236,7 @@ def main():
                 preposition_index = int(input("Which preposition do you want to delete? "))
                 gc.delete_preposition(group_index, preposition_index)
             case "s":
+                # save can be dangerous because if something happens in between the process we might lose the VDB
                 delete_collection(grouped_collection_name)
                 create_collection(grouped_collection_name)
                 insert_points(grouped_collection_name, gc.to_save_points())

@@ -12,14 +12,14 @@ _connection = None
 def get_qdrant_connection():
     global _connection
     if _connection is None:  # Only initialize if not already created
-        print(os.getenv("QDRANT_API_KEY"))
+        #print(os.getenv("QDRANT_API_KEY"))
         _connection = QdrantClient(
             url = os.getenv("QDRANT_URL"),
             api_key = os.getenv("QDRANT_API_KEY"),
         )
-        print("New connection successful:") # for checking connection is successful or not
-    else:
-        print("Using previous connection")
+        #print("New connection successful:") # for checking connection is successful or not
+    #else:
+        #print("Using previous connection")
     return _connection
 
 
@@ -99,6 +99,11 @@ def add_source(collection_name, source):
 def delete_collection(collection_name):
     get_qdrant_connection()
     _connection.delete_collection(collection_name)
+
+def valid_collection_name(collection_name):
+    get_qdrant_connection()
+    collections = _connection.get_collections().collections
+    return any(c.name == collection_name for c in collections)
 
 
 def main():
