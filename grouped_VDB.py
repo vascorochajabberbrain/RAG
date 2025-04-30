@@ -172,10 +172,11 @@ def main():
     if sentence_or_grouped_collection == "s":
 
         sentence_collection_name = "hh_ps_prepositions"
-        sentence_collection_name = input("Which sentence collection should we use:")
-        while not valid_collection_name(sentence_collection_name):
-            print("Invalid collection name")
-            sentence_collection_name = input("Which sentence collection should we use:")
+
+        #sentence_collection_name = input("Which sentence collection should we use:")
+        #while not valid_collection_name(sentence_collection_name):
+        #    print("Invalid collection name")
+        #    sentence_collection_name = input("Which sentence collection should we use:")
 
         chunks = get_list_of_chunks(sentence_collection_name)
         print("chunks: ", chunks)
@@ -191,6 +192,9 @@ def main():
 
     elif sentence_or_grouped_collection == "g":
         grouped_collection_name = input("Which grouped collection should we use:")
+        while not valid_collection_name(grouped_collection_name):
+            print("Invalid collection name")
+            grouped_collection_name = input("Which grouped collection should we use:")
         gc = get_collection_from_(gc, grouped_collection_name)
         gc.print()
 
