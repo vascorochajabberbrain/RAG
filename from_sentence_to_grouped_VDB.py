@@ -1,7 +1,8 @@
 import json
 from groupCollection import GroupCollection
 from openai_utils import get_openai_client
-from qdrant_utils import get_point_text, get_qdrant_connection
+from qdrant_utils import create_collection, delete_collection, get_point_text, get_qdrant_connection, get_points_from_collection, insert_points
+from vectorization import insert_data
 
 
 def making_description_of_groups(chunks):
@@ -112,21 +113,25 @@ def grouping_chunks(descriptions, chunks, gc):
 def get_list_of_chunks(collection_name):
     connection = get_qdrant_connection()
 
-    all_ids = []
+    chunks = []
     offset = None
 
     while True:
         result, offset = connection.scroll(
             collection_name=collection_name,
             scroll_filter=None,
-            with_payload=False,
+            with_payload=True,
             with_vectors=False,
             offset=offset,
         )
-        all_ids.extend([pt.id for pt in result])
+        chunks.extend([pt.payload["text"] for pt in result])
         if offset is None:
             break
-    return all_ids
+    return chunks
+
+def get_collection_from_(gc, collection_name):
+    gc.from_save_points(get_points_from_collection(collection_name))
+    return gc
 
 def get_all_descriptions(dict):
     descriptions = []
@@ -134,41 +139,111 @@ def get_all_descriptions(dict):
         descriptions.append(dict[group]["description"])
     return descriptions
 
-def rewrite_descriptions(gc):
 
-    #get the descriptions of all the groups
+def ai_new_description(gc, group_index):
+    #get the description of all the groups
     all_descriptions = gc.get_all_descriptions()
+    completion = get_openai_client().chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": f"""I need you to possibly rewrite the description of this group of sentences. 
+                    Use the sentences themselfs and compare with the other descriptions to better decide what to call this one.
+                    You can return the same description if you think it is the best one.
+                    Here are the descriptions of all the groups: {all_descriptions}
+                    Here is the description of the group to rewrite: {gc.get_description(group_index)}
+                    Here are the prepositions of the group: {gc.get_prepositions(group_index)}
+                    Return only the new description, no explanation"""}]
+    )
+    return completion.choices[0].message.content
+
+def ai_rewrite_all_descriptions(gc):
+
     for ix in range(len(gc.groups)):
-        completion = get_openai_client().chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": f"""I need you to possibly rewrite the description of this group of sentences. 
-                        Use the sentences themselfs and compare with the other descriptions to better decide what to call this one.
-                        You can return the same description if you think it is the best one.
-                        Here are the descriptions of all the groups: {all_descriptions}
-                        Here is the description of the group to rewrite: {gc.get_description(ix)}
-                        Here are the prepositions of the group: {gc.get_prepositions(ix)}
-                        Return only the new description, no explanation"""}]
-        )
-        gc.update_description(ix, completion.choices[0].message.content)
+        new_description = ai_new_description(gc, ix)
+        gc.update_description(ix, new_description)
     return gc
 
 def main():
-    sentence_collection_name = "hh_ps_prepositions"
-    #sentence_collection_name = input("Which sentence collection should we use:")
-    chunksIds = get_list_of_chunks(sentence_collection_name)
-    print("chunksIds: ", chunksIds)
-    chunks = []
-    for chunkId in chunksIds:
-        chunks.append(get_point_text(sentence_collection_name, chunkId))
-    print("chunks: ", chunks)
-    #first_descriptions = making_description_of_groups(chunks)
-    first_descriptions = ["Different payment month plans, pros and cons", "'Monthly' Plan details", "'6-Month' plan details", "'12-Month' plan details", "Style options of the pieces and selection", "heart box", "general brand positioning on the market and target audience", "shipping info", "included jewelry on the subscription", "policies and warranties", "pieces composition and materials", "others"]
-    
+
+    grouped_collection_name = None
     gc = GroupCollection()
-    gc = grouping_chunks(first_descriptions, chunks, gc)  
-    gc.print()
-    gc = rewrite_descriptions(gc)
-    gc.print()
+
+# Initialization of the class collection, either from sentence or already created grouped vectorbase
+
+    sentence_or_grouped_collection = input("Do you want to create one from a sentence collection or update a grouped one? (s/g)")
+    if sentence_or_grouped_collection == "s":
+
+        sentence_collection_name = "hh_ps_prepositions"
+        #sentence_collection_name = input("Which sentence collection should we use:")
+
+        chunks = get_list_of_chunks(sentence_collection_name)
+        print("chunks: ", chunks)
+
+        #first_descriptions = making_description_of_groups(chunks)
+        first_descriptions = ["Different payment month plans, pros and cons", "'Monthly' Plan details", "'6-Month' plan details", "'12-Month' plan details", "Style options of the pieces and selection", "heart box", "general brand positioning on the market and target audience", "shipping info", "included jewelry on the subscription", "policies and warranties", "pieces composition and materials", "others"]
+        
+        gc = grouping_chunks(first_descriptions, chunks, gc)  
+        gc.print()
+
+        gc = ai_rewrite_all_descriptions(gc)
+        gc.print()
+
+    elif sentence_or_grouped_collection == "g":
+        grouped_collection_name = input("Which grouped collection should we use:")
+        gc = get_collection_from_(gc, grouped_collection_name)
+        gc.print()
+
+# Normal edition runnig mode
+
+    basic_menu_string = """Any action? 
+                   -- "q" for exit
+                   -- "r" to rewrite a description
+                   -- "m" to move a preposition
+                   -- "c" to copy a preposition
+                   -- "d" to delete a group
+                   -- "p" to delete a preposition
+                   -- "s" to save collection
+                   """
+    action = input(basic_menu_string)
+
+    while action != "q":
+        match action:
+            case "r":
+                group_index = int(input("Which group do you want to rewrite? "))
+                manual_or_ai = input("Do you want to do it manually or with AI? (m/a) ")
+                if manual_or_ai == "a":
+                    new_description = ai_new_description(gc, group_index)
+                else:
+                    #manual
+                    new_description = input("What is the new description? ")
+                gc.update_description(group_index, new_description)
+            case "m":
+                preposition_index = int(input("Which preposition do you want to move? "))
+                from_group_index = int(input("From which group? "))
+                to_group_index = int(input("To which group? "))
+                gc.move_preposition(preposition_index, from_group_index, to_group_index)
+            case "c":
+                preposition_index = int(input("Which preposition do you want to copy? "))
+                from_group_index = int(input("From which group? "))
+                to_group_index = int(input("To which group? "))
+                gc.copy_preposition(preposition_index, from_group_index, to_group_index)
+            case "d":
+                group_index = int(input("Which group do you want to delete? "))
+                gc.delete_group(group_index)
+            case "p":
+                group_index = int(input("Which group do you want to delete a preposition from? "))
+                preposition_index = int(input("Which preposition do you want to delete? "))
+                gc.delete_preposition(group_index, preposition_index)
+            case "s":
+                delete_collection(grouped_collection_name)
+                create_collection(grouped_collection_name)
+                insert_points(grouped_collection_name, gc.to_save_points())
+            #case "a":
+                #insert_data(gc.to_save_points(), grouped_collection_name)
+            case _:
+                print("Invalid action")
+        
+        gc.print()
+        action = input(basic_menu_string)
 
 if __name__ == '__main__':
     main()

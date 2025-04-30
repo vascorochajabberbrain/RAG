@@ -10,7 +10,7 @@ import difflib
 import time
 
 from openai_utils import get_openai_client
-from vectorization import get_text_chunks, get_embedding, insert_data
+from vectorization import get_points, get_text_chunks, insert_data
 
 
 def setup_driver(start_url):
@@ -331,7 +331,7 @@ def main():
         #chunksToKeep = ['Please note that the Heart Jewelry Box is not included.', 'To ensure perfect fit, we are only offering necklaces and earrings. ']
 
         
-        vectors=get_embedding(chunksToKeep)
+        vectors=get_points(chunksToKeep)
         insert_data(vectors)
 
         """

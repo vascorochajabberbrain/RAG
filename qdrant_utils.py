@@ -38,6 +38,24 @@ def duplicate_collection(collection_name, new_collection_name):
     vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
     init_from=models.InitFrom(collection=collection_name),
 )
+    
+def get_points_from_collection(collection_name):
+    connection = get_qdrant_connection()
+    points = []
+    offset = None
+
+    while True:
+        result, offset = connection.scroll(
+            collection_name=collection_name,
+            scroll_filter=None,
+            with_payload=True,
+            with_vectors=False,
+            offset=offset,
+        )
+        points.extend(result)
+        if offset is None:
+            break
+    return points
 
 def insert_points(collection_name, points):
     get_qdrant_connection()
@@ -77,6 +95,10 @@ def add_source(collection_name, source):
     points=models.Filter(
     ),
 )
+    
+def delete_collection(collection_name):
+    get_qdrant_connection()
+    _connection.delete_collection(collection_name)
 
 
 def main():

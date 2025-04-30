@@ -38,8 +38,7 @@ def get_text_chunks(text):
     print(completion.choices[0].message.content)
     return json.loads(completion.choices[0].message.content)
 
-
-def get_embedding(text_chunks, model_id="text-embedding-ada-002"):
+def get_points(text_chunks, model_id="text-embedding-ada-002"):
     openai_client = get_openai_client()
     points = []
     for idx, chunk in enumerate(text_chunks):
@@ -53,14 +52,23 @@ def get_embedding(text_chunks, model_id="text-embedding-ada-002"):
 
     return points
 
+def get_embedding(text, model_id="text-embedding-ada-002"):
+    openai_client = get_openai_client()
+    response = openai_client.embeddings.create(
+        input=text,
+        model=model_id
+    )
+    return response.data[0].embedding
+
+def get_point_id():
+    return str(uuid.uuid4())
+
 
 def insert_data(get_points, collection_name = None):
     while True:
-        if collection_name is not None:
-            insert_points(collection_name, get_points)
-            return
-        print("write 'q' if you want to quit the insertion")
-        collection_name = input("Insert into which collection?")
+        if collection_name is None: 
+            print("write 'q' if you want to quit the insertion")
+            collection_name = input("Insert into which collection?")
         if collection_name == "q":
             return
         try:
@@ -74,5 +82,6 @@ def insert_data(get_points, collection_name = None):
                 create_collection(collection_name)
                 #print("Collection created, now you need to write again the name of the collection to actually insert the data")
             elif choice == "a":
+                collection_name = None
                 continue
 
