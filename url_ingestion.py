@@ -308,6 +308,15 @@ def get_image_knowing_the_src(driver):
     )
     return response.choices[0].message.content
 
+def scrape_page(url):
+    time.sleep(0.1)
+    driver = setup_driver(url)
+    try:
+        text = get_all_text(driver)
+        return text
+    finally:
+        driver.quit()
+
 def main():
     start_url = "https://heyharper.com/us/en/products/surprise-jewelry-subscription-box"
     driver = setup_driver(start_url)
