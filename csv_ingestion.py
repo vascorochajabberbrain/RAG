@@ -70,6 +70,8 @@ def main():
 
         condition = row['Condition']
         print(f"Condition {condition} ({index + 1}/{n_rows})")
+
+        aux_chunks = []
         for column in df.columns:
             value = row[column]
 
@@ -89,6 +91,7 @@ def main():
                         continue
                     chunks.append(value)
                 case "Boots Links":
+                    continue
                     try:
                         text = scrape_page(value)
                         print(f"Scraped {len(text)} characters from {condition} Boots Links")
@@ -106,19 +109,40 @@ def main():
                     except Exception as e:
                         print(f"""Something went wrong, uploading the new chunks anyway
                               Remember to update the n_rows_scraped to {n_rows_scraped}""")
-                case "Generic Over the counter medication" | "Brand name Over the counter medication" | "Generic Prescription name" | "Brand Prescription name" | "Selfcare":
-                    continue # WARNING: this continue is only until we are finalizing the scraping
-                    if pd.isna(value):
+                case "Generic Over the counter medication" | "Brand name Over the counter medication" | "Generic Prescription name" | "Brand Prescription name":
+                    if pd.isna(value) or value == "None" or "None" in value or "N/A" in value:
                         continue
-                    #TO-DO: send to LLM to generate a proper sentence
-                    chunks.append(f"The {column} for {condition} are {value}")
+                    if value in ["Depends", "Excision if suspicious", "Surgical excision if symptomatic", "Incision and drainage (if inflamed)", "Treat underlying cause", "Surgical excision, Immunotherapy", "Surgical removal if needed", "Electrocautery, Surgical excision", "Cryotherapy, surgical removal"]:
+                        aux_chunks.append(openai_chat_completion(
+                            "You are an assistant to make more reasonable sentences. They were formed on an automatic, going throught a table and the wording sometimes is incorrect but the content it is correct." \
+                            "Please rephrase the following text to make it a proper sentence maintaining the content." \
+                            "Answer only with the rephrased text, do not add any additional text or explanation.",
+                            f"For {condition} there are no really {column} because you should {value}"
+                        ))
+                    else:
+                        aux_chunks.append(openai_chat_completion(
+                            "You are an assistant to make more reasonable sentences. They were formed on an automatic, going throught a table and the wording sometimes is incorrect but the content it is correct." \
+                            "Please rephrase the following text to make it a proper sentence maintaining the content." \
+                            "Answer only with the rephrased text, do not add any additional text or explanation.",
+                            f"The {column} for {condition} is {value}"))
+                case "Selfcare":
+                    continue
                 case _:
                     continue
+        if index == 12:
+            y_n = input(f"These are the chunks {aux_chunks}. Do you want to continue? (y/n): ")
+            if y_n.lower() == 'n':
+                print("Stopping the ingestion process.")
+                continue
+        if aux_chunks != []:
+            points=get_points(aux_chunks)
+            insert_data(points, collection_name="autoderm_alpha")
+        
 
     print(chunks[:15])
                     
-    #points=get_points(chunks)
-    #insert_data(points, collection_name="autoderm_alpha")
+    points=get_points(chunks)
+    insert_data(points, collection_name="autoderm_alpha")
 
 
 if __name__ == '__main__':
