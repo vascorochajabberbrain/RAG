@@ -71,7 +71,6 @@ def main():
         condition = row['Condition']
         print(f"Condition {condition} ({index + 1}/{n_rows})")
 
-        aux_chunks = []
         for column in df.columns:
             value = row[column]
 
@@ -110,6 +109,7 @@ def main():
                         print(f"""Something went wrong, uploading the new chunks anyway
                               Remember to update the n_rows_scraped to {n_rows_scraped}""")
                 case "Generic Over the counter medication" | "Brand name Over the counter medication" | "Generic Prescription name" | "Brand Prescription name":
+                    continue
                     if pd.isna(value) or value == "None" or "None" in value or "N/A" in value:
                         continue
                     if value in ["Depends", "Excision if suspicious", "Surgical excision if symptomatic", "Incision and drainage (if inflamed)", "Treat underlying cause", "Surgical excision, Immunotherapy", "Surgical removal if needed", "Electrocautery, Surgical excision", "Cryotherapy, surgical removal"]:
@@ -126,20 +126,26 @@ def main():
                             "Answer only with the rephrased text, do not add any additional text or explanation.",
                             f"The {column} for {condition} is {value}"))
                 case "Selfcare":
+                    chunks.append(openai_chat_completion(
+                        "You are an assistant to make more reasonable sentences. They were formed on an automatic, going throught a table and the wording sometimes is incorrect but the content it is correct." \
+                        "Please rephrase the following text to make it a proper sentence maintaining the content." \
+                        "Answer only with the rephrased text, do not add any additional text or explanation.",
+                        f"For {condition} the selfcare you must have is {value}"))
                     continue
                 case _:
                     continue
-        if index == 12:
-            y_n = input(f"These are the chunks {aux_chunks}. Do you want to continue? (y/n): ")
-            if y_n.lower() == 'n':
-                print("Stopping the ingestion process.")
-                continue
+        
+        '''
         if aux_chunks != []:
             points=get_points(aux_chunks)
             insert_data(points, collection_name="autoderm_alpha")
-        
+        '''
 
-    print(chunks[:15])
+    print(chunks)
+    y_n = input("You like the chunks? (y/n) ")
+    if y_n.lower() != "y":
+        print("Exiting without inserting data.")
+        return
                     
     points=get_points(chunks)
     insert_data(points, collection_name="autoderm_alpha")
