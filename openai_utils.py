@@ -63,3 +63,19 @@ def openai_chat_completion(prompt, text, model="gpt-4o"):
             )
     #print(completion.choices[0].message.content)
     return completion.choices[0].message.content.strip()
+
+# Helper: Wait for run to complete
+def wait_for_run_completion(thread_id, run_id, poll_interval=0.1, timeout=60):
+    start_time = time.time()
+    while True:
+        run = openai.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
+        if run.status == "completed":
+            end_time = time.time()
+            print(f"Elapsed time measured locally: {end_time - start_time:.2f} seconds")
+            return run
+        elif run.status in ["failed", "cancelled", "expired"]:
+            raise Exception(f"Run failed with status: {run.status}")
+        elif time.time() - start_time > timeout:
+            raise TimeoutError("Run did not complete within timeout.")
+        time.sleep(poll_interval)
+        

@@ -1,6 +1,6 @@
 import json
 from groupCollection import GroupCollection
-from openai_utils import get_openai_client, openai_chat_completion
+from openai_utils import get_openai_client, openai_chat_completion, wait_for_run_completion
 from qdrant_utils import existing_collection_name, create_collection, delete_collection, get_qdrant_connection, get_points_from_collection, insert_points
 
 
@@ -73,41 +73,72 @@ def grouping_chunks(descriptions, chunks, gc):
     gc.add_groups(descriptions)
     gc.print()
 
+    assistant = openai_client.beta.assistants.create(
+        name="Sentence Inserter",
+        instructions="""You are a classifier whose task is to group self-contained sentences by meaning.
+
+            You will receive:
+            - A list of groups, where each group is a list of self-contained sentences. Each group is identified by a number.
+            - A new sentence to insert.
+            - A boolean flag indicating whether creating a new group is allowed.
+
+            Your response must be:
+            - The number of the group where the sentence fits best.
+            - Or `-1` if it fits in none and should form a new group.
+
+            Rules:
+            - If no groups exist yet, the only valid answer is `-1`.
+            - If the boolean is True, you must pick an existing group — do not return `-1`.
+
+            Only respond with the number. Examples:
+            `2`  
+            `-1`""",
+        model="gpt-4o"
+    )
+    
+    
+
     for index, chunk in enumerate(chunks[:1000]):
             
-            if gc.collection_is_full():
-                prompt = f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
-                           You will receive a list of groups of self-contained sentences and a new sentence.
-                           Each group will be identified by a number.
-                           Please answer only with the number of the group in which the new sentence fits better.
-                           I really just want you to answer with a number for me to be able to convert it to an integer on my code. Examples of answers:
-                           2
-                           5
-                           And yes, I am forcing you to put it onto a group and it might make more sense to put it into a new group but that is not possible, just answer with the number of the group where it fits best.
-                           The groups are:
-                           {gc.to_string()}
-                    """    
-                print("Collection is full")
-            else:
-                prompt = f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
-                            You will receive a list of groups of self-contained sentences and a new sentence.
-                            Each group will be identified by a number.
-                            Please answer only with the number of the group in which the new sentence fits well, or -1 if it doesn't fit well in any of them.
-                            I really just want you to answer with a number for me to be able to convert it to an integer on my code. Examples of answers:
-                            2
-                            -1
-                            Notice, if there are no groups yet, the only answer you can give is -1
-                            The groups are:
-                            {gc.to_string()}
-                        """
-            text = f"""New sentence: {chunk}"""
+            thread = openai_client.beta.threads.create()
 
-            response = openai_chat_completion(prompt, text)
+            user_message = f"""Groups:
+                {gc.to_string()}
+
+                New sentence: {chunk}
+
+                Allow new group creation (allowed '-1' response): {not gc.collection_is_full()}"""
+
+            openai_client.beta.threads.messages.create(
+                thread_id=thread.id,
+                role="user",
+                content=user_message
+            )
+
+            run = openai_client.beta.threads.runs.create(
+                thread_id=thread.id,
+                assistant_id=assistant.id
+            )
+
+            wait_for_run_completion(thread.id, run.id)
+
+            response = openai_client.beta.threads.messages.list(thread_id=thread.id).data[0].content[0].text.value
+
             response = clean_LLM_response(response)
             while not is_valid_group_response(response):
                 #repeat until the LLM ansers a valid response, this is dangerous though
                 print("The LLM answer an invalid response")
-                response = openai_chat_completion(prompt, text)
+                openai_client.beta.threads.messages.create(
+                thread_id=thread.id,
+                role="user",
+                content="That response was invalid, please pay attention to the rules and try again, no explanations just the response"
+            )
+                run = openai_client.beta.threads.runs.create(
+                    thread_id=thread.id,
+                    assistant_id=assistant.id
+                )
+                wait_for_run_completion(thread.id, run.id)
+                response = openai_client.beta.threads.messages.list(thread_id=thread.id).data[0].content[0].text.value
                 response = clean_LLM_response(response)
 
             if response == "-1":

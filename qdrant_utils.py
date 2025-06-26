@@ -100,7 +100,7 @@ def delete_collection(collection_name):
     get_qdrant_connection()
     _connection.delete_collection(collection_name)
 
-def valid_collection_name(collection_name):
+def existing_collection_name(collection_name):
     get_qdrant_connection()
     collections = _connection.get_collections().collections
     return any(c.name == collection_name for c in collections)
