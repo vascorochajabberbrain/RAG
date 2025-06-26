@@ -4,6 +4,9 @@ from vectorization import get_embedding, get_point_id
 
 
 class GroupCollection:
+    LIMIT_OF_SCS = 8
+    LIMIT_OF_UNFULL_GROUPS = 12
+
     def __init__(self):
         self.groups = []
 
@@ -24,6 +27,16 @@ class GroupCollection:
     def get_prepositions(self, group_index):
         self._validate_group_index(group_index)
         return self.groups[group_index]["prepositions"]
+    
+    def number_of_groups(self):
+        return len(self.groups)
+    
+    def number_of_full_groups(self):
+        return sum(1 for group in self.groups if self.group_is_full(self.groups.index(group)))
+    
+    def number_of_prepositions(self, group_index):
+        self._validate_group_index(group_index)
+        return len(self.groups[group_index]["prepositions"])
 
     def move_preposition(self, preposition_index, from_group_index, to_group_index):
         self._validate_group_index(from_group_index)
@@ -80,8 +93,14 @@ class GroupCollection:
         for point in points:
             self._payload_to_group(point.payload)
 
-    def print(self):
+    def print(self, list_indexes=None):
+        if list_indexes is None:
+            list_indexes = range(len(self.groups))
+        if not isinstance(list_indexes, list) and len(self.groups) != 0:
+            raise TypeError("list_indexes must be a list of integers")
         for i, group in enumerate(self.groups):
+            if i not in list_indexes:
+                continue
             print(f"[{i}] {group['description']}")
             for j, prep in enumerate(group["prepositions"]):
                 print(f"   ({j}) {prep}")
@@ -90,6 +109,8 @@ class GroupCollection:
     def to_string(self):
         lines = []
         for i, group in enumerate(self.groups):
+            if self.group_is_full(i):
+                continue
             lines.append(f"[{i}] {group['description']}")
             for j, prep in enumerate(group["prepositions"]):
                 lines.append(f"   ({j}) {prep}")
@@ -99,6 +120,14 @@ class GroupCollection:
     # Placeholder for future search implementation
     def search_prepositions(self, group_index, keyword):
         pass
+
+    def group_is_full(self, group_index):
+        self._validate_group_index(group_index)
+        return self.number_of_prepositions(group_index) >= self.LIMIT_OF_SCS
+    
+    def collection_is_full(self):
+        #a collection is full when the number of unfull groups reaches the limit
+        return self.number_of_groups() - self.number_of_full_groups() >= self.LIMIT_OF_UNFULL_GROUPS
 
     def _validate_group_index(self, index):
         if index < 0 or index >= len(self.groups):

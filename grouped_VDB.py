@@ -1,7 +1,7 @@
 import json
 from groupCollection import GroupCollection
-from openai_utils import get_openai_client
-from qdrant_utils import valid_collection_name, create_collection, delete_collection, get_qdrant_connection, get_points_from_collection, insert_points
+from openai_utils import get_openai_client, openai_chat_completion
+from qdrant_utils import existing_collection_name, create_collection, delete_collection, get_qdrant_connection, get_points_from_collection, insert_points
 
 
 def making_description_of_groups(chunks):
@@ -52,6 +52,19 @@ def initalize_dictionary(descriptions):
         }
     return dictionary_of_groups
 
+def clean_LLM_response(response):
+    #if the response comes as a list with an integer, just return the string of the integer
+    return response.strip("[]")
+
+def is_valid_group_response(response):
+    if response == "-1":
+        return True
+    try:
+        int(response)
+        return True
+    except ValueError:
+        return False
+
 def grouping_chunks(descriptions, chunks, gc):
     openai_client = get_openai_client()
     #assuming there is at least one chunk
@@ -60,51 +73,74 @@ def grouping_chunks(descriptions, chunks, gc):
     gc.add_groups(descriptions)
     gc.print()
 
-    for chunk in chunks:
+    for index, chunk in enumerate(chunks[:1000]):
             
-            # TO-DO add the response format to also include an explanation
-            completion = openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
-                           You will receive a list of groups of prepositions and a new one.
+            if gc.collection_is_full():
+                prompt = f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
+                           You will receive a list of groups of self-contained sentences and a new sentence.
                            Each group will be identified by a number.
-                           Please answer onlywith the number of the group in which the new preposition fits well, or -1 if it doesn't fit well in any of them.
-                           I rreally just want you to answer with a umber for me to be able to conver it to an integer on my code. Examples of answers:
+                           Please answer only with the number of the group in which the new sentence fits better.
+                           I really just want you to answer with a number for me to be able to convert it to an integer on my code. Examples of answers:
                            2
-                           -1
+                           5
+                           And yes, I am forcing you to put it onto a group and it might make more sense to put it into a new group but that is not possible, just answer with the number of the group where it fits best.
                            The groups are:
                            {gc.to_string()}
-                           New preposition: {chunk}"""}
-                          ]
-            )
-            response = completion.choices[0].message.content
+                    """    
+                print("Collection is full")
+            else:
+                prompt = f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
+                            You will receive a list of groups of self-contained sentences and a new sentence.
+                            Each group will be identified by a number.
+                            Please answer only with the number of the group in which the new sentence fits well, or -1 if it doesn't fit well in any of them.
+                            I really just want you to answer with a number for me to be able to convert it to an integer on my code. Examples of answers:
+                            2
+                            -1
+                            Notice, if there are no groups yet, the only answer you can give is -1
+                            The groups are:
+                            {gc.to_string()}
+                        """
+            text = f"""New sentence: {chunk}"""
+
+            response = openai_chat_completion(prompt, text)
+            response = clean_LLM_response(response)
+            while not is_valid_group_response(response):
+                #repeat until the LLM ansers a valid response, this is dangerous though
+                print("The LLM answer an invalid response")
+                response = openai_chat_completion(prompt, text)
+                response = clean_LLM_response(response)
+
+            if response == "-1":
+                print(f"Sentence({index + 1}/{len(chunks)}), response: {response})")
+            else:
+                print(f"Sentence({index + 1}/{len(chunks)}), response: {response} that has {gc.number_of_prepositions(int(response))} SCS's")
+            print(f"Groups({gc.number_of_full_groups()}/{gc.number_of_groups()})full, chunk: {chunk}")
+
+            #path where I don't decide
             if response == "-1":
                 gc.add_group("temporary description")
                 gc.add_preposition(len(gc.groups)-1, chunk)
             else:
                 gc.add_preposition(int(response), chunk)
+            '''
             #path where I decide
-            '''print("grouped chunks:\n", string_of_chunks)
+            gc.print()
             print("chunk: ", chunk)
             print("response: ", response)
             agreed = input("agree?")
             if agreed == "y":
                 if response == "-1":
-                    dictionary_of_groups[len(dictionary_of_groups)] = {
-                        "description": "temporary description",
-                        "prepositions": [chunk]
-                    }
+                    gc.add_group("temporary description")
+                    gc.add_preposition(len(gc.groups)-1, chunk)
                 else:
-                    dictionary_of_groups[int(response)]["prepositions"].append(chunk)
+                    gc.add_preposition(int(response), chunk)
             else:
                 user_response = input("then what?")
                 if user_response == "-1":
-                    dictionary_of_groups[len(dictionary_of_groups)] = {
-                        "description": "temporary description",
-                        "prepositions": [chunk]
-                    }
+                    gc.add_group("temporary description")
+                    gc.add_preposition(len(gc.groups)-1, chunk)
                 else:
-                    dictionary_of_groups[int(user_response)]["prepositions"].append(chunk)
+                    gc.add_preposition(int(user_response), chunk)
             '''
     
     return gc
@@ -139,18 +175,29 @@ def get_all_descriptions(dict):
     return descriptions
 
 
-def ai_new_description(gc, group_index):
-    #get the description of all the groups
-    all_descriptions = gc.get_all_descriptions()
-    completion = get_openai_client().chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": f"""I need you to possibly rewrite the description of this group of sentences. 
+#get the description of all the groups
+def ai_new_description(gc, group_index, with_other_descriptions=False):
+
+    if with_other_descriptions:
+        all_descriptions = gc.get_all_descriptions()
+        prompt = f"""I need you to possibly rewrite the description of this group of sentences. 
                     Use the sentences themselfs and compare with the other descriptions to better decide what to call this one.
                     You can return the same description if you think it is the best one.
                     Here are the descriptions of all the groups: {all_descriptions}
                     Here is the description of the group to rewrite: {gc.get_description(group_index)}
                     Here are the prepositions of the group: {gc.get_prepositions(group_index)}
-                    Return only the new description, no explanation"""}]
+                    Return only the new description, no explanation"""
+    else:
+        prompt = f"""I need you to possibly rewrite the description of this group of sentences. 
+                    Use the sentences themselfs to better decide what to call this one.
+                    You can return the same description if you think it is the best one.
+                    Here is the description of the group to rewrite: {gc.get_description(group_index)}
+                    Here are the prepositions of the group: {gc.get_prepositions(group_index)}
+                    Return only the new description, no explanation"""
+    
+    completion = get_openai_client().chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}]
     )
     return completion.choices[0].message.content
 
@@ -168,32 +215,35 @@ def main():
 
 # Initialization of the class collection, either from sentence or already created grouped vectorbase
 
-    sentence_or_grouped_collection = input("Do you want to create one from a sentence collection or update a grouped one? (s/g)")
+    #sentence_or_grouped_collection = input("Do you want to create one from a sentence collection or update a grouped one? (s/g)")
+    sentence_or_grouped_collection = "s"
     if sentence_or_grouped_collection == "s":
 
-        sentence_collection_name = "hh_ps_prepositions"
 
+        sentence_collection_name = "autoderm_alpha"
         #sentence_collection_name = input("Which sentence collection should we use:")
-        #while not valid_collection_name(sentence_collection_name):
-        #    print("Invalid collection name")
+        #while not existing_collection_name(sentence_collection_name):
+        #    print("That collection does not exist, try again with another collection name")
         #    sentence_collection_name = input("Which sentence collection should we use:")
 
         chunks = get_list_of_chunks(sentence_collection_name)
         print("chunks: ", chunks)
 
         #first_descriptions = making_description_of_groups(chunks)
-        first_descriptions = ["Different payment month plans, pros and cons", "'Monthly' Plan details", "'6-Month' plan details", "'12-Month' plan details", "Style options of the pieces and selection", "heart box", "general brand positioning on the market and target audience", "shipping info", "included jewelry on the subscription", "policies and warranties", "pieces composition and materials", "others"]
-        
-        gc = grouping_chunks(first_descriptions, chunks, gc)  
-        gc.print()
+        #first_descriptions = ["Different payment month plans, pros and cons", "'Monthly' Plan details", "'6-Month' plan details", "'12-Month' plan details", "Style options of the pieces and selection", "heart box", "general brand positioning on the market and target audience", "shipping info", "included jewelry on the subscription", "policies and warranties", "pieces composition and materials", "others"]
+        first_descriptions = []
 
+        gc = grouping_chunks(first_descriptions, chunks, gc)  
+        #gc.print()
+
+        print("Now we have the groups, we can rewrite the descriptions with AI")
         gc = ai_rewrite_all_descriptions(gc)
-        gc.print()
+        gc.print([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59])
 
     elif sentence_or_grouped_collection == "g":
         grouped_collection_name = input("Which grouped collection should we use:")
-        while not valid_collection_name(grouped_collection_name):
-            print("Invalid collection name")
+        while not existing_collection_name(grouped_collection_name):
+            print("That collection does not exist, try again with another collection name")
             grouped_collection_name = input("Which grouped collection should we use:")
         gc = get_collection_from_(gc, grouped_collection_name)
         gc.print()
@@ -241,9 +291,10 @@ def main():
                 gc.delete_preposition(group_index, preposition_index)
             case "s":
                 if grouped_collection_name == None:
+                    #means we came from a sentence collection and we need to create a new grouped collection
                     grouped_collection_name = input("What is the name of the new grouped collection? ")
-                    while not valid_collection_name(grouped_collection_name):
-                        print("Invalid collection name")
+                    while existing_collection_name(grouped_collection_name):
+                        print("That collection already exists, try again with another collection name")
                         grouped_collection_name = input("What is the name of the new grouped collection? ")
                 else:
                     # save can be dangerous because if something happens in between the process we might lose the VDB

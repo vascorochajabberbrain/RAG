@@ -69,6 +69,7 @@ def main():
 
 
         condition = row['Condition']
+        condition = condition.replace("_", " ")  # Replace underscores with spaces for better readability
         print(f"Condition {condition} ({index + 1}/{n_rows})")
 
         for column in df.columns:
@@ -116,7 +117,7 @@ def main():
                         aux_chunks.append(openai_chat_completion(
                             "You are an assistant to make more reasonable sentences. They were formed on an automatic, going throught a table and the wording sometimes is incorrect but the content it is correct." \
                             "Please rephrase the following text to make it a proper sentence maintaining the content." \
-                            "Answer only with the rephrased text, do not add any additional text or explanation.",
+                            "Answer only with the rephrased text, do not add any additional text or explanation." ,
                             f"For {condition} there are no really {column} because you should {value}"
                         ))
                     else:

@@ -1,3 +1,4 @@
+import time
 from dotenv import load_dotenv
 import os
 import openai
@@ -41,10 +42,24 @@ def openai_chat_completion(prompt, text, model="gpt-4o"):
     # Example prompt and text
     # prompt = "You are a helpful assistant that generates sentences based on the provided text."
     # text = "Your input text goes here."
-    completion = openai_client.chat.completions.create(
-        model=model,
-        messages=[{"role": "system", "content": prompt},
-                  {"role": "user", "content": text}]
-    )
+    try:
+        completion = openai_client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": prompt},
+                    {"role": "user", "content": text}]
+        )
+    except openai.error.RateLimitError as e:
+        # Extract details from the error object
+        error_data = e.response.json()["error"]
+
+        # Check if it's a token-per-minute (TPM) limit
+        if "tokens per min" in error_data.get("message", "").lower():
+            print("Hit the TPM (tokens per minute) limit. Will wait a bit and try again")
+            time.sleep(10)  # Wait for 10 seconds before retrying
+            completion = openai_client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": prompt},
+                        {"role": "user", "content": text}]
+            )
     #print(completion.choices[0].message.content)
     return completion.choices[0].message.content.strip()
