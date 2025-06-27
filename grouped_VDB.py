@@ -1,4 +1,5 @@
 import json
+import ast
 from groupCollection import GroupCollection
 from openai_utils import get_openai_client, openai_chat_completion, wait_for_run_completion
 from qdrant_utils import existing_collection_name, create_collection, delete_collection, get_qdrant_connection, get_points_from_collection, insert_points
@@ -52,21 +53,39 @@ def initalize_dictionary(descriptions):
         }
     return dictionary_of_groups
 
+#used when I had no batch
 def clean_LLM_response(response):
     #if the response comes as a list with an integer, just return the string of the integer
     return response.strip("[]")
 
-def is_valid_group_response(response, collection_is_full):
-    if response == "-1" and not collection_is_full:
-        return True
-    if response == "-1" and collection_is_full:
-        return False
-    #check if the response is a number, if it is not, return False
+def is_valid_group_response(response, lenght, collection_is_full):
+    print(lenght, collection_is_full)
     try:
-        int(response)
-        return True
-    except ValueError:
-        return False
+        response_list = ast.literal_eval(response)    
+    except:
+        raise ValueError("The response is not a valid list format.")
+    if not isinstance(response_list, list):
+        raise ValueError("The response is not a list.")
+    if len(response_list) != lenght:
+        raise ValueError(f"The response list length {len(response_list)} does not match the expected length {lenght}.")
+    for response in response_list:
+        if response == -1 and not collection_is_full:
+            continue
+        if response == -1 and collection_is_full:
+            raise ValueError("The response contains -1, but new group creation is not allowed.")
+        #check if the response is a number, if it is not, return False
+        try:
+            int(response)
+            continue
+        except ValueError:
+            raise ValueError(f"The response {response} is not a valid group index.")
+    return True
+    
+#be carefull when using yeld
+def batch_list(lst, batch_size):
+    index_list = list(range(len(lst)))
+    for i in range(0, len(lst), batch_size):
+        yield index_list[i:i + batch_size], lst[i:i + batch_size]
 
 def grouping_chunks(descriptions, chunks, gc):
     openai_client = get_openai_client()
@@ -76,80 +95,59 @@ def grouping_chunks(descriptions, chunks, gc):
     gc.add_groups(descriptions)
     gc.print()
 
-    assistant = openai_client.beta.assistants.create(
-        name="Sentence Inserter",
-        instructions="""You are a classifier whose task is to group self-contained sentences by meaning.
-
-            You will receive:
-            - A list of groups, where each group is a list of self-contained sentences. Each group is identified by a number.
-            - A new sentence to insert.
-            - A boolean flag indicating whether creating a new group is allowed.
-
-            Your response must be:
-            - The number of the group where the sentence fits best.
-            - Or `-1` if it fits in none and should form a new group.
-
-            Rules:
-            - If no groups exist yet, the only valid answer is `-1`.
-            - If the boolean is True, you must pick an existing group — do not return `-1`.
-
-            Only respond with the number. Examples:
-            `2`  
-            `-1`""",
-        model="gpt-4o"
-    )
     
-    
-
-    for index, chunk in enumerate(chunks[:1000]):
+    for index_list, chunk_list in batch_list(chunks[:1000], 5):
             
-            if gc.collection_is_full():
-                prompt = f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
-                           You will receive a list of groups of self-contained sentences and a new sentence.
-                           Each group will be identified by a number.
-                           Please answer only with the number of the group in which the new sentence fits better.
-                           I really just want you to answer with a number for me to be able to convert it to an integer on my code. Examples of answers:
-                           2
-                           5
-                           And yes, I am forcing you to put it onto a group and it might make more sense to put it into a new group but that is not possible, just answer with the number of the group where it fits best.
-                           The groups are:
-                           {gc.to_string()}
-                    """    
-                print("Collection is full")
-            else:
-                prompt = f"""You are classifier which porpuse is to group prepositions together depending on their meaning.
-                            You will receive a list of groups of self-contained sentences and a new sentence.
-                            Each group will be identified by a number.
-                            Please answer only with the number of the group in which the new sentence fits well, or -1 if it doesn't fit well in any of them.
-                            I really just want you to answer with a number for me to be able to convert it to an integer on my code. Examples of answers:
-                            2
-                            -1
-                            Notice, if there are no groups yet, the only answer you can give is -1
-                            The groups are:
-                            {gc.to_string()}
-                        """
-            text = f"""New sentence: {chunk}"""
+            prompt = """You are a classifier whose task is to group self-contained sentences by meaning.
 
-            response = openai_chat_completion(prompt, text)
-            response = clean_LLM_response(response)
-            while not is_valid_group_response(response, gc.collection_is_full()):
-                #repeat until the LLM ansers a valid response, this is dangerous though
-                print("The LLM answer an invalid response")
-                response = openai_chat_completion(prompt, text)
-                response = clean_LLM_response(response)
+                You will receive:
+                - A list of groups, where each group is a list of self-contained sentences. Each group is identified by a number.
+                - A list of new sentences to insert.
+                - A boolean flag indicating whether creating a new group is allowed.
 
-            if response == "-1":
-                print(f"Sentence({index + 1}/{len(chunks)}), response: {response})")
-            else:
-                print(f"Sentence({index + 1}/{len(chunks)}), response: {response} that has {gc.number_of_prepositions(int(response))} SCS's")
-            print(f"Groups({gc.number_of_full_groups()}/{gc.number_of_groups()})full, chunk: {chunk}")
+                Your response must be:
+                - A list of one of these two options, for each new sentence:
+                    - The number of the group where the sentence fits best.
+                    - Or `-1` if it fits in none and should form a new group.
 
+                Rules:
+                - If no groups exist yet, the only valid answer is `-1`, for the first new sentence.
+                - If the boolean is True, you must pick an existing group — do not return `-1`.
+
+                Only respond with the list of numbers. Examples:
+                `[2, -1, 3]`  
+                `[-1, 5, 3, 9, 12]`"""
+                
+            text = f"""Groups:More actions
+                {gc.to_string()}
+
+                New sentence: {chunk_list}
+
+                Allow new group creation (allowed '-1' response): {not gc.collection_is_full()}"""
+
+            response_list = openai_chat_completion(prompt, text)
+            #repeat until the LLM ansers a valid response, this is dangerous though
+            while True:
+                try:
+                    is_valid_group_response(response_list, len(chunk_list), gc.collection_is_full())
+                    break
+                except ValueError as e:
+                    print(f"You answered {response_list}, but it is not a valid response because {e}.")
+                    text += f"You answered {response_list}, but it is not a valid response because {e}."
+                    response_list = openai_chat_completion(prompt, text)
+
+            response_list = ast.literal_eval(response_list)
             #path where I don't decide
-            if response == "-1":
-                gc.add_group("temporary description")
-                gc.add_preposition(len(gc.groups)-1, chunk)
-            else:
-                gc.add_preposition(int(response), chunk)
+            for response, chunk, index in zip(response_list, chunk_list, index_list):
+                if response == -1:
+                    print(f"Sentence({index + 1}/{len(chunks)}), response: {response})")
+                    gc.add_group("temporary description")
+                    gc.add_preposition(len(gc.groups)-1, chunk)
+                else:
+                    print(f"Sentence({index + 1}/{len(chunks)}), response: {response} that has {gc.number_of_prepositions(int(response))} SCS's")
+                    gc.add_preposition(int(response), chunk)
+                print(f"Groups({gc.number_of_full_groups()}/{gc.number_of_groups()})full")
+
             '''
             #path where I decide
             gc.print()
@@ -255,7 +253,7 @@ def main():
         #    sentence_collection_name = input("Which sentence collection should we use:")
 
         chunks = get_list_of_chunks(sentence_collection_name)
-        print("chunks: ", chunks)
+        #print("chunks: ", chunks)
 
         #first_descriptions = making_description_of_groups(chunks)
         #first_descriptions = ["Different payment month plans, pros and cons", "'Monthly' Plan details", "'6-Month' plan details", "'12-Month' plan details", "Style options of the pieces and selection", "heart box", "general brand positioning on the market and target audience", "shipping info", "included jewelry on the subscription", "policies and warranties", "pieces composition and materials", "others"]

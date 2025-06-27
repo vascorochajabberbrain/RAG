@@ -41,7 +41,9 @@ def get_text_chunks(text, additional_prompt=None):
     #print(completion.choices[0].message.content)
     return json.loads(completion.choices[0].message.content)
 
-def get_points(text_chunks, model_id="text-embedding-ada-002"):
+def get_points(text_chunks, initial_idx, model_id="text-embedding-ada-002"):
+    if not isinstance(initial_idx, int):
+        raise ValueError("initial_idx has to be an integer")
     openai_client = get_openai_client()
     points = []
     for idx, chunk in enumerate(text_chunks):
@@ -51,11 +53,13 @@ def get_points(text_chunks, model_id="text-embedding-ada-002"):
         )
         embeddings = response.data[0].embedding
         point_id = str(uuid.uuid4())  # Generate a unique ID for the point
-        points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk}))
+        points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "idx": initial_idx + idx}))
 
     return points
 
-def get_points_with_source(text_chunks, source, model_id="text-embedding-ada-002"):
+def get_points_with_source(text_chunks, source, initial_idx, model_id="text-embedding-ada-002"):
+    if not isinstance(initial_idx, int):
+        raise ValueError("initial_idx has to be an integer")
     openai_client = get_openai_client()
     points = []
     for idx, chunk in enumerate(text_chunks):
@@ -65,7 +69,7 @@ def get_points_with_source(text_chunks, source, model_id="text-embedding-ada-002
         )
         embeddings = response.data[0].embedding
         point_id = str(uuid.uuid4())  # Generate a unique ID for the point
-        points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "source": source}))
+        points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "source": source, "idx": initial_idx + idx}))
 
     return points
 
