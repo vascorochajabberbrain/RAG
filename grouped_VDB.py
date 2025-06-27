@@ -56,9 +56,12 @@ def clean_LLM_response(response):
     #if the response comes as a list with an integer, just return the string of the integer
     return response.strip("[]")
 
-def is_valid_group_response(response):
-    if response == "-1":
+def is_valid_group_response(response, collection_is_full):
+    if response == "-1" and not collection_is_full:
         return True
+    if response == "-1" and collection_is_full:
+        return False
+    #check if the response is a number, if it is not, return False
     try:
         int(response)
         return True
@@ -125,9 +128,9 @@ def grouping_chunks(descriptions, chunks, gc):
             response = openai_client.beta.threads.messages.list(thread_id=thread.id).data[0].content[0].text.value
 
             response = clean_LLM_response(response)
-            while not is_valid_group_response(response):
+            while not is_valid_group_response(response, gc.collection_is_full()):
                 #repeat until the LLM ansers a valid response, this is dangerous though
-                print("The LLM answer an invalid response")
+                print("The LLM answer an invalid response, the response was: ", response)
                 openai_client.beta.threads.messages.create(
                 thread_id=thread.id,
                 role="user",

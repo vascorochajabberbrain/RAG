@@ -65,7 +65,7 @@ def openai_chat_completion(prompt, text, model="gpt-4o"):
     return completion.choices[0].message.content.strip()
 
 # Helper: Wait for run to complete
-def wait_for_run_completion(thread_id, run_id, poll_interval=0.1, timeout=60):
+def wait_for_run_completion(thread_id, run_id, poll_interval=0.1, timeout=100):
     start_time = time.time()
     while True:
         run = openai.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
