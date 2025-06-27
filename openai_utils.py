@@ -27,6 +27,7 @@ def clean_json_response(text):
     return text
 
 def openai_chat_completion(prompt, text, model="gpt-4o"):
+    start_time = time.time()
     """
     Function to get a chat completion from OpenAI's API.
     
@@ -62,6 +63,8 @@ def openai_chat_completion(prompt, text, model="gpt-4o"):
                         {"role": "user", "content": text}]
             )
     #print(completion.choices[0].message.content)
+    end_time = time.time()
+    print(f"Elapsed time measured locally: {end_time - start_time:.2f} seconds")
     return completion.choices[0].message.content.strip()
 
 # Helper: Wait for run to complete
