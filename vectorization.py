@@ -41,7 +41,7 @@ def get_text_chunks(text, additional_prompt=None):
     #print(completion.choices[0].message.content)
     return json.loads(completion.choices[0].message.content)
 
-def get_points(text_chunks, initial_idx, model_id="text-embedding-ada-002"):
+def get_points(text_chunks, condition, initial_idx, model_id="text-embedding-ada-002"):
     if not isinstance(initial_idx, int):
         raise ValueError("initial_idx has to be an integer")
     openai_client = get_openai_client()
@@ -53,11 +53,11 @@ def get_points(text_chunks, initial_idx, model_id="text-embedding-ada-002"):
         )
         embeddings = response.data[0].embedding
         point_id = str(uuid.uuid4())  # Generate a unique ID for the point
-        points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "idx": initial_idx + idx}))
+        points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "condition": condition, "idx": initial_idx + idx}))
 
     return points
 
-def get_points_with_source(text_chunks, source, initial_idx, model_id="text-embedding-ada-002"):
+def get_points_with_source(text_chunks, source, condition, initial_idx, model_id="text-embedding-ada-002"):
     if not isinstance(initial_idx, int):
         raise ValueError("initial_idx has to be an integer")
     openai_client = get_openai_client()
@@ -69,7 +69,7 @@ def get_points_with_source(text_chunks, source, initial_idx, model_id="text-embe
         )
         embeddings = response.data[0].embedding
         point_id = str(uuid.uuid4())  # Generate a unique ID for the point
-        points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "source": source, "idx": initial_idx + idx}))
+        points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "source": source, "condition": condition, "idx": initial_idx + idx}))
 
     return points
 
@@ -96,7 +96,8 @@ def insert_data(get_points, collection_name = None):
             insert_points(collection_name, get_points)
             return
         except Exception as e:
-            print(e)
+            raise Exception(e)
+            '''
             print("That collection does not exist, do you want to create it? or try again? (c/a)")
             choice = input()
             if choice == "c":
@@ -105,4 +106,5 @@ def insert_data(get_points, collection_name = None):
             elif choice == "a":
                 collection_name = None
                 continue
+            '''
 

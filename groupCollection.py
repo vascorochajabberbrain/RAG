@@ -88,6 +88,24 @@ class GroupCollection:
             
             points.append(PointStruct(id=get_point_id(), vector=get_embedding(to_embed), payload=self._group_to_payload(idx)))
         return points
+    
+    def to_save_points_w_batch(self, batch_size=5):
+        batch = []
+        for idx, group in enumerate(self.groups):
+            to_embed = group["description"] + "\n\n" + self._prepositions_to_string(idx)
+            point = PointStruct(
+                id=get_point_id(),
+                vector=get_embedding(to_embed),
+                payload=self._group_to_payload(idx)
+            )
+            batch.append(point)
+
+            if len(batch) == batch_size:
+                yield batch
+                batch = []
+
+        if batch:
+            yield batch  # Yield any remaining points at the end
 
     def from_save_points(self, points):
         for point in points:
@@ -128,7 +146,10 @@ class GroupCollection:
     def collection_is_full(self):
         #a collection is full when the number of unfull groups reaches the limit
         return self.number_of_groups() - self.number_of_full_groups() >= self.LIMIT_OF_UNFULL_GROUPS
-
+    
+    def existing_group_index(self, index):
+        return 0 <= index < len(self.groups)
+    #these two are very similar for now...
     def _validate_group_index(self, index):
         if index < 0 or index >= len(self.groups):
             raise IndexError("Invalid group index")

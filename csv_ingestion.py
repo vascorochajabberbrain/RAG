@@ -4,6 +4,7 @@ import json
 import pandas as pd
 
 from openai_utils import openai_chat_completion
+from qdrant_utils import create_collection
 from url_ingestion import scrape_page
 from vectorization import get_points, get_points_with_source, get_text_chunks, insert_data
 
@@ -40,6 +41,7 @@ def main():
     df = pd.read_csv('Autoderm Content jB - Sheet1.csv')
 
     chunks = []
+    things_that_went_wrong = []
 
     #Nameing the two columns that had no name
     df.columns.values[3] = "Small resume"
@@ -54,6 +56,7 @@ def main():
     n_rows_limit = n_rows_scraped +1
     '''
 
+    create_collection("autoderm_with_order")
     chunks_count = 0
     # Iterate through each row and column
     for index, row in df.iterrows():
@@ -113,14 +116,13 @@ def main():
                         
                         #n_rows_scraped += 1
                         
-                        points=get_points_with_source(filtered_link_chunks, value, chunks_count)
-                        insert_data(points, collection_name="autoderm_alpha")
+                        points=get_points_with_source(filtered_link_chunks, value, condition, chunks_count)
+                        insert_data(points, collection_name="autoderm_with_order")
                         chunks_count += len(filtered_link_chunks)
-                        print("Data inserted with no errors")
+                        print(f"Scrapped data inserted with no errors: {len(filtered_link_chunks)} chunks")
                         continue
                     except Exception as e:
-                        print(f"""Something went wrong, uploading the new chunks anyway
-                              Remember to update the n_rows_scraped to {n_rows_scraped}""")
+                        things_that_went_wrong.append(f"Error scraping {condition}: {e}")
                 case "Generic Over the counter medication" | "Brand name Over the counter medication" | "Generic Prescription name" | "Brand Prescription name":
                     
                     if pd.isna(value) or value == "None" or "None" in value or "N/A" in value:
@@ -151,11 +153,15 @@ def main():
 
         
         if chunks != []:
-            points=get_points(chunks, chunks_count)
-            insert_data(points, collection_name="autoderm_alpha")
-            chunks_count += len(chunks)
-            chunks = []
+            try:
+                points=get_points(chunks, condition, chunks_count)
+                insert_data(points, collection_name="autoderm_with_order")
+                print(f"Table data inserted with no errors: {len(chunks)} chunks")
+                chunks_count += len(chunks)
+            except Exception as e:
+                things_that_went_wrong.append(f"Error inserting table data for {condition}: {e}")
         
+            chunks = []
     '''
     print(chunks)
     y_n = input("You like the chunks? (y/n) ")
@@ -166,6 +172,7 @@ def main():
     points=get_points(chunks)
     insert_data(points, collection_name="autoderm_alpha")
     '''
+    print(things_that_went_wrong)
 
 if __name__ == '__main__':
     main()

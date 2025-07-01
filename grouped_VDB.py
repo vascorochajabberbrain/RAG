@@ -2,7 +2,7 @@ import json
 import ast
 from groupCollection import GroupCollection
 from openai_utils import get_openai_client, openai_chat_completion, wait_for_run_completion
-from qdrant_utils import existing_collection_name, create_collection, delete_collection, get_qdrant_connection, get_points_from_collection, insert_points
+from qdrant_utils import collection_length, existing_collection_name, create_collection, delete_collection, get_qdrant_connection, get_points_from_collection, insert_points
 
 
 def making_description_of_groups(chunks):
@@ -58,7 +58,8 @@ def clean_LLM_response(response):
     #if the response comes as a list with an integer, just return the string of the integer
     return response.strip("[]")
 
-def is_valid_group_response(response, lenght, collection_is_full):
+def is_valid_group_response(response, lenght, gc):
+    collection_is_full = gc.collection_is_full()
     print(lenght, collection_is_full)
     try:
         response_list = ast.literal_eval(response)    
@@ -76,9 +77,13 @@ def is_valid_group_response(response, lenght, collection_is_full):
         #check if the response is a number, if it is not, return False
         try:
             int(response)
-            continue
         except ValueError:
-            raise ValueError(f"The response {response} is not a valid group index.")
+            raise ValueError(f"The response {response} is not an integer.")
+        if not gc.existing_group_index(int(response)):
+            raise ValueError(f"The group {response} does not exist.")
+        if gc.group_is_full(int(response)):
+            raise ValueError(f"The group {response} is full, you cannot add more self-contained sentences to it.")
+            
     return True
     
 #be carefull when using yeld
@@ -96,7 +101,7 @@ def grouping_chunks(descriptions, chunks, gc):
     gc.print()
 
     
-    for index_list, chunk_list in batch_list(chunks[:1000], 5):
+    for index_list, chunk_list in batch_list(chunks, 5):
             
             prompt = """You are a classifier whose task is to group self-contained sentences by meaning.
 
@@ -129,7 +134,7 @@ def grouping_chunks(descriptions, chunks, gc):
             #repeat until the LLM ansers a valid response, this is dangerous though
             while True:
                 try:
-                    is_valid_group_response(response_list, len(chunk_list), gc.collection_is_full())
+                    is_valid_group_response(response_list, len(chunk_list), gc)
                     break
                 except ValueError as e:
                     print(f"You answered {response_list}, but it is not a valid response because {e}.")
@@ -144,8 +149,12 @@ def grouping_chunks(descriptions, chunks, gc):
                     gc.add_group("temporary description")
                     gc.add_preposition(len(gc.groups)-1, chunk)
                 else:
-                    print(f"Sentence({index + 1}/{len(chunks)}), response: {response} that has {gc.number_of_prepositions(int(response))} SCS's")
-                    gc.add_preposition(int(response), chunk)
+                    try:
+                        print(f"Sentence({index + 1}/{len(chunks)}), response: {response} that has {gc.number_of_prepositions(int(response))} SCS's")
+                        gc.add_preposition(int(response), chunk)
+                    except Exception as e:
+                        print(f"ERROR anwser: {response}")
+                        raise(e)
                 print(f"Groups({gc.number_of_full_groups()}/{gc.number_of_groups()})full")
 
             '''
@@ -189,6 +198,29 @@ def get_list_of_chunks(collection_name):
         if offset is None:
             break
     return chunks
+
+def get_ordered_list_of_chunks(collection_name):
+    connection = get_qdrant_connection()
+
+    length = collection_length(collection_name)
+    chunks = [None] * length
+
+    offset = None
+
+    while True:
+        result, offset = connection.scroll(
+            collection_name=collection_name,
+            scroll_filter=None,
+            with_payload=True,
+            with_vectors=False,
+            offset=offset,
+        )
+        for pt in result:
+            chunks[pt.payload['idx']] = pt.payload['text']
+        if offset is None:
+            break
+    return chunks
+
 
 def get_collection_from_(gc, collection_name):
     gc.from_save_points(get_points_from_collection(collection_name))
@@ -246,13 +278,13 @@ def main():
     if sentence_or_grouped_collection == "s":
 
 
-        sentence_collection_name = "autoderm_alpha"
+        sentence_collection_name = "autoderm_with_order"
         #sentence_collection_name = input("Which sentence collection should we use:")
         #while not existing_collection_name(sentence_collection_name):
         #    print("That collection does not exist, try again with another collection name")
         #    sentence_collection_name = input("Which sentence collection should we use:")
 
-        chunks = get_list_of_chunks(sentence_collection_name)
+        chunks = get_ordered_list_of_chunks(sentence_collection_name)
         #print("chunks: ", chunks)
 
         #first_descriptions = making_description_of_groups(chunks)
@@ -326,7 +358,8 @@ def main():
                     # save can be dangerous because if something happens in between the process we might lose the VDB
                     delete_collection(grouped_collection_name)
                 create_collection(grouped_collection_name)
-                insert_points(grouped_collection_name, gc.to_save_points())
+                for batch in gc.to_save_points_w_batch():
+                    insert_points(grouped_collection_name, batch)
             #case "a":
                 #insert_data(gc.to_save_points(), grouped_collection_name)
             case _:

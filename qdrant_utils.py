@@ -57,6 +57,25 @@ def get_points_from_collection(collection_name):
             break
     return points
 
+def collection_length(collection_name):
+    connection = get_qdrant_connection()
+    points = []
+    offset = None
+
+    while True:
+        result, offset = connection.scroll(
+            collection_name=collection_name,
+            scroll_filter=None,
+            with_payload=False,
+            with_vectors=False,
+            offset=offset,
+        )
+        points.extend(result)
+        if offset is None:
+            break
+    return len(points)
+
+
 def insert_points(collection_name, points):
     get_qdrant_connection()
     _connection.upsert(
@@ -81,6 +100,10 @@ def get_point_text(collection_name, point_id):
     get_qdrant_connection()
     #print(_connection.retrieve(collection_name=collection_name, ids=[point_id]))
     return _connection.retrieve(collection_name=collection_name, ids=[point_id])[0].payload['text']
+
+def get_point_payload(collection_name, point_id):
+    get_qdrant_connection()
+    return _connection.retrieve(collection_name=collection_name, ids=[point_id])[0].payload
 
 #info = _connection.get_collection(collection_name="fruit_example")
 # until here the duplicated code
