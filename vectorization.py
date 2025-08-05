@@ -73,6 +73,14 @@ def get_points_with_source(text_chunks, source, condition, initial_idx, model_id
 
     return points
 
+#is duplacted
+def get_unique_id():
+    """
+    Generate a unique identifier for a point.
+    This is used to ensure that each point has a unique ID.
+    """
+    return str(uuid.uuid4())
+
 def get_embedding(text, model_id="text-embedding-ada-002"):
     openai_client = get_openai_client()
     response = openai_client.embeddings.create(

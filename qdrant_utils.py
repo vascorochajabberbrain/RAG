@@ -96,6 +96,69 @@ def delete_points(collection_name, point_ids):
     )
     return
 
+def connect_to_download_with_qdrant(collection_name):
+    """
+    Make it sure that exists a 1:1 relation between Qdrant and local collection
+    """
+    get_qdrant_connection()
+    if collection_name is None:
+        collection_name = input("Insert the name of the collection:")
+
+    while True:
+
+        # if the collection exists, we assume the naming was correct and proceed
+        if existing_collection_name(collection_name):
+            break
+
+        # if the collection does not exist, we ask the user if they want to create a new collection
+        print(f"The collection {collection_name} does not exist. Do you want to create it? (y/n)")
+        create_collection(collection_name)
+        break
+
+    return collection_name
+
+    
+
+def connect_to_upload_with_qdrant(collection_name):
+    """
+    Make it sure that exists a 1:1 relation between Qdrant and local collection
+    """
+    get_qdrant_connection()
+    if collection_name is None:
+        collection_name = input("Insert the name of the collection:")
+
+    # Loop until we have a valid collection name
+    while True:
+
+        # we assume that if the collection does not exist, the user wants to create a new collection
+        if not existing_collection_name(collection_name):
+            print(f"Qdrant: Creating collection {collection_name}...")
+            create_collection(collection_name)
+            break
+
+        # if the collection exists, we make sure the user wants to overwrite it
+        else:
+
+            #loop until the user gives a valid answer
+            while True:
+                overwrite = input(f"The collection {collection_name} already exists. Do you want to overwrite it? (y/n): ")
+                if overwrite.lower() in ['y', 'n']:
+                    break
+                else:
+                    print("Please enter 'y' for yes or 'n' for no.")
+
+            if overwrite.lower() == 'y':
+                print(f"Qdrant: Deleting collection {collection_name}...")
+                delete_collection(collection_name)
+                print(f"Qdrant: Creating collection {collection_name}...")
+                create_collection(collection_name)
+                break
+
+            elif overwrite.lower() == 'n':
+                collection_name = input("Then, insert a new name for the collection:")
+        
+    return collection_name
+
 def get_point_text(collection_name, point_id):
     get_qdrant_connection()
     #print(_connection.retrieve(collection_name=collection_name, ids=[point_id]))

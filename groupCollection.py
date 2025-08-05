@@ -1,5 +1,8 @@
 from qdrant_client.http.models import PointStruct
 
+
+from Group import Group
+import QdrantTracker
 from vectorization import get_embedding, get_point_id
 
 
@@ -7,8 +10,9 @@ class GroupCollection:
     LIMIT_OF_SCS = 8
     LIMIT_OF_UNFULL_GROUPS = 12
 
-    def __init__(self):
+    def __init__(self, collection_name=None):
         self.groups = []
+        self.collection_name = collection_name
 
     def add_group(self, description):
         self.groups.append({
@@ -16,9 +20,18 @@ class GroupCollection:
             "prepositions": []
         })
 
+
     def add_groups(self, descriptions):
         for description in descriptions:
             self.add_group(description)
+
+    def append_group(self, group):
+        """
+        Append a new Group to the collection.
+        """
+        if not isinstance(group, Group):
+            raise TypeError("Expected an instance of Group.")
+        self.groups.append(group)
 
     def add_preposition(self, group_index, preposition):
         self._validate_group_index(group_index)
@@ -114,15 +127,12 @@ class GroupCollection:
     def print(self, list_indexes=None):
         if list_indexes is None:
             list_indexes = range(len(self.groups))
-        if not isinstance(list_indexes, list) and len(self.groups) != 0:
+        if not (isinstance(list_indexes, list) or isinstance(list_indexes, range))  and len(self.groups) != 0:
             raise TypeError("list_indexes must be a list of integers")
         for i, group in enumerate(self.groups):
             if i not in list_indexes:
                 continue
-            print(f"[{i}] {group['description']}")
-            for j, prep in enumerate(group["prepositions"]):
-                print(f"   ({j}) {prep}")
-            print()
+            print(f"[{i}] {group}")
 
     def to_string(self):
         lines = []
@@ -134,6 +144,38 @@ class GroupCollection:
                 lines.append(f"   ({j}) {prep}")
             lines.append("")  # Blank line between groups
         return "\n".join(lines)
+
+    @classmethod
+    def download_qdrant_collection(cls, collection_name, qdrant_tracker: QdrantTracker):
+        """
+        Download the SCS List from Qdrant.
+        """
+        
+        collection_name, qdrant_points = qdrant_tracker.connect(collection_name)
+        #TO-DO: verify if _from_payload works on this collection type, might exist a missmatch
+        self = cls(collection_name)
+        print(f"Downloading collection: {collection_name} ({len(qdrant_points)} points)")
+        for qdrant_point in qdrant_points:
+            print(qdrant_point)
+            self.append_group(Group.from_payload(qdrant_point))
+        
+        return self
+
+
+    def save(self, qdrant_tracker: QdrantTracker):
+        """
+        Save the Group Collection on Qdrant.
+        """
+        qdrant_points = []
+        for group in self.groups:
+            print(group)
+            qdrant_points.append(PointStruct(
+                id=get_point_id(),
+                vector=get_embedding(group.to_embed()),
+                payload=group.to_payload()
+            ))
+        
+        qdrant_tracker.disconnect(self.collection_name, qdrant_points)
 
     # Placeholder for future search implementation
     def search_prepositions(self, group_index, keyword):
@@ -172,3 +214,16 @@ class GroupCollection:
             "description": payload["description"],
             "prepositions": self._string_to_prepositions(payload["text"])
         })
+
+def main():
+    qdrant_tracker = QdrantTracker.QdrantTracker()
+    collection = GroupCollection.download_qdrant_collection("testing_w_groups", qdrant_tracker)
+    collection.print()
+    collection.append_group(Group("This is a new group"))
+    collection.append_group(Group("This is a new preposition", ["This is a new preposition", "This is another new preposition"]))
+    collection.print()
+    collection.save(qdrant_tracker) 
+    collection.print()
+
+if __name__ == '__main__':
+    main()
