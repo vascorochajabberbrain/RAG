@@ -104,6 +104,16 @@ class QdrantTracker:
         else:
             print(f"QdrantTracker: Collection {collection_name} is not open.")
     
+    def all_collections(self):
+        collections = self._connection.get_collections().collections
+        return [c.name for c in collections]
+    
+    def open_collections(self):
+        """
+        Returns a list of currently open collections.
+        """
+        return list(self._open_collections)
+
 
     def _existing_collection_name(self, collection_name):
         collections = self._connection.get_collections().collections

@@ -11,9 +11,58 @@ class SCS_Collection:
     A class to represent a collection of self-contained sentences (SCS).
     """
 
+    """------------------------Constructors------------------------"""
     def __init__(self, collection_name=None):
         self.scs_list = []
         self.collection_name = collection_name
+
+    @classmethod
+    def download_qdrant_collection(cls, collection_name, qdrant_tracker: QdrantTracker):
+        """
+        Download the SCS List from Qdrant.
+        """
+        collection_name, qdrant_points = qdrant_tracker.connect(collection_name)
+        #TO-DO: verify if _from_payload works on this collection type, might exist a missmatch
+        self = cls(collection_name)
+        print(f"Downloading collection: {collection_name}")
+        for qdrant_point in qdrant_points:
+            #print(qdrant_point)
+            self.append_scs(SCS.from_payload(qdrant_point))
+        
+        return self
+    
+    """--------------------------Dunders---------------------------"""
+
+    def __str__(self):
+        pass
+
+    def print(self, list_indexes=None):
+        if list_indexes is None:
+            list_indexes = range(len(self.scs_list))
+        if not (isinstance(list_indexes, list) or isinstance(list_indexes, range)) and len(self.scs_list) != 0:
+            raise TypeError("list_indexes must be a list of integers")
+        for i, scs in enumerate(self.scs_list):
+            if i not in list_indexes:
+                continue
+            print(f"[{i}] {scs}")
+
+    """----------------------Public Methods------------------------"""
+
+    def save(self, qdrant_tracker: QdrantTracker):
+        """
+        Save the SCS Collection on Qdrant.
+        """
+        qdrant_points = []
+        for scs in self.scs_list:
+            #print(scs)
+            qdrant_points.append(PointStruct(
+                id=get_point_id(),
+                vector=get_embedding(scs.get_sentence()),  #maybe on a broad version of collection it should be scs.to_embed()
+                payload=scs.to_payload()))
+        qdrant_tracker.disconnect(self.collection_name, qdrant_points)
+
+
+    """-------------SCS's------------"""
 
     def append_scs(self, scs):
         """
@@ -26,69 +75,38 @@ class SCS_Collection:
     def append_sentence(self, sentence, source=None):
         self.scs_list.append(SCS(sentence, source))
 
-    def add_scs(self, idx, scs, source=None):
-        self._validate_idx(idx)
+    def add_scs(self, idx, scs):
+        self._check_index(idx)
+        if not isinstance(scs, SCS):
+            raise TypeError("Expected an instance of SCS.")
         self.scs_list.insert(idx, scs)
 
+    def add_sentence(self, idx, sentence, source=None):
+        self._check_index(idx)
+        self.scs_list.insert(idx, SCS(sentence, source))
+
     def get_scs(self, idx):
-        self._validate_idx
+        self._check_index
         return self.scs_list[idx]
+    
+    def get_sentence(self, idx):
+        self._check_index(idx)
+        return self.scs_list[idx].get_sentence()
 
     def delete_scs(self, idx):
-        self._validate_idx(idx)
+        self._check_index(idx)
         del self.scs_list[idx]
 
-    def _validate_idx(self, idx):
+    def delete_all_scs(self):
+        self.scs_list = []
+
+    """----------------------Private Methods-----------------------"""
+    def _check_index(self, idx):
         """
         Validate the index for accessing the SCS collection.
         """
         if idx < 0 or idx >= len(self.scs_list):
             raise IndexError("Index out of bounds for SCS collection.")
-
-    def __str__(self):
-        pass
-
-    #this is a constructor also, just initializes with what we have on Qdrant
-    @classmethod
-    def download_qdrant_collection(cls, collection_name, qdrant_tracker: QdrantTracker):
-        """
-        Download the SCS List from Qdrant.
-        """
-        collection_name, qdrant_points = qdrant_tracker.connect(collection_name)
-        #TO-DO: verify if _from_payload works on this collection type, might exist a missmatch
-        self = cls(collection_name)
-        print(f"Downloading collection: {collection_name}")
-        for qdrant_point in qdrant_points:
-            print(qdrant_point)
-            self.append_scs(SCS.from_payload(qdrant_point))
-        
-        return self
-        
-    def save(self, qdrant_tracker: QdrantTracker):
-        """
-        Save the SCS Collection on Qdrant.
-        """
-        qdrant_points = []
-        for scs in self.scs_list:
-            print(scs)
-            qdrant_points.append(PointStruct(
-                id=get_point_id(),
-                vector=get_embedding(scs.get_sentence()),  #maybe on a broad version of collection it should be scs.to_embed()
-                payload=scs.to_payload()))
-        qdrant_tracker.disconnect(self.collection_name, qdrant_points)
-
-
-    def print(self, list_indexes=None):
-        if list_indexes is None:
-            list_indexes = range(len(self.scs_list))
-        if not (isinstance(list_indexes, list) or isinstance(list_indexes, range)) and len(self.scs_list) != 0:
-            raise TypeError("list_indexes must be a list of integers")
-        for i, scs in enumerate(self.scs_list):
-            if i not in list_indexes:
-                continue
-            print(f"[{i}] {scs}")
-            
-
 
     def _verify_qdrant_collection_structure(self):
         """
@@ -96,7 +114,7 @@ class SCS_Collection:
         """
         pass
 
-
+    #outdated
     def _to_embed(self, idx):
         """
         Convert the SCS at the given index to a string.
@@ -104,7 +122,6 @@ class SCS_Collection:
         scs = self.scs_list[idx]
         return scs.get_sentence()
 
-    
     def _to_payload(self, idx):
 
 
@@ -118,10 +135,13 @@ class SCS_Collection:
             "idx": idx
         }
     
+
+
     #unused
     def _from_payload(payload):
         return SCS(payload["text"], payload["source"])
 
+    #outdated
     # This method is not overwritable on children
     @final
     def make_qdrant_point(self, idx):
@@ -166,8 +186,19 @@ def main():
     qdrant_tracker = QdrantTracker.QdrantTracker()
     collection = SCS_Collection.download_qdrant_collection("fruit_example", qdrant_tracker)
     collection.print()
-    collection.append_scs(SCS("This is a new SCS"))
+    collection.append_scs(SCS("This is a new SCS from append_scs"))
+    collection.append_sentence("This is a new sentence", "source_example")
     collection.print()
+    collection.add_scs(1, SCS("This is a new SCS from add_scs"))
+    collection.add_sentence(2, "This is a new sentence from add_sentence", "source_example_2")
+    collection.print()
+    print(f"Getting SCS at index 1: {collection.get_scs(1)}")
+    print(f"Getting sentence at index 2: {collection.get_sentence(2)}")
+    collection.delete_scs(1)
+    collection.print()
+    collection.delete_all_scs()
+    collection.print()
+    collection.append_scs(SCS("This is a new SCS after deletion"))
     collection.save(qdrant_tracker)
     collection.print()
 
