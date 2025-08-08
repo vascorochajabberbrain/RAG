@@ -1,7 +1,7 @@
 import json
 import ast
-from groupCollection import GroupCollection
-from openai_utils import get_openai_client, openai_chat_completion, wait_for_run_completion
+from my_collections.groupCollection import GroupCollection
+from llms.openai_utils import get_openai_client, openai_chat_completion, wait_for_run_completion
 from qdrant_utils import collection_length, existing_collection_name, create_collection, delete_collection, get_qdrant_connection, get_points_from_collection, insert_points
 
 
