@@ -114,7 +114,8 @@ class QdrantTracker:
         """
         return list(self._open_collections)
 
-
+    """-----------------------------Private Methods-----------------------------"""
+    
     def _existing_collection_name(self, collection_name):
         collections = self._connection.get_collections().collections
         return any(c.name == collection_name for c in collections)
