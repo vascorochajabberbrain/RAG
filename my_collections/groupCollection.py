@@ -1,7 +1,7 @@
 from qdrant_client.http.models import PointStruct
 
 
-from Group import Group
+from objects.Group import Group
 import QdrantTracker
 from vectorization import get_embedding, get_point_id
 

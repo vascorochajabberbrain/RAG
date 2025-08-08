@@ -1,11 +1,13 @@
 import QdrantTracker
 
 
-from groupCollection import GroupCollection
+from my_collections.groupCollection import GroupCollection
 
 
 def main():
     qdrant_tracker = QdrantTracker.QdrantTracker()
+    collection = GroupCollection.download_qdrant_collection("testing_w_groups", qdrant_tracker)
+
     print(qdrant_tracker.all_collections())
     print(qdrant_tracker.open_collections())
 
