@@ -4,7 +4,7 @@ import uuid
 
 from langchain import hub
 
-from openai_utils import get_openai_client
+from llms.openai_utils import get_openai_client
 from qdrant_utils import create_collection, insert_points
 
 import json
@@ -73,7 +73,7 @@ def get_points_with_source(text_chunks, source, condition, initial_idx, model_id
 
     return points
 
-#is duplacted
+#is duplicated
 def get_unique_id():
     """
     Generate a unique identifier for a point.

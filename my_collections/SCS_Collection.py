@@ -1,12 +1,13 @@
 from typing import final
 import QdrantTracker
 from qdrant_client.http.models import PointStruct
-from SCS import SCS
+from objects.SCS import SCS
 from qdrant_utils import connect_to_upload_with_qdrant, insert_points
 from vectorization import get_embedding, get_point_id, get_unique_id
 
 
 class SCS_Collection:
+    TYPE = "scs"
     """
     A class to represent a collection of self-contained sentences (SCS).
     """
@@ -17,17 +18,17 @@ class SCS_Collection:
         self.collection_name = collection_name
 
     @classmethod
-    def download_qdrant_collection(cls, collection_name, qdrant_tracker: QdrantTracker):
+    def download_qdrant_collection(cls, collection_name, qdrant_points):
         """
         Download the SCS List from Qdrant.
         """
-        collection_name, qdrant_points = qdrant_tracker.connect(collection_name)
+
         #TO-DO: verify if _from_payload works on this collection type, might exist a missmatch
         self = cls(collection_name)
         print(f"Downloading collection: {collection_name}")
         for qdrant_point in qdrant_points:
             #print(qdrant_point)
-            self.append_scs(SCS.from_payload(qdrant_point))
+            self.append_scs(SCS.from_payload(self._get_only_point_data_from_payload(qdrant_point)))
         
         return self
     
@@ -47,7 +48,12 @@ class SCS_Collection:
             print(f"[{i}] {scs}")
 
     """----------------------Public Methods------------------------"""
-
+    def get_collection_name(self):
+        """
+        Get the name of the collection.
+        """
+        return self.collection_name
+    
     def save(self, qdrant_tracker: QdrantTracker):
         """
         Save the SCS Collection on Qdrant.
@@ -58,7 +64,7 @@ class SCS_Collection:
             qdrant_points.append(PointStruct(
                 id=get_point_id(),
                 vector=get_embedding(scs.get_sentence()),  #maybe on a broad version of collection it should be scs.to_embed()
-                payload=scs.to_payload()))
+                payload=self._add_collection_data_to_payload(scs.to_payload())))
         qdrant_tracker.disconnect(self.collection_name, qdrant_points)
 
 
@@ -74,6 +80,14 @@ class SCS_Collection:
 
     def append_sentence(self, sentence, source=None):
         self.scs_list.append(SCS(sentence, source))
+
+    def append_sentences(self, sentences, source=None):
+        if not isinstance(sentences, list):
+            raise TypeError("Expected a list of sentences.")
+        for sentence in sentences:
+            if not isinstance(sentence, str):
+                raise TypeError("Expected a string in the list of sentences.")
+            self.scs_list.append(SCS(sentence, source))
 
     def add_scs(self, idx, scs):
         self._check_index(idx)
@@ -101,6 +115,20 @@ class SCS_Collection:
         self.scs_list = []
 
     """----------------------Private Methods-----------------------"""
+    def _add_collection_data_to_payload(self, point_payload):
+        """
+        Add collection specific data to the payload.
+        """
+        return {
+            "collection": {
+                "type": self.TYPE
+            },
+            "point": point_payload
+        }
+    
+    def _get_only_point_data_from_payload(self, point_payload):
+        return point_payload["point"]
+    
     def _check_index(self, idx):
         """
         Validate the index for accessing the SCS collection.

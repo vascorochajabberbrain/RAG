@@ -8,6 +8,7 @@ from vectorization import get_embedding, get_point_id
 
 class GroupCollection:
     LIMIT_OF_UNFULL_GROUPS = 12
+    TYPE = "group"
     """------------------------------Constructors------------------------------"""
 
     def __init__(self, collection_name=None):
@@ -15,18 +16,17 @@ class GroupCollection:
         self.collection_name = collection_name
 
     @classmethod
-    def download_qdrant_collection(cls, collection_name, qdrant_tracker: QdrantTracker):
+    def download_qdrant_collection(cls, collection_name, qdrant_points):
         """
         Download the SCS List from Qdrant.
         """
         
-        collection_name, qdrant_points = qdrant_tracker.connect(collection_name)
         #TO-DO: verify if _from_payload works on this collection type, might exist a missmatch
         self = cls(collection_name)
         print(f"Downloading collection: {collection_name} ({len(qdrant_points)} points)")
         for qdrant_point in qdrant_points:
             print(qdrant_point)
-            self.append_group(Group.from_payload(qdrant_point))
+            self.append_group(Group.from_payload(self._get_only_point_data_from_payload(qdrant_point)))
         
         return self
     
@@ -43,8 +43,13 @@ class GroupCollection:
             print(f"[{i}] {group}")
 
     """-----------------------------Public Methods-----------------------------"""
+    def get_collection_name(self):
+        """
+        Get the name of the collection.
+        """
+        return self.collection_name
 
-    def save(self, qdrant_tracker: QdrantTracker):
+    def points_to_save(self):
         """
         Save the Group Collection on Qdrant.
         """
@@ -55,14 +60,74 @@ class GroupCollection:
             qdrant_points.append(PointStruct(
                 id=get_point_id(),
                 vector=get_embedding(group.to_embed()),
-                payload=group.to_payload()
+                payload=self._add_collection_data_to_payload(group.to_payload())
             ))
         #disconnecting from QdrantTracker
-        qdrant_tracker.disconnect(self.collection_name, qdrant_points)
+        return qdrant_points
 
     def collection_is_full(self):
         #a collection is full when the number of unfull groups reaches the limit
         return self._number_of_groups() - self._number_of_full_groups() >= GroupCollection.LIMIT_OF_UNFULL_GROUPS
+    
+    def menu(self):
+        menu = """Select an action:
+        -- "q" to quit
+        -- "app" to append a group
+        -- "add" to add a group (by index)
+        -- "del" to delete a group
+        -- "app_scs" to append a scs to a group
+        -- "del_scs" to delete a scs from a group
+        -- "m_scs" to move a scs from a group to another
+        -- "c_scs" to copy a scs from a group to another
+        -- "u" to update a group description
+        -- "p" to print the collection
+        -- "s" to save the collection
+"""
+        action = input(menu)
+
+        while action != "q":
+            match action:
+                case "app":
+                    description = input("Description:")
+                    self.append_description(description)
+                case "add":
+                    idx = int(input("Group Index:"))
+                    description = input("Description:")
+                    self.add_description(idx, description)
+                case "del":
+                    idx = int(input("Group Index:"))
+                    self.delete_group(idx)
+                case "app_scs":
+                    group_idx = int(input("Group Index:"))
+                    scs = input("SCS:")
+                    self.append_scs(group_idx, scs)
+                case "del_scs":
+                    group_idx = int(input("Group Index:"))
+                    scs_idx = int(input("SCS Index:"))
+                    self.delete_scs(group_idx, scs_idx)
+                case "m_scs":
+                    group_idx_from = int(input("Group Index From:"))
+                    group_idx_to = int(input("Group Index To:"))
+                    scs_idx = int(input("SCS Index:"))
+                    self.move_scs(group_idx_from, group_idx_to, scs_idx)
+                case "c_scs":
+                    group_idx_from = int(input("Group Index From:"))
+                    group_idx_to = int(input("Group Index To:"))
+                    scs_idx = int(input("SCS Index:"))
+                    self.copy_scs(group_idx_from, group_idx_to, scs_idx)
+                case "u":
+                    group_idx = int(input("Group Index:"))
+                    description = input("Description:")
+                    self.update_description(group_idx, description)
+                case "p":
+                    self.print()
+                case "s":
+                    return True
+                    self.save()
+                case _:
+                    print("Invalid action.")
+            action = input(menu)
+        return False
     
     """----------Group related methods----------"""
 
@@ -113,9 +178,9 @@ class GroupCollection:
     
 
     """-----------SCS related methods-----------"""
-    def add_scs(self, group_index, scs):
+    def append_scs(self, group_index, scs):
         self._check_index(group_index)
-        self.groups[group_index].add_scs(scs)
+        self.groups[group_index].append_scs(scs)
 
     def get_scss(self, group_index):
         self._check_index(group_index)
@@ -130,18 +195,18 @@ class GroupCollection:
         self._check_index(group_index)
         self.groups[group_index].delete_scs(scs_index)
 
-    def move_scs(self, from_group_index, scs_index, to_group_index):
+    def move_scs(self, from_group_index, to_group_index, scs_index):
         self._check_index(from_group_index)
         self._check_index(to_group_index)
         scs = self.groups[from_group_index].get_scs(scs_index)
         self.groups[to_group_index].add_scs(scs)
         self.groups[from_group_index].delete_scs(scs_index)
 
-    def copy_scs(self, from_group_index, scs_index, to_group_index):
+    def copy_scs(self, from_group_index, to_group_index, scs_index):
         self._check_index(from_group_index)
         self._check_index(to_group_index)
         scs = self.groups[from_group_index].get_scs(scs_index)
-        self.groups[to_group_index].add_scs(scs)
+        self.groups[to_group_index].append_scs(scs)
 
     """--------Description related methods--------"""
     def update_description(self, group_index, new_description):
@@ -156,6 +221,20 @@ class GroupCollection:
         return [group.get_description() for group in self.groups]
     
     """------------Private methods--------------"""
+    def _add_collection_data_to_payload(self, point_payload):
+        """
+        Add collection specific data to the payload.
+        """
+        return {
+            "collection": {
+                "type": self.TYPE
+            },
+            "point": point_payload
+        }
+    
+    def _get_only_point_data_from_payload(self, point_payload):
+        return point_payload["point"]
+    
     def _number_of_groups(self):
         return len(self.groups)
     

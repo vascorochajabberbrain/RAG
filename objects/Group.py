@@ -14,7 +14,7 @@ class Group:
         description = payload["description"]
         source = payload.get("source", None)
         self = cls(description, source=source)
-        self.add_scs(self._string_to_scss(payload["text"]))
+        self.append_scs(self._string_to_scss(payload["text"]))
         return self
     
     """---------------------------------Dunders---------------------------------"""
@@ -41,7 +41,7 @@ class Group:
     
     """----------SCS related methods----------"""
 
-    def add_scs(self, scss):# one or more
+    def append_scs(self, scss):# one or more
         """
         Add SCS's to the group.
         """

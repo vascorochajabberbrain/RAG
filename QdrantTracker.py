@@ -1,6 +1,14 @@
 from qdrant_client import QdrantClient, models
 import os
 
+from my_collections.groupCollection import GroupCollection
+from my_collections.SCS_Collection import SCS_Collection
+
+COLLECTIONS_TYPES_MAP = {
+    "group": GroupCollection,
+    "scs": SCS_Collection
+}
+
 
 class QdrantTracker:
     """
@@ -8,6 +16,7 @@ class QdrantTracker:
     """
 
     def __init__(self):
+        print("QdrantTracker: Initializing QdrantTracker...")
         try:
             self._connection = QdrantClient(
                 url = os.getenv("QDRANT_URL"),
@@ -19,8 +28,9 @@ class QdrantTracker:
                 "Please check your QDRANT_URL and QDRANT_API_KEY environment variables."
             )
         self._open_collections = set()
+        print("QdrantTracker: QdrantTracker initialized.")
 
-    def connect(self, collection_name):
+    def open(self, collection_name):
         """
         Make it sure that exists a 1:1 relation between Qdrant and local collection.
         Will certify if the user wants to use an existing collection or create a new one.
@@ -56,54 +66,98 @@ class QdrantTracker:
                 if using.lower() == 'n':
                     print(f"Qdrant: Deleting collection {collection_name}...")
                     self._delete_collection(collection_name)
-                    print(f"Qdrant: Creating collection {collection_name}...")
-                    self._create_collection(collection_name)
-                    break
+                    print(f"QdrantTracker: Collection {collection_name} does not exist. Going to execute the new method...")
+                    colletion =self.new(collection_name)  # Create a new collection
+                    return colletion
 
                 elif using.lower() == 'y':
-                    offset = None
-                    while True:
-                        result, offset = self._connection.scroll(
-                            collection_name=collection_name,
-                            scroll_filter=None,
-                            with_payload=True,
-                            with_vectors=False,
-                            offset=offset,
-                        )
-                        points.extend([point.payload for point in result])
-                        if offset is None:
-                            break #all points taken
+                    print(f"Qdrant: Getting points from collection {collection_name}...")
+                    points = self._get_all_points(collection_name, points)
                     
                     break
-            
-        self._open_collections.add(collection_name)
+        
+        collection_type = self.get_collection_type(points[0]) #any point will have collection information
+        collection = COLLECTIONS_TYPES_MAP[collection_type].download_qdrant_collection(collection_name, points)
+        self._open_collections.add(collection)
         print(f"QdrantTracker: Collection: {collection_name} is open.")
-        return collection_name, points
+        return collection
     
-    def disconnect(self, collection_name, points=None):
+    def new(self, collection_name):
+        """
+        Create a new collection with the given name.
+        """
+        if collection_name is None:
+            collection_name = input("Insert the name of the collection:")
+        
+        if self._existing_collection_name(collection_name):
+            print(f"QdrantTracker: Collection {collection_name} already exists. Going to execute the open method...")
+            return self.open(collection_name)
+        
+        while True:
+            collection_type = input(f"""From the options: {', '.join(COLLECTIONS_TYPES_MAP.keys())}\nEnter the type of the collection you want: """).strip().lower()
+        
+            if collection_type not in COLLECTIONS_TYPES_MAP:
+                print(f"QdrantTracker: Invalid collection type.")
+                continue
+            break
+        
+        print(f"QdrantTracker: Creating new collection {collection_name}...")
+        self._create_collection(collection_name)
+
+        collection = COLLECTIONS_TYPES_MAP[collection_type](collection_name)
+        self._open_collections.add(collection)
+        print(f"QdrantTracker: New collection {collection_name} created and opened.")
+        return collection
+    
+    def save_collection(self, collection_name):
+        """
+        Save the collection to Qdrant.
+        """
+
+        print(f"QdrantTracker: Deleting collection {collection_name}...")
+        self._delete_collection(collection_name)
+        print(f"QdrantTracker: Creating collection {collection_name}...")
+        self._create_collection(collection_name)
+
+        collection = self.get_collection(collection_name)
+        points = collection.points_to_save()
+
+        for i in range(0, len(points), 5):
+            batch = points[i:i + 5]
+            self._connection.upsert(
+                collection_name=collection_name,
+                wait = True,
+                points=batch
+            )
+    
+    def disconnect(self, collection_name):
         """
         Disconnect from the Qdrant collection.
         """
-        if collection_name in self._open_collections:
-            
-            print(f"QdrantTracker: Deleting collection {collection_name}...")
-            self._delete_collection(collection_name)
-            print(f"QdrantTracker: Creating collection {collection_name}...")
-            self._create_collection(collection_name)
+        self._check_open_collection(collection_name)
+        
+        while True:
+            save_collection = input("Do you want to save the collection? (y/n): ")
+            if save_collection.lower() == 'y':
+                self.save_collection(collection_name)
+                break
+            elif save_collection.lower() == 'n':
+                break
+        
 
-            for i in range(0, len(points), 5):
-                batch = points[i:i + 5]
-                self._connection.upsert(
-                    collection_name=collection_name,
-                    wait = True,
-                    points=batch
-                )
-
-            self._open_collections.remove(collection_name)
-            print(f"QdrantTracker: Disconnected from collection: {collection_name}")
-        else:
-            print(f"QdrantTracker: Collection {collection_name} is not open.")
+        self._remove(collection_name)
+        print(f"QdrantTracker: Disconnected from collection: {collection_name}")
     
+    def get_collection(self, collection_name):
+        """
+        Returns the collection object.
+        """
+        for c in self._open_collections:
+            if c.get_collection_name() == collection_name:
+                return c
+        else:
+            raise ValueError(f"Collection {collection_name} is not open.")
+
     def all_collections(self):
         collections = self._connection.get_collections().collections
         return [c.name for c in collections]
@@ -112,10 +166,43 @@ class QdrantTracker:
         """
         Returns a list of currently open collections.
         """
-        return list(self._open_collections)
+        return [c.get_collection_name() for c in self._open_collections]
 
     """-----------------------------Private Methods-----------------------------"""
-    
+    def _remove(self, collection_name):
+        self._check_open_collection(collection_name)
+        collection = self.get_collection(collection_name)
+        self._open_collections.remove(collection)
+
+    def get_collection_type(self, point):
+        """
+        Get the type of collection from the point payload.
+        """
+        if "collection" in point:
+            return point["collection"]["type"]
+        else:
+            raise ValueError("Point payload does not contain collection type information.")
+
+    def _get_all_points(self, collection_name, points=[]):
+        offset = None
+        while True:
+            result, offset = self._connection.scroll(
+                collection_name=collection_name,
+                scroll_filter=None,
+                with_payload=True,
+                with_vectors=False,
+                offset=offset,
+            )
+            points.extend([point.payload for point in result])
+            if offset is None:
+                break #all points taken
+        print(f"Só para ver como estão os points: {points}")
+        return points
+
+    def _check_open_collection(self, collection_name):
+        if collection_name not in [c.get_collection_name() for c in self._open_collections]:
+            raise ValueError(f"Collection {collection_name} is not open.")
+        
     def _existing_collection_name(self, collection_name):
         collections = self._connection.get_collections().collections
         return any(c.name == collection_name for c in collections)
