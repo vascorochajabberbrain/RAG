@@ -139,12 +139,25 @@ class Group:
     
     """---------Qdrant related methods-----------"""
 
-    def to_payload(self):
+    def to_payload(self, index=None):
+        if index and self.source:
+            return {
+                "description": self.description,
+                "text": "\n".join(self.scss),
+                "source": self.source,
+                "idx": index
+            }
         if self.source:
             return {
                 "description": self.description,
                 "text": "\n".join(self.scss),
                 "source": self.source
+            }
+        if index:
+            return {
+                "description": self.description,
+                "text": "\n".join(self.scss),
+                "idx": index
             }
         else:
             return {

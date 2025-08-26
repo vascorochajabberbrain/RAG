@@ -36,11 +36,22 @@ class SCS:
         self.source = None
     
     """---------Qdrant related methods-----------"""
-    def to_payload(self):
+    def to_payload(self, index=None):
+        if index and self.source:
+            return {
+                "text": self.scs,
+                "source": self.source,
+                "idx": index
+            }
         if self.source:
             return {
                 "text": self.scs,
                 "source": self.source
+            }
+        if index:
+            return {
+                "text": self.scs,
+                "idx": index
             }
         else:
             return {

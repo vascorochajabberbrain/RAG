@@ -48,9 +48,9 @@ class QdrantTracker:
 
             # we assume that if the collection does not exist, the user wants to create a new collection
             if not self._existing_collection_name(collection_name):
-                print(f"Qdrant: Creating collection {collection_name}...")
-                self._create_collection(collection_name)
-                break
+                print(f"QdrantTracker: Collection {collection_name} does not exist. Going to execute the new method...")
+                collection =self.new(collection_name)  # Create a new collection
+                return collection
 
             # if the collection exists, we make sure the user wants to overwrite it
             else:
@@ -67,8 +67,8 @@ class QdrantTracker:
                     print(f"Qdrant: Deleting collection {collection_name}...")
                     self._delete_collection(collection_name)
                     print(f"QdrantTracker: Collection {collection_name} does not exist. Going to execute the new method...")
-                    colletion =self.new(collection_name)  # Create a new collection
-                    return colletion
+                    collection =self.new(collection_name)  # Create a new collection
+                    return collection
 
                 elif using.lower() == 'y':
                     print(f"Qdrant: Getting points from collection {collection_name}...")

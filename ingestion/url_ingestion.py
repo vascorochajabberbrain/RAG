@@ -9,7 +9,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 import difflib
 import time
 
-from openai_utils import get_openai_client
+from llms.openai_utils import get_openai_client
 from vectorization import get_points, get_text_chunks, insert_data
 
 

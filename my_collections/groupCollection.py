@@ -7,12 +7,12 @@ from vectorization import get_embedding, get_point_id
 
 
 class GroupCollection:
-    LIMIT_OF_UNFULL_GROUPS = 12
     TYPE = "group"
+    LIMIT_OF_UNFULL_GROUPS = 12
     """------------------------------Constructors------------------------------"""
 
     def __init__(self, collection_name=None):
-        self.groups = []
+        self.items = []
         self.collection_name = collection_name
 
     @classmethod
@@ -34,10 +34,10 @@ class GroupCollection:
 
     def print(self, list_indexes=None):
         if list_indexes is None:
-            list_indexes = range(len(self.groups))
-        if not (isinstance(list_indexes, list) or isinstance(list_indexes, range))  and len(self.groups) != 0:
+            list_indexes = range(len(self.items))
+        if not (isinstance(list_indexes, list) or isinstance(list_indexes, range))  and len(self.items) != 0:
             raise TypeError("list_indexes must be a list of integers")
-        for i, group in enumerate(self.groups):
+        for i, group in enumerate(self.items):
             if i not in list_indexes:
                 continue
             print(f"[{i}] {group}")
@@ -55,7 +55,7 @@ class GroupCollection:
         """
         qdrant_points = []
         #creation of points
-        for group in self.groups:
+        for group in self.items:
             print(group)
             qdrant_points.append(PointStruct(
                 id=get_point_id(),
@@ -73,7 +73,7 @@ class GroupCollection:
         menu = """Select an action:
         -- "q" to quit
         -- "app" to append a group
-        -- "add" to add a group (by index)
+        -- "ins" to insert a group (by index)
         -- "del" to delete a group
         -- "app_scs" to append a scs to a group
         -- "del_scs" to delete a scs from a group
@@ -90,10 +90,10 @@ class GroupCollection:
                 case "app":
                     description = input("Description:")
                     self.append_description(description)
-                case "add":
+                case "ins":
                     idx = int(input("Group Index:"))
                     description = input("Description:")
-                    self.add_description(idx, description)
+                    self.insert_description(idx, description)
                 case "del":
                     idx = int(input("Group Index:"))
                     self.delete_group(idx)
@@ -123,7 +123,6 @@ class GroupCollection:
                     self.print()
                 case "s":
                     return True
-                    self.save()
                 case _:
                     print("Invalid action.")
             action = input(menu)
@@ -137,7 +136,7 @@ class GroupCollection:
         """
         if not isinstance(group, Group):
             raise TypeError("Expected an instance of Group.")
-        self.groups.append(group)
+        self.items.append(group)
 
     def append_groups(self, groups):
         for group in groups:
@@ -149,7 +148,7 @@ class GroupCollection:
         """
         if not isinstance(description, str):
             raise TypeError("Expected a string for description.")
-        self.groups.append(Group(description))
+        self.items.append(Group(description))
 
     def append_descriptions(self, descriptions):
         """
@@ -160,31 +159,31 @@ class GroupCollection:
         for description in descriptions:
             self.append_description(description)
 
-    def add_group(self, idx, group):
+    def insert_group(self, idx, group):
         self._check_index(idx)
         if not isinstance(group, Group):
             raise TypeError("Expected an instance of Group.")
-        self.groups.insert(idx, group)
+        self.items.insert(idx, group)
 
-    def add_description(self, idx, description):
+    def insert_description(self, idx, description):
         self._check_index(idx)
         if not isinstance(description, str):
             raise TypeError("Expected a string for description.")
-        self.groups.insert(idx, Group(description))
+        self.items.insert(idx, Group(description))
 
     def delete_group(self, group_index):
         self._check_index(group_index)
-        del self.groups[group_index]
+        del self.items[group_index]
     
 
     """-----------SCS related methods-----------"""
     def append_scs(self, group_index, scs):
         self._check_index(group_index)
-        self.groups[group_index].append_scs(scs)
+        self.items[group_index].append_scs(scs)
 
     def get_scss(self, group_index):
         self._check_index(group_index)
-        return self.groups[group_index].get_all_scs()
+        return self.items[group_index].get_all_scs()
     
     # Placeholder for future search implementation
     def search_scss(self, group_index, keyword):
@@ -193,32 +192,32 @@ class GroupCollection:
     #this can actually receive a list on the scs_index
     def delete_scs(self, group_index, scs_index):
         self._check_index(group_index)
-        self.groups[group_index].delete_scs(scs_index)
+        self.items[group_index].delete_scs(scs_index)
 
     def move_scs(self, from_group_index, to_group_index, scs_index):
         self._check_index(from_group_index)
         self._check_index(to_group_index)
-        scs = self.groups[from_group_index].get_scs(scs_index)
-        self.groups[to_group_index].add_scs(scs)
-        self.groups[from_group_index].delete_scs(scs_index)
+        scs = self.items[from_group_index].get_scs(scs_index)
+        self.items[to_group_index].add_scs(scs)
+        self.items[from_group_index].delete_scs(scs_index)
 
     def copy_scs(self, from_group_index, to_group_index, scs_index):
         self._check_index(from_group_index)
         self._check_index(to_group_index)
-        scs = self.groups[from_group_index].get_scs(scs_index)
-        self.groups[to_group_index].append_scs(scs)
+        scs = self.items[from_group_index].get_scs(scs_index)
+        self.items[to_group_index].append_scs(scs)
 
     """--------Description related methods--------"""
     def update_description(self, group_index, new_description):
         self._check_index(group_index)
-        self.groups[group_index].set_description(new_description)
+        self.items[group_index].set_description(new_description)
 
     def get_description(self, group_index):
         self._check_index(group_index)
-        return self.groups[group_index].get_description()
+        return self.items[group_index].get_description()
     
     def get_all_descriptions(self):
-        return [group.get_description() for group in self.groups]
+        return [group.get_description() for group in self.items]
     
     """------------Private methods--------------"""
     def _add_collection_data_to_payload(self, point_payload):
@@ -236,23 +235,23 @@ class GroupCollection:
         return point_payload["point"]
     
     def _number_of_groups(self):
-        return len(self.groups)
+        return len(self.items)
     
     def _number_of_full_groups(self):
-        return sum(1 for group in self.groups if group.is_full())
+        return sum(1 for group in self.items if group.is_full())
 
     def _check_index(self, index):
-        if index < 0 or index >= len(self.groups):
+        if index < 0 or index >= len(self.items):
             raise IndexError("Invalid group index")
     
     def _group_is_full(self, group_index):
         self._check_index(group_index)
-        return self.groups[group_index].is_full()
+        return self.items[group_index].is_full()
     
     #outdated
     def to_string(self):
         lines = []
-        for i, group in enumerate(self.groups):
+        for i, group in enumerate(self.items):
             if self._group_is_full(i):
                 continue
             lines.append(f"[{i}] {group['description']}")
@@ -264,7 +263,7 @@ class GroupCollection:
     #outdated
     def to_save_points(self):
         points = []
-        for idx, group in enumerate(self.groups):
+        for idx, group in enumerate(self.items):
             to_embed = group["description"] + "\n\n" + self._scss_to_string(idx)
             
             points.append(PointStruct(id=get_point_id(), vector=get_embedding(to_embed), payload=self._group_to_payload(idx)))
@@ -272,7 +271,7 @@ class GroupCollection:
     #outdated
     def to_save_points_w_batch(self, batch_size=5):
         batch = []
-        for idx, group in enumerate(self.groups):
+        for idx, group in enumerate(self.items):
             to_embed = group["description"] + "\n\n" + self._scss_to_string(idx)
             point = PointStruct(
                 id=get_point_id(),
@@ -295,11 +294,11 @@ class GroupCollection:
     
     #only exists for grouped_VDB.py
     def existing_group_index(self, index):
-        return 0 <= index < len(self.groups)
+        return 0 <= index < len(self.items)
     
     #outdated
     def _scss_to_string(self, group_index):
-        scss = self.groups[group_index]["prepositions"]
+        scss = self.items[group_index]["prepositions"]
         return "\n".join(scss)
     
     def _string_to_scss(self, string):
@@ -307,12 +306,12 @@ class GroupCollection:
     
     def _group_to_payload(self, group_index):
         return {
-            "description": self.groups[group_index]["description"],
+            "description": self.items[group_index]["description"],
             "text": self._scss_to_string(group_index)
         }
     
     def _payload_to_group(self, payload):
-        self.groups.append({
+        self.items.append({
             "description": payload["description"],
             "prepositions": self._string_to_scss(payload["text"])
         })

@@ -54,9 +54,9 @@ class SCS_Collection:
         """
         return self.collection_name
     
-    def save(self, qdrant_tracker: QdrantTracker):
+    def points_to_save(self):
         """
-        Save the SCS Collection on Qdrant.
+        Getting points to save the SCS Collection on Qdrant.
         """
         qdrant_points = []
         for scs in self.scs_list:
@@ -65,8 +65,40 @@ class SCS_Collection:
                 id=get_point_id(),
                 vector=get_embedding(scs.get_sentence()),  #maybe on a broad version of collection it should be scs.to_embed()
                 payload=self._add_collection_data_to_payload(scs.to_payload())))
-        qdrant_tracker.disconnect(self.collection_name, qdrant_points)
 
+        return qdrant_points
+    
+    def menu(self):
+        menu = """Select an action:
+        -- "q" to quit
+        -- "app" to append a sentence
+        -- "ins" to insert a sentence (by index)
+        -- "del" to delete a sentence
+        -- "p" to print the collection
+        -- "s" to save the collection
+"""
+        action = input(menu)
+
+        while action != "q":
+            match action:
+                case "app":
+                    description = input("SCS:")
+                    self.append_sentence(description)
+                case "insert":
+                    idx = int(input("Index:"))
+                    description = input("SCS:")
+                    self.insert_sentence(idx, description)
+                case "del":
+                    idx = int(input("Index:"))
+                    self.delete_scs(idx)
+                case "p":
+                    self.print()
+                case "s":
+                    return True
+                case _:
+                    print("Invalid action.")
+            action = input(menu)
+        return False
 
     """-------------SCS's------------"""
 
@@ -89,13 +121,13 @@ class SCS_Collection:
                 raise TypeError("Expected a string in the list of sentences.")
             self.scs_list.append(SCS(sentence, source))
 
-    def add_scs(self, idx, scs):
+    def insert_scs(self, idx, scs):
         self._check_index(idx)
         if not isinstance(scs, SCS):
             raise TypeError("Expected an instance of SCS.")
         self.scs_list.insert(idx, scs)
 
-    def add_sentence(self, idx, sentence, source=None):
+    def insert_sentence(self, idx, sentence, source=None):
         self._check_index(idx)
         self.scs_list.insert(idx, SCS(sentence, source))
 

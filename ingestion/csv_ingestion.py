@@ -3,9 +3,10 @@ import sys
 import json
 import pandas as pd
 
-from openai_utils import openai_chat_completion
+from my_collections.SCS_Collection import SCS_Collection
+from llms.openai_utils import openai_chat_completion
 from qdrant_utils import create_collection
-from url_ingestion import scrape_page
+from ingestion.url_ingestion import scrape_page
 from vectorization import get_points, get_points_with_source, get_text_chunks, insert_data
 
 
@@ -35,10 +36,10 @@ def filter_boots_chunks(chunks, condition):
     return chunks
 
 
-def main():
+def csv_ingestion(collection: SCS_Collection):
     
     # Load the CSV file
-    df = pd.read_csv('Autoderm Content jB - Sheet1.csv')
+    df = pd.read_csv('ingestion/data_to_ingest/csvs/Autoderm Content jB - Sheet1.csv')
 
     chunks = []
     things_that_went_wrong = []
@@ -56,7 +57,9 @@ def main():
     n_rows_limit = n_rows_scraped +1
     '''
 
-    create_collection("autoderm_with_order")
+    #create_collection("autoderm_with_order")
+    
+    
     chunks_count = 0
     # Iterate through each row and column
     for index, row in df.iterrows():
@@ -103,6 +106,9 @@ def main():
                 case "Boots Links":
 
                     try:
+                        if value == "":
+                            print(f"Skipping scrapping for {condition} as there is no link provided.")
+                            continue
                         text = scrape_page(value)
                         print(f"Scraped {len(text)} characters from {condition} Boots Links")
 
@@ -116,8 +122,10 @@ def main():
                         
                         #n_rows_scraped += 1
                         
-                        points=get_points_with_source(filtered_link_chunks, value, condition, chunks_count)
-                        insert_data(points, collection_name="autoderm_with_order")
+                        #points=get_points_with_source(filtered_link_chunks, value, condition, chunks_count)
+                        #insert_data(points, collection_name="autoderm_with_order")
+                        collection.append_sentences(filtered_link_chunks, source=value)
+
                         chunks_count += len(filtered_link_chunks)
                         print(f"Scrapped data inserted with no errors: {len(filtered_link_chunks)} chunks")
                         continue
@@ -154,8 +162,9 @@ def main():
         
         if chunks != []:
             try:
-                points=get_points(chunks, condition, chunks_count)
-                insert_data(points, collection_name="autoderm_with_order")
+                #points=get_points(chunks, condition, chunks_count)
+                #insert_data(points, collection_name="autoderm_with_order")
+                collection.append_sentences(chunks)
                 print(f"Table data inserted with no errors: {len(chunks)} chunks")
                 chunks_count += len(chunks)
             except Exception as e:
@@ -173,6 +182,9 @@ def main():
     insert_data(points, collection_name="autoderm_alpha")
     '''
     print(things_that_went_wrong)
+
+def main():
+    print("running this file now does nothing")
 
 if __name__ == '__main__':
     main()
