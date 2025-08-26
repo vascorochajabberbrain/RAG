@@ -11,59 +11,10 @@ class GroupCollection:
     LIMIT_OF_UNFULL_GROUPS = 12
     """------------------------------Constructors------------------------------"""
 
-    def __init__(self, collection_name=None):
-        self.items = []
-        self.collection_name = collection_name
-
-    @classmethod
-    def download_qdrant_collection(cls, collection_name, qdrant_points):
-        """
-        Download the SCS List from Qdrant.
-        """
-        
-        #TO-DO: verify if _from_payload works on this collection type, might exist a missmatch
-        self = cls(collection_name)
-        print(f"Downloading collection: {collection_name} ({len(qdrant_points)} points)")
-        for qdrant_point in qdrant_points:
-            print(qdrant_point)
-            self.append_group(Group.from_payload(self._get_only_point_data_from_payload(qdrant_point)))
-        
-        return self
-    
-    """---------------------------------Dunders---------------------------------"""
-
-    def print(self, list_indexes=None):
-        if list_indexes is None:
-            list_indexes = range(len(self.items))
-        if not (isinstance(list_indexes, list) or isinstance(list_indexes, range))  and len(self.items) != 0:
-            raise TypeError("list_indexes must be a list of integers")
-        for i, group in enumerate(self.items):
-            if i not in list_indexes:
-                continue
-            print(f"[{i}] {group}")
+    def init_item_from_qdrant(self, point_data):
+        return Group.from_payload(point_data)
 
     """-----------------------------Public Methods-----------------------------"""
-    def get_collection_name(self):
-        """
-        Get the name of the collection.
-        """
-        return self.collection_name
-
-    def points_to_save(self):
-        """
-        Save the Group Collection on Qdrant.
-        """
-        qdrant_points = []
-        #creation of points
-        for group in self.items:
-            print(group)
-            qdrant_points.append(PointStruct(
-                id=get_point_id(),
-                vector=get_embedding(group.to_embed()),
-                payload=self._add_collection_data_to_payload(group.to_payload())
-            ))
-        #disconnecting from QdrantTracker
-        return qdrant_points
 
     def collection_is_full(self):
         #a collection is full when the number of unfull groups reaches the limit
@@ -129,7 +80,7 @@ class GroupCollection:
         return False
     
     """----------Group related methods----------"""
-
+    #outdated
     def append_group(self, group):
         """
         Append a new Group to the collection.
@@ -137,7 +88,7 @@ class GroupCollection:
         if not isinstance(group, Group):
             raise TypeError("Expected an instance of Group.")
         self.items.append(group)
-
+    #outdated
     def append_groups(self, groups):
         for group in groups:
             self.append_group(group)
@@ -148,7 +99,7 @@ class GroupCollection:
         """
         if not isinstance(description, str):
             raise TypeError("Expected a string for description.")
-        self.items.append(Group(description))
+        self.append_item(Group(description))
 
     def append_descriptions(self, descriptions):
         """
@@ -159,6 +110,7 @@ class GroupCollection:
         for description in descriptions:
             self.append_description(description)
 
+    #outdated
     def insert_group(self, idx, group):
         self._check_index(idx)
         if not isinstance(group, Group):
@@ -169,8 +121,9 @@ class GroupCollection:
         self._check_index(idx)
         if not isinstance(description, str):
             raise TypeError("Expected a string for description.")
-        self.items.insert(idx, Group(description))
+        self.insert_item(idx, Group(description))
 
+    #outdated
     def delete_group(self, group_index):
         self._check_index(group_index)
         del self.items[group_index]
@@ -220,29 +173,12 @@ class GroupCollection:
         return [group.get_description() for group in self.items]
     
     """------------Private methods--------------"""
-    def _add_collection_data_to_payload(self, point_payload):
-        """
-        Add collection specific data to the payload.
-        """
-        return {
-            "collection": {
-                "type": self.TYPE
-            },
-            "point": point_payload
-        }
-    
-    def _get_only_point_data_from_payload(self, point_payload):
-        return point_payload["point"]
     
     def _number_of_groups(self):
         return len(self.items)
     
     def _number_of_full_groups(self):
         return sum(1 for group in self.items if group.is_full())
-
-    def _check_index(self, index):
-        if index < 0 or index >= len(self.items):
-            raise IndexError("Invalid group index")
     
     def _group_is_full(self, group_index):
         self._check_index(group_index)
@@ -300,16 +236,16 @@ class GroupCollection:
     def _scss_to_string(self, group_index):
         scss = self.items[group_index]["prepositions"]
         return "\n".join(scss)
-    
+    #outdated
     def _string_to_scss(self, string):
         return string.split("\n")
-    
+    #outdated
     def _group_to_payload(self, group_index):
         return {
             "description": self.items[group_index]["description"],
             "text": self._scss_to_string(group_index)
         }
-    
+    #outdated
     def _payload_to_group(self, payload):
         self.items.append({
             "description": payload["description"],

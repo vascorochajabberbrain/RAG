@@ -77,7 +77,7 @@ class QdrantTracker:
                     break
         
         collection_type = self.get_collection_type(points[0]) #any point will have collection information
-        collection = COLLECTIONS_TYPES_MAP[collection_type].download_qdrant_collection(collection_name, points)
+        collection = COLLECTIONS_TYPES_MAP[collection_type].init_from_qdrant(collection_name, points)
         self._open_collections.add(collection)
         print(f"QdrantTracker: Collection: {collection_name} is open.")
         return collection

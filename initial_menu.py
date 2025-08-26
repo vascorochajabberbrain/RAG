@@ -54,7 +54,7 @@ def main():
                     print("To-do")
                 case _:
                     print("Invalid action")
-        except ValueError as e:
+        except Exception as e:
             print(e)
         action = input(initial_menu)
 

@@ -32,7 +32,6 @@ class Collection:
     @abstractmethod
     def init_item_from_qdrant(self, point_data):
         pass
-        #return SCS.from_payload(point_data)
 
     """--------------------------Dunders---------------------------"""
 
@@ -64,12 +63,12 @@ class Collection:
         """
         qdrant_points = []
 
-        for item in self.items:
+        for idx, item in enumerate(self.items):
             print(item)
             qdrant_points.append(PointStruct(
                 id=get_point_id(),
                 vector=get_embedding(item.to_embed()),
-                payload=self._add_collection_data_to_payload(item.to_payload())
+                payload=self._add_collection_data_to_payload(item.to_payload(idx))
             ))
 
         return qdrant_points
@@ -106,6 +105,13 @@ class Collection:
         """
         self.items[idx] = item
 
+    def get_item(self, idx):
+        """
+        Get an item from the collection by index.
+        """
+        self._check_index(idx)
+        return self.items[idx]
+    
     @abstractmethod
     def menu(self):
         pass
