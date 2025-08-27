@@ -167,6 +167,12 @@ class QdrantTracker:
         Returns a list of currently open collections.
         """
         return [c.get_collection_name() for c in self._open_collections]
+    
+    def delete_collection(self, collection_name):
+        if collection_name in [c.get_collection_name() for c in self._open_collections]:
+            collection = self.get_collection(collection_name)
+            self._open_collections.remove(collection)
+        self._delete_collection(collection_name)
 
     """-----------------------------Private Methods-----------------------------"""
     def _remove(self, collection_name):

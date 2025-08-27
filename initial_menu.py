@@ -51,7 +51,7 @@ def main():
                     qdrant_tracker.disconnect(collection_name)
                 case "d":
                     collection_name = input("Name of the collection:")
-                    print("To-do")
+                    qdrant_tracker.delete_collection(collection_name)
                 case _:
                     print("Invalid action")
         except Exception as e:

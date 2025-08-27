@@ -1,12 +1,10 @@
-from qdrant_client.http.models import PointStruct
-
-
+from my_collections.Colletion import Collection
 from objects.Group import Group
 import QdrantTracker
 from vectorization import get_embedding, get_point_id
 
 
-class GroupCollection:
+class GroupCollection(Collection):
     TYPE = "group"
     LIMIT_OF_UNFULL_GROUPS = 12
     """------------------------------Constructors------------------------------"""
@@ -80,18 +78,6 @@ class GroupCollection:
         return False
     
     """----------Group related methods----------"""
-    #outdated
-    def append_group(self, group):
-        """
-        Append a new Group to the collection.
-        """
-        if not isinstance(group, Group):
-            raise TypeError("Expected an instance of Group.")
-        self.items.append(group)
-    #outdated
-    def append_groups(self, groups):
-        for group in groups:
-            self.append_group(group)
 
     def append_description(self, description):
         """
@@ -110,24 +96,11 @@ class GroupCollection:
         for description in descriptions:
             self.append_description(description)
 
-    #outdated
-    def insert_group(self, idx, group):
-        self._check_index(idx)
-        if not isinstance(group, Group):
-            raise TypeError("Expected an instance of Group.")
-        self.items.insert(idx, group)
-
     def insert_description(self, idx, description):
         self._check_index(idx)
         if not isinstance(description, str):
             raise TypeError("Expected a string for description.")
-        self.insert_item(idx, Group(description))
-
-    #outdated
-    def delete_group(self, group_index):
-        self._check_index(group_index)
-        del self.items[group_index]
-    
+        self.insert_item(idx, Group(description))    
 
     """-----------SCS related methods-----------"""
     def append_scs(self, group_index, scs):
@@ -184,73 +157,11 @@ class GroupCollection:
         self._check_index(group_index)
         return self.items[group_index].is_full()
     
-    #outdated
-    def to_string(self):
-        lines = []
-        for i, group in enumerate(self.items):
-            if self._group_is_full(i):
-                continue
-            lines.append(f"[{i}] {group['description']}")
-            for j, prep in enumerate(group["prepositions"]):
-                lines.append(f"   ({j}) {prep}")
-            lines.append("")  # Blank line between groups
-        return "\n".join(lines)
-
-    #outdated
-    def to_save_points(self):
-        points = []
-        for idx, group in enumerate(self.items):
-            to_embed = group["description"] + "\n\n" + self._scss_to_string(idx)
-            
-            points.append(PointStruct(id=get_point_id(), vector=get_embedding(to_embed), payload=self._group_to_payload(idx)))
-        return points
-    #outdated
-    def to_save_points_w_batch(self, batch_size=5):
-        batch = []
-        for idx, group in enumerate(self.items):
-            to_embed = group["description"] + "\n\n" + self._scss_to_string(idx)
-            point = PointStruct(
-                id=get_point_id(),
-                vector=get_embedding(to_embed),
-                payload=self._group_to_payload(idx)
-            )
-            batch.append(point)
-
-            if len(batch) == batch_size:
-                yield batch
-                batch = []
-
-        if batch:
-            yield batch  # Yield any remaining points at the end
-    #outdated
-    def from_save_points(self, points):
-        for point in points:
-            self._payload_to_group(point.payload)
-
     
     #only exists for grouped_VDB.py
     def existing_group_index(self, index):
         return 0 <= index < len(self.items)
     
-    #outdated
-    def _scss_to_string(self, group_index):
-        scss = self.items[group_index]["prepositions"]
-        return "\n".join(scss)
-    #outdated
-    def _string_to_scss(self, string):
-        return string.split("\n")
-    #outdated
-    def _group_to_payload(self, group_index):
-        return {
-            "description": self.items[group_index]["description"],
-            "text": self._scss_to_string(group_index)
-        }
-    #outdated
-    def _payload_to_group(self, payload):
-        self.items.append({
-            "description": payload["description"],
-            "prepositions": self._string_to_scss(payload["text"])
-        })
 
 def main():
     qdrant_tracker = QdrantTracker.QdrantTracker()
