@@ -1,20 +1,24 @@
 '''Still supposing only one source per group.'''
 
-class Group:
+from objects.SCS import SCS
+from objects.Item import Item
+
+
+class Group(Item):
     LIMIT_OF_SCS = 8
     """-----------------------------Constructors-----------------------------"""
     
     def __init__(self, description=None, scss=None, source=None):
+        super().__init__(source)
         self.description = description if description else ""
         self.scss = scss if scss else []
-        self.source = source
 
     @classmethod
     def from_payload(cls, payload):
         description = payload["description"]
         source = payload.get("source", None)
         self = cls(description, source=source)
-        self.append_scs(self._string_to_scss(payload["text"]))
+        self.append_scss(self._string_to_scss(payload["text"]))
         return self
     
     """---------------------------------Dunders---------------------------------"""
@@ -37,11 +41,18 @@ class Group:
     """--------Status related methods---------"""
 
     def is_full(self):
+        """
+        Check if the group is full.
+        """
         return len(self.scss) >= Group.LIMIT_OF_SCS
+    
+    def is_empty(self):
+        return len(self.scss) == 0
     
     """----------SCS related methods----------"""
 
-    def append_scs(self, scss):# one or more
+    #outdated I think
+    def append_sentence(self, scss):# one or more
         """
         Add SCS's to the group.
         """
@@ -55,6 +66,21 @@ class Group:
             self.scss.extend(scss)
         else:
             raise TypeError("Expected a string or a list of strings for SCS.")
+
+    def append_scs(self, scs):
+        if isinstance(scs, str):
+            scs = SCS(scs)
+        self._check_full()
+        if not isinstance(scs, SCS):
+            raise TypeError("Expected a SCS object.")
+        self.append_sentence(scs.get_sentence())
+
+    def append_scss(self, scss):
+        """
+        Add multiple SCS objects to the group.
+        """
+        for scs in scss:
+            self.append_scs(scs)
 
     def get_scs(self, idx):#only one
         """
@@ -89,29 +115,6 @@ class Group:
         else:
             raise TypeError("Expected an integer or a list of integers for SCS index.")
 
-    """--------Source related methods--------"""
-
-    def set_source(self, source):
-        """
-        Set a source to the group.
-        """
-        if not isinstance(source, str):
-            raise TypeError(f"Expected a string for source, got {type(source)}.")
-        if not source:
-            raise ValueError("Source cannot be an empty string.")
-        self.source = source
-
-    def get_source(self):
-        """
-        Get the source of the group.
-        """
-        return self.source
-    
-    def delete_source(self):
-        """
-        Delete the source from the group.
-        """
-        self.source = None
 
     """--------Description related methods--------"""
 
@@ -140,20 +143,20 @@ class Group:
     """---------Qdrant related methods-----------"""
 
     def to_payload(self, index=None):
-        if index and self.source:
+        if index is not None and self.source is not None:
             return {
                 "description": self.description,
                 "text": "\n".join(self.scss),
                 "source": self.source,
                 "idx": index
             }
-        if self.source:
+        if self.source is not None:
             return {
                 "description": self.description,
                 "text": "\n".join(self.scss),
                 "source": self.source
             }
-        if index:
+        if index is not None:
             return {
                 "description": self.description,
                 "text": "\n".join(self.scss),
@@ -191,3 +194,4 @@ class Group:
         """
         if self.is_full():
             raise ValueError("Group is full. Cannot add more SCS's.")
+        

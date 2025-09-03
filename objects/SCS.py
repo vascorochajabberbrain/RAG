@@ -1,11 +1,14 @@
 
 
-class SCS:
+from objects.Item import Item
+
+
+class SCS(Item):
 
     """----------------------Constructors----------------------"""
     def __init__(self, scs, source=None):
+        super().__init__(source)
         self.scs = scs
-        self.source = source
 
     @classmethod
     def from_payload(cls, payload):
@@ -24,31 +27,21 @@ class SCS:
     def get_sentence(self):
         return self.scs
     
-    """-----------Source related methods-----------"""
-    
-    def set_source(self, source):
-        self.source = source
-    
-    def get_source(self):
-        return self.source
-    
-    def delete_source(self):
-        self.source = None
     
     """---------Qdrant related methods-----------"""
     def to_payload(self, index=None):
-        if index and self.source:
+        if index is not None and self.source is not None:
             return {
                 "text": self.scs,
                 "source": self.source,
                 "idx": index
             }
-        if self.source:
+        if self.source is not None:
             return {
                 "text": self.scs,
                 "source": self.source
             }
-        if index:
+        if index is not None:
             return {
                 "text": self.scs,
                 "idx": index

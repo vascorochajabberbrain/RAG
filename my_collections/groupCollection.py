@@ -1,12 +1,11 @@
 from my_collections.Colletion import Collection
 from objects.Group import Group
-import QdrantTracker
-from vectorization import get_embedding, get_point_id
 
 
 class GroupCollection(Collection):
     TYPE = "group"
     LIMIT_OF_UNFULL_GROUPS = 12
+
     """------------------------------Constructors------------------------------"""
 
     def init_item_from_qdrant(self, point_data):
@@ -14,9 +13,16 @@ class GroupCollection(Collection):
 
     """-----------------------------Public Methods-----------------------------"""
 
-    def collection_is_full(self):
+    #outdated now
+    def print_only_not_full_groups(self):
+        not_full_groups = [idx for idx, group in enumerate(self.items) if not group.is_full()]
+        self.print(not_full_groups)
+
+    def collection_is_full(self, scs):
         #a collection is full when the number of unfull groups reaches the limit
+    
         return self._number_of_groups() - self._number_of_full_groups() >= GroupCollection.LIMIT_OF_UNFULL_GROUPS
+
     
     def menu(self):
         menu = """Select an action:
@@ -79,13 +85,15 @@ class GroupCollection(Collection):
     
     """----------Group related methods----------"""
 
-    def append_description(self, description):
+    def append_description(self, description, scs):
         """
         Append a new Group with the given description.
         """
         if not isinstance(description, str):
             raise TypeError("Expected a string for description.")
+        self._check_full_collection(scs)
         self.append_item(Group(description))
+        return len(self.items) - 1  # Return the index of the newly added group
 
     def append_descriptions(self, descriptions):
         """
@@ -102,6 +110,21 @@ class GroupCollection(Collection):
             raise TypeError("Expected a string for description.")
         self.insert_item(idx, Group(description))    
 
+    def available_groups_for_source(self, source):
+        """
+        Find a group by its source.
+        """
+        if not isinstance(source, str) and source is not None:
+            raise TypeError("Expected a string for source or None.")
+        indexes = []
+        for idx, group in enumerate(self.items):
+            if group.same_source(source) and not group.is_full():
+                indexes.append(idx)
+        return indexes
+    
+    def unfull_groups_indexes(self, scs):
+        return [idx for idx, group in enumerate(self.items) if not group.is_full()]
+    
     """-----------SCS related methods-----------"""
     def append_scs(self, group_index, scs):
         self._check_index(group_index)
@@ -157,6 +180,10 @@ class GroupCollection(Collection):
         self._check_index(group_index)
         return self.items[group_index].is_full()
     
+    def _check_full_collection(self, scs):
+        if self.collection_is_full(scs):
+            raise Exception("The collection is full, cannot add more groups before fulling another group.")
+
     
     #only exists for grouped_VDB.py
     def existing_group_index(self, index):
@@ -164,33 +191,32 @@ class GroupCollection(Collection):
     
 
 def main():
-    qdrant_tracker = QdrantTracker.QdrantTracker()
-    collection = GroupCollection.download_qdrant_collection("testing_w_groups", qdrant_tracker)
+    """The main now serves as a test for the GroupCollection class."""
     try:
-        """
+        collection = GroupCollection()
         collection.print()
-        collection.append_group(Group("This is a new group from append_group"))
-        collection.append_groups([Group("Group 1"), Group("Group 2")])
+        collection.append_item(Group("This is a new group from append_item"))
         collection.append_description("This is a new description from append_description")
         collection.append_descriptions(["Description 1", "Description 2"])
         collection.print()
-        collection.add_group(1, Group("This is a new group from add_group"))
-        collection.add_description(2, "This is a new group from add_description")
+        collection.insert_item(1, Group("This is a new group from insert_item"))
+        collection.insert_description(2, "This is a new group from insert_description")
         collection.print()
-        collection.delete_group(1)
-        """
+        collection.delete_item(1)
+        
         collection.print()
-        print(f"going to add")
-        collection.add_scs(1, "This is a new SCS in group 1")
-        collection.add_scs(1, "This is a new SCS in group 1")
-        collection.add_scs(1, "This is a new SCS in group 1")
-        collection.add_scs(1, "This is another new SCS in group 1")
-        collection.add_scs(1, "This is a third new SCS in group 1")
-        collection.add_scs(1, "This is a fourth new SCS in 1")
-        collection.add_scs(1, "This is a fifth new SCS in 1")
-        collection.add_scs(1, "This is a sixth new SCS in 1")
-        collection.add_scs(1, "This is a seventh new SCS in 1")
+        collection.append_scs(1, "This is a new SCS in group 1")
+        collection.append_scs(1, "This is second SCS in group 1")
+        collection.append_scs(1, "This is third SCS in group 1")
+        collection.append_scs(1, "This is another new SCS in group 1")
+        collection.append_scs(1, "This is a fifth new SCS in 1")
+        collection.append_scs(1, "This is a sixth new SCS in 1")
+        collection.append_scs(1, "This is a seventh new SCS in 1")
+        collection.append_scs(1, "This is a eighth new SCS in 1")
+        print("--------------------now, first just print")
         collection.print()
+        print("--------------------now, print only full groups")
+        collection.print_only_not_full_groups()
         print(collection.get_scss(1))
         print("going to delete 1, 0")
         collection.delete_scs(1, 0)
@@ -207,7 +233,6 @@ def main():
         print(collection.get_all_descriptions())
     except Exception as e:
         print(e)
-    collection.save(qdrant_tracker) 
 
 if __name__ == '__main__':
     main()

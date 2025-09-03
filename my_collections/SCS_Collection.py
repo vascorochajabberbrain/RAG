@@ -1,4 +1,3 @@
-import QdrantTracker
 from my_collections.Colletion import Collection
 from objects.SCS import SCS
 
@@ -21,6 +20,7 @@ class SCS_Collection(Collection):
         -- "app" to append a sentence
         -- "ins" to insert a sentence (by index)
         -- "del" to delete a sentence
+        -- "mov" to move a sentence (by index)
         -- "p" to print the collection
         -- "s" to save the collection
 """
@@ -37,9 +37,18 @@ class SCS_Collection(Collection):
                     self.insert_sentence(idx, description)
                 case "del":
                     idx = int(input("Index:"))
-                    self.delete_scs(idx)
+                    self.delete_item(idx)
+                case "mov":
+                    from_idx = int(input("From Index:"))
+                    to_idx = int(input("To Index:"))
+                    self.move_item(from_idx, to_idx)
                 case "p":
-                    self.print()
+                    user_input = input("Press enter to print all or provide a list of indexes separated by spaces (example '1 2 3'):")
+                    if user_input == "":
+                        self.print()
+                    else:
+                        list_indexes = [int(i) for i in user_input.split()]
+                        self.print(list_indexes)
                 case "s":
                     return True
                 case _:
@@ -66,6 +75,9 @@ class SCS_Collection(Collection):
     def get_sentence(self, idx):
         return self.get_item(idx).get_sentence()
 
+    #do not like this, how we simply open the SCS object
+    def get_all_scss(self):
+        return self.items
     """----------------------Private Methods-----------------------"""
 
     def _verify_qdrant_collection_structure(self):
@@ -76,7 +88,6 @@ class SCS_Collection(Collection):
             
 
 def main():
-    qdrant_tracker = QdrantTracker.QdrantTracker()
     collection = SCS_Collection.download_qdrant_collection("fruit_example", qdrant_tracker)
     collection.print()
     collection.append_scs(SCS("This is a new SCS from append_scs"))

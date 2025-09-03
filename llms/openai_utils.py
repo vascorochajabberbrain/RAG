@@ -44,14 +44,17 @@ def openai_chat_completion(prompt, text, model="gpt-4o"):
     # prompt = "You are a helpful assistant that generates sentences based on the provided text."
     # text = "Your input text goes here."
     try:
+        #time.sleep(5) #temporary
         completion = openai_client.chat.completions.create(
             model=model,
             messages=[{"role": "system", "content": prompt},
                     {"role": "user", "content": text}]
         )
-    except openai.error.RateLimitError as e:
+    except openai.RateLimitError as e:
         # Extract details from the error object
         error_data = e.response.json()["error"]
+
+        print(error_data)
 
         # Check if it's a token-per-minute (TPM) limit
         if "tokens per min" in error_data.get("message", "").lower():

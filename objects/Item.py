@@ -3,9 +3,9 @@ from abc import abstractmethod
 
 class Item:
 
-    @abstractmethod
-    def __init__(self):
-        pass
+    def __init__(self, source=None):
+        self.source = source
+        
 
     @classmethod
     @abstractmethod
@@ -20,12 +20,16 @@ class Item:
         """
         Set a source to the item.
         """
-        if not isinstance(source, str):
-            raise TypeError(f"Expected a string for source, got {type(source)}.")
-        if not source:
-            raise ValueError("Source cannot be an empty string.")
+        if not isinstance(source, str) and source is not None:
+            raise TypeError(f"Expected a string or None for source, got {type(source)}.")
         self.source = source
 
+    def has_source(self):
+        """
+        Check if the item has a source.
+        """
+        return self.source is not None
+    
     def get_source(self):
         """
         Get the source of the item.
@@ -37,6 +41,9 @@ class Item:
         Delete the source from the item.
         """
         self.source = None
+    
+    def same_source(self, source):
+        return self.source == source
     
     @abstractmethod
     def to_payload(self, index=None):

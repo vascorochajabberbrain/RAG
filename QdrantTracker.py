@@ -1,11 +1,13 @@
 from qdrant_client import QdrantClient, models
 import os
 
-from my_collections.groupCollection import GroupCollection
 from my_collections.SCS_Collection import SCS_Collection
+from my_collections.groupCollection import GroupCollection
+from my_collections.groupCollection_sameSource import groupCollection_sameSource
 
 COLLECTIONS_TYPES_MAP = {
     "group": GroupCollection,
+    "group_sameSource": groupCollection_sameSource,
     "scs": SCS_Collection
 }
 
@@ -72,7 +74,7 @@ class QdrantTracker:
 
                 elif using.lower() == 'y':
                     print(f"Qdrant: Getting points from collection {collection_name}...")
-                    points = self._get_all_points(collection_name, points)
+                    points = self._get_all_points_payload(collection_name, points)
                     
                     break
         
@@ -94,7 +96,7 @@ class QdrantTracker:
             return self.open(collection_name)
         
         while True:
-            collection_type = input(f"""From the options: {', '.join(COLLECTIONS_TYPES_MAP.keys())}\nEnter the type of the collection you want: """).strip().lower()
+            collection_type = input(f"""From the options: {', '.join(COLLECTIONS_TYPES_MAP.keys())}\nEnter the type of the collection you want: """)
         
             if collection_type not in COLLECTIONS_TYPES_MAP:
                 print(f"QdrantTracker: Invalid collection type.")
@@ -122,13 +124,7 @@ class QdrantTracker:
         collection = self.get_collection(collection_name)
         points = collection.points_to_save()
 
-        for i in range(0, len(points), 5):
-            batch = points[i:i + 5]
-            self._connection.upsert(
-                collection_name=collection_name,
-                wait = True,
-                points=batch
-            )
+        self._upsert_points(collection_name, points)
     
     def disconnect(self, collection_name):
         """
@@ -174,6 +170,23 @@ class QdrantTracker:
             self._open_collections.remove(collection)
         self._delete_collection(collection_name)
 
+    def duplicate_collection(self, collection_name, new_collection_name):
+        if self._existing_collection_name(new_collection_name):
+            raise ValueError(f"Collection {new_collection_name} already exists.")
+        self._connection.create_collection(
+            collection_name=new_collection_name,
+            vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
+            init_from=models.InitFrom(collection=collection_name),
+        )
+        return
+
+        new_collection = self._create_collection(new_collection_name)
+        points = self._get_all_points(collection_name, points=[])
+        print(f"example of a point: {points[0]}")
+        points = self._make_qdrant_points(points)
+        self._upsert_points(new_collection_name, points)
+
+
     """-----------------------------Private Methods-----------------------------"""
     def _remove(self, collection_name):
         self._check_open_collection(collection_name)
@@ -189,7 +202,7 @@ class QdrantTracker:
         else:
             raise ValueError("Point payload does not contain collection type information.")
 
-    def _get_all_points(self, collection_name, points=[]):
+    def _get_all_points_payload(self, collection_name, points=[]):
         offset = None
         while True:
             result, offset = self._connection.scroll(
@@ -202,8 +215,47 @@ class QdrantTracker:
             points.extend([point.payload for point in result])
             if offset is None:
                 break #all points taken
-        print(f"Só para ver como estão os points: {points}")
+        #print(f"Só para ver como estão os points: {points}")
         return points
+    
+    def _get_all_points(self, collection_name, points=[]):
+        offset = None
+        while True:
+            result, offset = self._connection.scroll(
+                collection_name=collection_name,
+                scroll_filter=None,
+                with_payload=True,
+                with_vectors=True,
+                offset=offset,
+            )
+            points.extend(result)
+            if offset is None:
+                break #all points taken
+        #print(f"Só para ver como estão os points: {points}")
+        return points
+
+    def _make_qdrant_points(self, points):
+        from qdrant_client.http.models import PointStruct
+
+        qdrant_points = []
+
+        for point in points:
+            qdrant_points.append(PointStruct(
+                id=point.id,
+                vector=point.vector,
+                payload=point.payload
+            ))
+
+        return qdrant_points
+
+    def _upsert_points(self, collection_name, points):
+        for i in range(0, len(points), 5):
+            batch = points[i:i + 5]
+            self._connection.upsert(
+                collection_name=collection_name,
+                wait = True,
+                points=batch
+            )
 
     def _check_open_collection(self, collection_name):
         if collection_name not in [c.get_collection_name() for c in self._open_collections]:
