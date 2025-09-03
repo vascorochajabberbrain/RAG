@@ -156,7 +156,9 @@ class QdrantTracker:
 
     def all_collections(self):
         collections = self._connection.get_collections().collections
-        return [c.name for c in collections]
+        all_collections = [c.name for c in collections]
+        all_collections.sort()
+        return all_collections
     
     def open_collections(self):
         """
@@ -179,13 +181,6 @@ class QdrantTracker:
             init_from=models.InitFrom(collection=collection_name),
         )
         return
-
-        new_collection = self._create_collection(new_collection_name)
-        points = self._get_all_points(collection_name, points=[])
-        print(f"example of a point: {points[0]}")
-        points = self._make_qdrant_points(points)
-        self._upsert_points(new_collection_name, points)
-
 
     """-----------------------------Private Methods-----------------------------"""
     def _remove(self, collection_name):

@@ -35,6 +35,8 @@ class GroupCollection(Collection):
         -- "m_scs" to move a scs from a group to another
         -- "c_scs" to copy a scs from a group to another
         -- "u" to update a group description
+        -- "crt_desc" to create a description for a group using an LLM
+        -- "crt_all_desc" to create descriptions for all groups using an LLM
         -- "p" to print the collection
         -- "s" to save the collection
 """
@@ -74,6 +76,11 @@ class GroupCollection(Collection):
                     group_idx = int(input("Group Index:"))
                     description = input("Description:")
                     self.update_description(group_idx, description)
+                case "crt_desc":
+                    group_idx = int(input("Group Index:"))
+                    print(self.create_description(group_idx))
+                case "crt_all_desc":
+                    self.create_all_descriptions()
                 case "p":
                     self.print()
                 case "s":
@@ -168,6 +175,13 @@ class GroupCollection(Collection):
     def get_all_descriptions(self):
         return [group.get_description() for group in self.items]
     
+    def create_description(self, group_index):
+        self._check_index(group_index)
+        return self.items[group_index].create_description()
+    
+    def create_all_descriptions(self):
+        for group in self.items:
+            group.create_description()
     """------------Private methods--------------"""
     
     def _number_of_groups(self):

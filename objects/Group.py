@@ -1,4 +1,5 @@
 '''Still supposing only one source per group.'''
+from llms.openai_utils import openai_chat_completion
 
 from objects.SCS import SCS
 from objects.Item import Item
@@ -140,42 +141,68 @@ class Group(Item):
         """
         self.description = None
     
+    def create_description(self):
+        """
+        Use an LLM to create a description for the group based on its SCS's.
+        """
+        prompt = f"""You are an expert in creating concise and accurate descriptions for groups of sentences.
+                Given a list of sentences, your task is to generate a brief description that encapsulates the main theme or subject of the sentences.
+                The description should be no longer than 15 words and should be clear and to the point.
+
+                The user will send you a list of sentences like this:
+                "A dog's sense of smell is remarkably powerful, estimated to be anywhere from 10,000 to 100,000 times more acute than a human's. This allows them to detect minute scents, which is why they're used in search-and-rescue, bomb detection, and medical diagnosis.
+                Dogs can be trained to detect diseases. Some can be trained to sniff out diseases like cancer, diabetes, and even COVID-19 by identifying specific odors released by the human body.
+                The average dog is as intelligent as a two-year-old human. They can understand over 150 words and gestures and are capable of counting up to four or five.
+                The Basenji breed is unique because it doesn't bark. Instead, it makes a yodel-like sound due to its unusually shaped larynx."
+
+                Which a description for these sentences would be:
+                "Facts about dogs' abilities and intelligence."
+                
+                The format of your response must be only the actual description, without any additional explanation or punctuation."""
+        text = self._scss_to_string()
+        llm_response = openai_chat_completion(prompt, text)
+        llm_response = self._check_valid_llm_response(llm_response)
+        self.set_description(llm_response)
+        return llm_response
     """---------Qdrant related methods-----------"""
 
     def to_payload(self, index=None):
         if index is not None and self.source is not None:
             return {
                 "description": self.description,
-                "text": "\n".join(self.scss),
+                "text": self._scss_to_string(),
                 "source": self.source,
                 "idx": index
             }
         if self.source is not None:
             return {
                 "description": self.description,
-                "text": "\n".join(self.scss),
+                "text": self._scss_to_string(),
                 "source": self.source
             }
         if index is not None:
             return {
                 "description": self.description,
-                "text": "\n".join(self.scss),
+                "text": self._scss_to_string(),
                 "idx": index
             }
         else:
             return {
                 "description": self.description,
-                "text": "\n".join(self.scss)
+                "text": self._scss_to_string()
             }
         
     def to_embed(self):
         """
         Convert the group to a string suitable for embedding.
         """
-        return self.description + "\n" + "".join(self.scss)
+        return self.description + self._scss_to_string()
     
     """-----------------------------Private Methods-----------------------------"""
 
+    def _scss_to_string(self):
+        return "\n".join(self.scss)
+    
     def _string_to_scss(self, string):
             if string == "":
                 return []
@@ -194,4 +221,13 @@ class Group(Item):
         """
         if self.is_full():
             raise ValueError("Group is full. Cannot add more SCS's.")
+        
+    #not very useful for now but I like the principle of allways processing the llm response before using it
+    def _check_valid_llm_response(self, response):
+        """
+        Check if the LLM response is valid.
+        """
+        if not response:
+            raise ValueError("LLM response is empty.")
+        return response
         

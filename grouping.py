@@ -8,13 +8,6 @@ def grouping(sc: SCS_Collection, gc: GroupCollection):
     
     for scs in sc.get_all_scss():
 
-        #get source of scs
-        source = scs.get_source()
-
-        #get possible groups for this source in gc
-        possible_groups = gc.available_groups_for_source(source)
-
-        #call llm to chose which group
         prompt = """You are a classifier whose task is to insert a sentence into a group by meaning.
 
                 You will receive:
@@ -41,16 +34,20 @@ def grouping(sc: SCS_Collection, gc: GroupCollection):
         if not gc.collection_is_full(scs):
             possible_answers[0].append(-1)
         
-        text = f"""Groups:{gc.to_string(gc.unfull_groups_indexes(scs))}
+        groups_part_of_text = f"""Groups:{gc.to_string(gc.unfull_groups_indexes(scs))}"""
 
-                New sentence: {scs.get_sentence()}
+        readable_text_to_print = f"""New sentence: {scs.get_sentence()}
 
                 Allow new group creation (allowed '-1' response): {not gc.collection_is_full(scs)}
 
                 So, possible answers are: {possible_answers}"""
-        print(f"Text: {text}")
+        
+        print(f"Grouping: sending: {text}")
+
+        text = f"{groups_part_of_text}\n{readable_text_to_print}"
         llm_response = openai_chat_completion(prompt, text)
-        print(f"LLM response: {llm_response}")
+        
+        print(f"Grpuping: LLM response: {llm_response}")
         
         #repeat until the LLM ansers a valid response, this is dangerous though
         while True:
@@ -63,11 +60,16 @@ def grouping(sc: SCS_Collection, gc: GroupCollection):
                 gc.append_scs(index, scs)
                 break
             except Exception as e:
-                print(f"You answered {llm_response}, but it is not a valid response because {e}. These are the possible answers: {possible_answers}. Please answer again.")
-                text += f"You answered {llm_response}, but it is not a valid response because {e}. These are the possible answers: {possible_answers}. Please answer again."
+                error_message = f"You answered {llm_response}, but it is not a valid response because {e}. These are the possible answers: {possible_answers}. Please answer again."
+                print(error_message)
+                text += error_message
                 llm_response = openai_chat_completion(prompt, text)
 
-        #append scs to the chosen group in gc
+        
+    print("Grouping: Creating descriptions for all groups...")
+    gc.create_all_descriptions()
+
+    print("Grouping: Done.")
 
 def check_valid_llm_response(response):
     try:
