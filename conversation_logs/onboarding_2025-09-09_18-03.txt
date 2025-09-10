@@ -1,0 +1,70 @@
+Q: What products do you sell?
+A: - Necklaces
+- Rings
+- Anklets
+- Earrings
+- Bracelets
+- Swimwear
+- Athleisure
+- Watches
+
+Q: Do you sell bracelets
+A: Yes
+
+Q: Do you sell rings
+A: Yes
+
+Q: Apart  from products rings, bracelets, earrings, what other products do you offer?
+A: Necklaces, Anklets, Swimwear, Athleisure, Watches.
+
+Q: What payment methods do you offer?
+A: IDontKnow
+
+Q: Is it possible to pay with VISA
+A: IDontKnow
+
+Q: Is it possible to pay with multiple credit cards
+A: IDontKnow
+
+Q: Apart from VISA, AMEX and Pay Pal, what other payment methods do you offer?
+A: Mastercard
+
+Q: Explain the domestic return delivery process including details of the time and cost.
+A: To explain the domestic return delivery process, I would need specific details from the company's return policy. However, typically, the domestic return delivery process generally involves these steps:
+
+1. **Initiate the Return**: 
+   - Start by going to the website's 'Support' or 'Contact' section.
+   - Use the 'Start a return' option most likely provided on the site.
+
+2. **Prepare the Item**:
+   - Ensure the item is in its original condition.
+   - Package it securely to prevent any damage during return shipping.
+
+3. **Shipping the Item**:
+   - Use the provided return label, if offered by the company. 
+   - If no label is provided, choose a reliable shipping service and send the package to the specified return address.
+
+4. **Cost of Return**:
+   - The cost may vary; some companies offer free returns while others might charge a return shipping fee.
+   - Check the company’s specific return policy for details on costs.
+
+5. **Waiting for Refund or Exchange**:
+   - After the item is received and inspected, wait for confirmation of the processed return.
+   - The refund is usually processed back to the original payment method.
+
+For precise information on time and cost details, it is best to consult the company's specific return policy or contact their customer service directly.
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product
+A: How do I start a return/exchange?
+
+Q: Which products, if any, require a different return process
+A: Watches, clothing items, and swimwear require a different return process.

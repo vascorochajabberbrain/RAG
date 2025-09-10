@@ -1,12 +1,13 @@
 from datetime import datetime
 
-from openai_utils import get_openai_client
+from llms.openai_utils import get_openai_client
 from qdrant_utils import get_qdrant_connection
 
-def make_conversation_file(conversation):
+def make_conversation_file(conversation, standard_filename):
     # Generate a filename with the current date and minute
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")  # Example: 2025-02-19_14-30
-    filename = f"conversation_logs/conversation_file_{timestamp}.txt"
+    #filename = f"conversation_logs/conversation_file_{timestamp}.txt"
+    filename = f"{standard_filename}_{timestamp}.txt"
 
     # Save the file
     with open(filename, "w", encoding="utf-8") as file:

@@ -9,7 +9,8 @@ from selenium.webdriver.common.action_chains import ActionChains
 import difflib
 import time
 
-from llms.openai_utils import get_openai_client
+from llms.openai_utils import get_openai_client, openai_chat_completion
+from chatbot import make_conversation_file
 from vectorization import get_points, get_text_chunks, insert_data
 
 
@@ -86,7 +87,6 @@ def get_all_clickable_buttons(driver):
     
     return really_clickable
 
-
 def get_all_product_urls(driver):
     print("entrou no get_all_product_urls")
     product_elements = driver.find_elements(By.XPATH, "//a[starts-with(@href, '/eu/en/products/')]")
@@ -95,7 +95,7 @@ def get_all_product_urls(driver):
     for element in product_elements:
         try:
             product_url = element.get_attribute("href")
-            if product_url and product_url.startswith("https://heyharper.com/eu/en/products/")and product_url not in products_urls:
+            if product_url and (product_url.startswith("https://heyharper.com/eu/en/products/") or product_url.startswith("https://checkout-eu.heyharper.com/")) and not product_url.startswith(product_url, "https://heyharper.com/eu/en/products/") and product_url not in products_urls:
                 print(product_url)
                 products_urls.append(product_url)
         except:
@@ -176,9 +176,25 @@ def mouse_hover(driver, original_text, original_clickable_elements):
                 continue
     return hover_text, hover_clickable_elements
 
+def get_new_content(initial_text, new_text):
+    """
+    Compares two strings and returns the content present in the new text
+    that was not in the initial text.
+    """
+    # Split the initial and new text into sets of lines for efficient comparison.
+    initial_lines = set(initial_text.splitlines())
+    new_lines = new_text.splitlines()
+
+    # Find the lines that are in new_lines but not in initial_lines.
+    newly_added_lines = [line for line in new_lines if line not in initial_lines]
+    
+    # Join the new lines back into a single string, separated by newlines.
+    return "\n".join(newly_added_lines)
+
 def open_all_toggles(driver):
     toggles = driver.find_elements(By.XPATH, "//button[@aria-label='accordion']")
 
+    initial_text = get_all_text(driver)
     for toggle in toggles:
         try:
             if toggle.is_displayed() and toggle.is_enabled():
@@ -189,8 +205,12 @@ def open_all_toggles(driver):
                 toggle = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, toggle.get_attribute("id"))))
                 toggle.click()
                 time.sleep(0.1)
+                new_text = get_all_text(driver)
+                initial_text += get_new_content(initial_text, new_text)
         except:
             continue
+
+    return initial_text
 
 def get_all_text(driver):
     # Get all text that is visible
@@ -201,13 +221,30 @@ def get_all_text(driver):
 def clean_page_text(text):
     return 
 
-def crawl(driver, start_url):
+def ask_questions(text, questions):
+    """ Receives a list of questions and returns a list of answers. """
+    openai_client = get_openai_client()
+    answers = []
+    for question in questions:
+        response = openai_chat_completion("""Use the provided text to answer the question, notice that the text was generated from a website scrapping process.
+                                          If it is a yes or not questions only answer with Yes, No or IDontKnow.
+                                          If the provided text does not contain the answer, do not explain that the text does have the answer just answer IDontKnow.
+                                          If it is a question to list something, just name the items.
+                                          Overall try to be brieve, unless there is question on a process, in that case, explain all the steps""", "Question: " + question + "\nContext: " + text)
+        answers.append(response)
+    return answers
+
+def crawl(driver, start_url, number_links_visited, filename):
     """ Recursively crawls through all clickable elements and extracts text. """
     stack = [start_url]  # URLs to visit
     visited_urls = []
     text = ""
 
+    links_count = 0
+
     while stack:
+        #if links_count == 10:
+        #    break
         url = stack.pop()
         
         if url in visited_urls:
@@ -218,11 +255,34 @@ def crawl(driver, start_url):
         time.sleep(2)  # Wait for JS to load
         visited_urls.append(url)
 
-        #print(f"\n--- Extracting from {url} ---")
+        try:
+            #print(f"\n--- Extracting from {url} ---")
+            new_text = open_all_toggles(driver)
+        except:
+            write_number_visited_links_at_the_end(links_count, filename)
 
-        text += "\n" + get_all_text(driver)
-        clickable_elements = get_all_clickable_buttons(driver)
-        
+        if number_links_visited > links_count:
+            links_count += 1
+            print("Skipping link ", links_count, " of ", number_links_visited, " : ", url)
+
+        else:
+            """
+            try:      
+                new_text = get_all_text(driver)
+            except:
+                write_number_visited_links_at_the_end(links_count, filename)
+            """
+            #print("new text: ", new_text)
+            print("Count of visited URLs: ", len(visited_urls), " Current URL: ", url)
+            with open(filename, 'a') as file:
+                file.write(new_text + "\n")
+            #text += "\n" + new_text
+            links_count += 1
+
+        try:
+            clickable_elements = get_all_clickable_buttons(driver)
+        except:
+            write_number_visited_links_at_the_end(links_count, filename)
         '''
         hover_text, hover_clickable_elements = mouse_hover(driver, text, clickable_elements)
 
@@ -232,17 +292,16 @@ def crawl(driver, start_url):
         clickable_elements.append(hover_clickable_elements)
 '''
 
-        open_all_toggles(driver)
-
         for element in clickable_elements:
             try:
                 # Use JavaScript to get the href without clicking
                 link = element.get_attribute("href")
-                if link and link.startswith("http") and link not in visited_urls:
+                if link and (link.startswith(start_url) or link.startswith("https://checkout-eu.heyharper.com/")) and not link.startswith("https://heyharper.com/eu/en/products/") and link not in visited_urls:
                     stack.append(link)
             except:
                 continue  # Ignore elements that fail
 
+    print(f"\nCrawling completed. Visited {len(visited_urls)} pages.")
     return text
 
 def add_context(chunk, text):
@@ -284,6 +343,8 @@ def manual_chunks_filter(chunks, text):
             chunksToKeep.append(new_chunk)
     return chunksToKeep
 
+def filter_links_from_website(start_url, list_of_links):
+    return [link for link in list_of_links if link.startswith(start_url)]
 
 def get_image_knowing_the_src(driver):
     openai_client = get_openai_client()
@@ -317,21 +378,100 @@ def scrape_page(url):
     finally:
         driver.quit()
 
+def read_and_split_last_line(filename):
+    """
+    Reads a file, separates the last line, and returns both parts.
+    
+    Returns:
+        A tuple containing (all_lines_but_last, last_line).
+        If the file is empty, returns ([], None).
+    """
+    try:
+        # Open the file in read mode to get all lines.
+        with open(filename, 'r') as file:
+            lines = file.readlines()
+        
+        # Check if the file is not empty.
+        if lines:
+            # The last line is the last element of the list.
+            last_line = lines[-1].strip()
+            # All other lines are everything up to the last element.
+            all_but_last_line = lines[:-1]
+            return all_but_last_line, last_line
+        else:
+            return [], None
+    except FileNotFoundError:
+        print(f"Error: The file '{filename}' was not found.")
+        return [], None
+
+def write_number_visited_links_at_the_end(number_visited_links, filename):
+    with open(filename, "a") as file:
+        file.write(str(number_visited_links))
+
 def main():
-    start_url = "https://heyharper.com/us/en/products/surprise-jewelry-subscription-box"
+    start_url = "https://heyharper.com/eu/en"
     driver = setup_driver(start_url)
 
     openai_client = get_openai_client()
     try:
+            
+        filename = "ingestion/heyharper_helper_text_reading_at_all_toggles.txt"
+        """
+        existing_text, number_links_visited = read_and_split_last_line(filename)
+        if number_links_visited is None:
+            number_links_visited = 0
+        else:
+            number_links_visited = int(number_links_visited)
+            with open(filename, 'w') as file:
+                file.writelines(existing_text)
+
+        text = crawl(driver, start_url, number_links_visited, filename)
+        """
+        with open(filename, 'r') as file:
+            text = file.read()
+
+
+        questions = ["What products do you sell?",
+"Do you sell bracelets?",
+"Do you sell rings?",
+"Do you sell dresses?"
+"Apart  from products rings, bracelets, earrings, what other products do you offer?",
+"What payment methods do you offer?",
+"Is it possible to pay with VISA?",
+"Is it possible to pay with multiple credit cards?",
+"Apart from VISA, AMEX and Pay Pal, what other payment methods do you offer?",
+"Explain the domestic return delivery process including details of the time and cost.",
+"What is the fee for domestic return delivery?",
+"Explain the international return delivery process including details of the time and cost.",
+"What is the fee for international return delivery?",
+"What is the process to return a product?",
+"Which products, if any, require a different return process?"]
         
+        answers = ask_questions(text, questions)
+
+        formatted_lines = [
+    f"Q: {question}\nA: {answer}\n" for question, answer in zip(questions, answers)
+]
+        formatted_output = "\n".join(formatted_lines)
+
+        make_conversation_file(formatted_output, "conversation_logs/onboarding")
+        print(formatted_output)
+
+        """
         text = ""
         
         open_all_toggles(driver)
-        #text += get_all_text(driver)
-        text += get_image_knowing_the_src(driver)
+        text += get_all_text(driver)
+        #text += get_image_knowing_the_src(driver)
         print("scraping done")
 
-        chunks=get_text_chunks(text)
+        """
+        
+        print(openai_chat_completion("From the text the user will give you understand if bracelets are sold or not by this website.", text))
+        
+        """chunks=get_text_chunks(text)
+
+        print("chunks: \n", chunks)
 
         chunksToKeep = manual_chunks_filter(chunks, text)
 
@@ -341,7 +481,8 @@ def main():
 
         
         vectors=get_points(chunksToKeep)
-        insert_data(vectors)
+        #insert_data(vectors)
+        """
 
         """
         chunks=get_text_chunks(text_2)

@@ -1,0 +1,64 @@
+Q: What products do you sell?
+A: - Jewelry
+- Swimwear
+- Dresses
+- Watches
+
+Q: Do you sell bracelets
+A: Yes
+
+Q: Do you sell rings
+A: Yes.
+
+Q: Apart  from products rings, bracelets, earrings, what other products do you offer?
+A: Swimwear, Dresses, Watches, Anklets, Necklaces, Athleisure.
+
+Q: What payment methods do you offer?
+A: - Credit card
+- Debit card
+- Klarna
+- Apple Pay
+- Google Pay
+- Shop Pay
+- PayPal
+
+Q: Is it possible to pay with VISA
+A: Yes
+
+Q: Is it possible to pay with multiple credit cards
+A: IDontKnow
+
+Q: Apart from VISA, AMEX and Pay Pal, what other payment methods do you offer?
+A: Credit card, Debit card, Klarna, Apple Pay, Google Pay, Shop Pay.
+
+Q: Explain the domestic return delivery process including details of the time and cost.
+A: The provided text does not include details about the domestic return delivery process, time, or cost.
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product
+A: To return a product, the following process should typically be followed:
+
+1. **Start a Return**: Locate the "Start a return" option on the Hey Harper website.
+
+2. **Contact Customer Service**: You may need to contact Hey Harper’s Customer Service for specific instructions.
+
+3. **Verify Product Condition**: Ensure the product is in the condition required for returns, which typically means it hasn't been used or damaged.
+
+4. **Package the Product**: Prepare the product for shipment back to the company, usually in its original packaging.
+
+5. **Ship the Product**: Use the instructions provided by customer service for shipping the product back to Hey Harper.
+
+6. **Refund or Replacement**: Once processed, Hey Harper will either replace the product or refund the purchase amount according to their policy.
+
+This is a general guideline; it's important to refer to the specific return policy details when proceeding with a return.
+
+Q: Which products, if any, require a different return process
+A: No
