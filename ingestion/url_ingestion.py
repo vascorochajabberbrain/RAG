@@ -23,6 +23,7 @@ def setup_driver(start_url):
     return driver
 
 
+"""-------------Products related functions------------------"""
 def get_product_names(driver):
     # Find product names
     products = driver.find_elements(By.XPATH, '//a[@aria-label="Product name"]')
@@ -31,7 +32,23 @@ def get_product_names(driver):
     for product in products:
         print(product.text)
 
+def get_all_product_urls(driver):
+    print("entrou no get_all_product_urls")
+    product_elements = driver.find_elements(By.XPATH, "//a[starts-with(@href, '/eu/en/products/')]")
 
+    products_urls = []
+    for element in product_elements:
+        try:
+            product_url = element.get_attribute("href")
+            if product_url and (product_url.startswith("https://heyharper.com/eu/en/products/") or product_url.startswith("https://checkout-eu.heyharper.com/")) and not product_url.startswith(product_url, "https://heyharper.com/eu/en/products/") and product_url not in products_urls:
+                print(product_url)
+                products_urls.append(product_url)
+        except:
+                continue  # Ignore elements that fail
+
+    return products_urls
+
+"""-------------Specific functions------------------"""
 def find_show_more_id(driver):
     # Find all buttons or elements you want to check
     button_elements = driver.find_elements(By.TAG_NAME, "button")
@@ -70,6 +87,30 @@ def click_show_more(driver):
     print("No more 'Show More' button found or error occurred:")
     return False
 
+def get_image_knowing_the_src(driver):
+    openai_client = get_openai_client()
+
+    #images = driver.find_elements(By.TAG_NAME, "img")
+    #image_srcs = [image.get_attribute("src") for image in images]
+
+    image_url = "https://a.storyblok.com/f/237022/2964x1040/fdbef14142/01_offer_desktop-us-1.png/m/2048x0/"
+
+    # Download the image
+    img_data = requests.get(image_url).content
+
+    # Convert image data to base64
+    base64_image = base64.b64encode(img_data).decode("utf-8")
+
+    # Call GPT-4 Vision model
+    response = openai_client.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[
+            { "role": "user", "content": [{ "type": "text", "text": "Please retrun the text of the image."},{ "type": "image_url", "image_url": { "url": f"data:image/png;base64,{base64_image}" }}]}],
+        max_tokens=1000
+    )
+    return response.choices[0].message.content
+"""-----------What to get functions------------------"""
+#not in use, since get_all_hrefs to replace it
 def get_all_clickable_buttons(driver):
     #print("entrou no get_all_clickable")
     clickables = driver.find_elements(By.CSS_SELECTOR, "a, button, [role='button'], [onclick], [tabindex='0'], [href]")
@@ -117,24 +158,27 @@ def get_all_hrefs(driver):
     print("hrefs found: ", len(elements_list))
     return elements_list
 
-def get_all_product_urls(driver):
-    print("entrou no get_all_product_urls")
-    product_elements = driver.find_elements(By.XPATH, "//a[starts-with(@href, '/eu/en/products/')]")
+def get_all_text(driver):
+    # Get all text that is visible
+    visible_text = driver.find_element(By.TAG_NAME, "body").text
+    #print("visible data", visible_text)
+    return visible_text
 
-    products_urls = []
-    for element in product_elements:
-        try:
-            product_url = element.get_attribute("href")
-            if product_url and (product_url.startswith("https://heyharper.com/eu/en/products/") or product_url.startswith("https://checkout-eu.heyharper.com/")) and not product_url.startswith(product_url, "https://heyharper.com/eu/en/products/") and product_url not in products_urls:
-                print(product_url)
-                products_urls.append(product_url)
-        except:
-                continue  # Ignore elements that fail
+"""-------------Effeciency functions------------------"""
+def get_new_content(initial_text, new_text):
+    """
+    Compares two strings and returns the content present in the new text
+    that was not in the initial text.
+    """
+    # Split the initial and new text into sets of lines for efficient comparison.
+    initial_lines = set(initial_text.splitlines())
+    new_lines = new_text.splitlines()
 
-    return products_urls
-
-
-
+    # Find the lines that are in new_lines but not in initial_lines.
+    newly_added_lines = [line for line in new_lines if line not in initial_lines]
+    
+    # Join the new lines back into a single string, separated by newlines.
+    return "\n".join(newly_added_lines)
 
 #expensive operation
 def element_diff(list1, list2):
@@ -144,6 +188,7 @@ def element_diff(list1, list2):
             unique_elements.append(element)
     return unique_elements
 
+#not in use
 def element_common(list1, list2):
     unique_elements = []
     for element in list2:
@@ -151,7 +196,41 @@ def element_common(list1, list2):
             unique_elements.append(element)
     return unique_elements
 
+def filter_links_from_website(start_url, list_of_links):
+    return [link for link in list_of_links if link.startswith(start_url)]
 
+"""---------Deal with interroption of the process--------"""
+def read_and_split_last_line(filename):
+    """
+    Reads a file, separates the last line, and returns both parts.
+    
+    Returns:
+        A tuple containing (all_lines_but_last, last_line).
+        If the file is empty, returns ([], None).
+    """
+    try:
+        # Open the file in read mode to get all lines.
+        with open(filename, 'r') as file:
+            lines = file.readlines()
+        
+        # Check if the file is not empty.
+        if lines:
+            # The last line is the last element of the list.
+            last_line = lines[-1].strip()
+            # All other lines are everything up to the last element.
+            all_but_last_line = lines[:-1]
+            return all_but_last_line, last_line
+        else:
+            return [], None
+    except FileNotFoundError:
+        print(f"Error: The file '{filename}' was not found.")
+        return [], None
+
+def write_number_visited_links_at_the_end(number_visited_links, filename):
+    with open(filename, "a") as file:
+        file.write(str(number_visited_links))
+"""-------------Search functions------------------"""          
+#not in use
 def get_dynamic_elements(driver):
     elements_1 = driver.find_elements(By.XPATH, "//*")  # Get all elements
     
@@ -169,7 +248,6 @@ def get_dynamic_elements(driver):
 
     return dynamic_elements
 
-            
 def mouse_hover(driver, original_text, original_clickable_elements):
     hover_elements = driver.find_elements(By.XPATH, "//*[contains(@onmouseover, '') or contains(@class, 'hover')]")
     print("entrou no hover, numero de hover elements: ", len(hover_elements))
@@ -206,21 +284,6 @@ def mouse_hover(driver, original_text, original_clickable_elements):
                 continue
     return hover_text, hover_clickable_elements
 
-def get_new_content(initial_text, new_text):
-    """
-    Compares two strings and returns the content present in the new text
-    that was not in the initial text.
-    """
-    # Split the initial and new text into sets of lines for efficient comparison.
-    initial_lines = set(initial_text.splitlines())
-    new_lines = new_text.splitlines()
-
-    # Find the lines that are in new_lines but not in initial_lines.
-    newly_added_lines = [line for line in new_lines if line not in initial_lines]
-    
-    # Join the new lines back into a single string, separated by newlines.
-    return "\n".join(newly_added_lines)
-
 def open_all_toggles(driver):
     toggles = driver.find_elements(By.XPATH, "//button[@aria-label='accordion']")
 
@@ -246,15 +309,7 @@ def open_all_toggles(driver):
 
     return initial_text, initial_clickables
 
-def get_all_text(driver):
-    # Get all text that is visible
-    visible_text = driver.find_element(By.TAG_NAME, "body").text
-    #print("visible data", visible_text)
-    return visible_text
-
-def clean_page_text(text):
-    return 
-
+"""-------------Answers functions------------------"""
 def ask_questions(text, questions):
     """ Receives a list of questions and returns a list of answers. """
     openai_client = get_openai_client()
@@ -268,6 +323,49 @@ def ask_questions(text, questions):
         answers.append(response)
     return answers
 
+"""-------------RAG functions------------------"""
+#To-Do: transport to RAG files
+def add_context(chunk, text):
+    openai_client = get_openai_client()
+    response = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": f"""I need you to rewrite this preposition: {chunk}. 
+                           In order to include a bit more context so that will better mach when used for embeddings
+                           The text is: {text}
+                           Note, I don't want to include any more information than the one that makes it so you do not need to know anything else to understand it.
+                           Please answer only the rewritten sentence.
+                           Example:
+                           if this was the preposition: "Options are: Minimalist, Trendy, or Surprise Me."
+                           your answer should be something like this: "For the product subscription, customers can choose the style of jewelry pieces they want: Minimalist, Trendy, or Surprise Me."
+                           This is a good example because it includes the context that we are refering to the product subscription, we refer who has the option to choose, and we use words that are used on the rest of the text, like style instead of options"""}
+                          ]
+    )
+    return response.choices[0].message.content
+
+def manual_chunks_filter(chunks, text):
+    chunksToKeep = []
+    for chunk in chunks:
+        print("\nchunk: ", chunk, "\n")
+        toKeep = input("""Do you want to keep this chunk as it is? if Yes type y
+        If it is too summarized and needs context, type 1
+        If you want to rewrite it yourself, type r""")
+        if toKeep == "y":
+            chunksToKeep.append(chunk)
+        elif toKeep == "1":
+            new_chunk = add_context(chunk, text)
+            print("new chunk: ", new_chunk)
+            toKeep = input("Write y to include like this, b to include it as before and r to rewrite it yourself")
+            if toKeep == "y":
+                chunksToKeep.append(new_chunk)
+            elif toKeep == "b":
+                chunksToKeep.append(chunk)
+        elif toKeep == "r":
+            new_chunk = input("Write the new chunk: ")
+            chunksToKeep.append(new_chunk)
+    return chunksToKeep
+
+
+"""-------------Main functions"""
 def crawl(driver, start_url, number_links_visited, filename):
     """ Recursively crawls through all clickable elements and extracts text. """
     stack = [start_url]  # URLs to visit
@@ -343,109 +441,6 @@ def crawl(driver, start_url, number_links_visited, filename):
     print(f"\nCrawling completed. Visited {len(visited_urls)} pages.")
     return text
 
-def add_context(chunk, text):
-    openai_client = get_openai_client()
-    response = openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": f"""I need you to rewrite this preposition: {chunk}. 
-                           In order to include a bit more context so that will better mach when used for embeddings
-                           The text is: {text}
-                           Note, I don't want to include any more information than the one that makes it so you do not need to know anything else to understand it.
-                           Please answer only the rewritten sentence.
-                           Example:
-                           if this was the preposition: "Options are: Minimalist, Trendy, or Surprise Me."
-                           your answer should be something like this: "For the product subscription, customers can choose the style of jewelry pieces they want: Minimalist, Trendy, or Surprise Me."
-                           This is a good example because it includes the context that we are refering to the product subscription, we refer who has the option to choose, and we use words that are used on the rest of the text, like style instead of options"""}
-                          ]
-    )
-    return response.choices[0].message.content
-
-def manual_chunks_filter(chunks, text):
-    chunksToKeep = []
-    for chunk in chunks:
-        print("\nchunk: ", chunk, "\n")
-        toKeep = input("""Do you want to keep this chunk as it is? if Yes type y
-        If it is too summarized and needs context, type 1
-        If you want to rewrite it yourself, type r""")
-        if toKeep == "y":
-            chunksToKeep.append(chunk)
-        elif toKeep == "1":
-            new_chunk = add_context(chunk, text)
-            print("new chunk: ", new_chunk)
-            toKeep = input("Write y to include like this, b to include it as before and r to rewrite it yourself")
-            if toKeep == "y":
-                chunksToKeep.append(new_chunk)
-            elif toKeep == "b":
-                chunksToKeep.append(chunk)
-        elif toKeep == "r":
-            new_chunk = input("Write the new chunk: ")
-            chunksToKeep.append(new_chunk)
-    return chunksToKeep
-
-def filter_links_from_website(start_url, list_of_links):
-    return [link for link in list_of_links if link.startswith(start_url)]
-
-def get_image_knowing_the_src(driver):
-    openai_client = get_openai_client()
-
-    #images = driver.find_elements(By.TAG_NAME, "img")
-    #image_srcs = [image.get_attribute("src") for image in images]
-
-    image_url = "https://a.storyblok.com/f/237022/2964x1040/fdbef14142/01_offer_desktop-us-1.png/m/2048x0/"
-
-    # Download the image
-    img_data = requests.get(image_url).content
-
-    # Convert image data to base64
-    base64_image = base64.b64encode(img_data).decode("utf-8")
-
-    # Call GPT-4 Vision model
-    response = openai_client.chat.completions.create(
-        model="gpt-4-turbo",
-        messages=[
-            { "role": "user", "content": [{ "type": "text", "text": "Please retrun the text of the image."},{ "type": "image_url", "image_url": { "url": f"data:image/png;base64,{base64_image}" }}]}],
-        max_tokens=1000
-    )
-    return response.choices[0].message.content
-
-def scrape_page(url):
-    time.sleep(0.1)
-    driver = setup_driver(url)
-    try:
-        text = get_all_text(driver)
-        return text
-    finally:
-        driver.quit()
-
-def read_and_split_last_line(filename):
-    """
-    Reads a file, separates the last line, and returns both parts.
-    
-    Returns:
-        A tuple containing (all_lines_but_last, last_line).
-        If the file is empty, returns ([], None).
-    """
-    try:
-        # Open the file in read mode to get all lines.
-        with open(filename, 'r') as file:
-            lines = file.readlines()
-        
-        # Check if the file is not empty.
-        if lines:
-            # The last line is the last element of the list.
-            last_line = lines[-1].strip()
-            # All other lines are everything up to the last element.
-            all_but_last_line = lines[:-1]
-            return all_but_last_line, last_line
-        else:
-            return [], None
-    except FileNotFoundError:
-        print(f"Error: The file '{filename}' was not found.")
-        return [], None
-
-def write_number_visited_links_at_the_end(number_visited_links, filename):
-    with open(filename, "a") as file:
-        file.write(str(number_visited_links))
 
 def main():
     start_url = "https://heyharper.com/eu/en"
