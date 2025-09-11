@@ -1,0 +1,56 @@
+Q: What products do you sell?
+A: - Jewelry
+- Swimwear
+- Dresses
+- Watches
+
+Q: Do you sell bracelets?
+A: Yes
+
+Q: Do you sell rings?
+A: Rings
+
+Q: Do you sell dresses?Apart  from products rings, bracelets, earrings, what other products do you offer?
+A: Rings, bracelets, earrings, necklaces, swimwear, dresses, watches, anklets.
+
+Q: What payment methods do you offer?
+A: - Credit card
+- Debit card
+- Klarna
+- Apple Pay
+- Google Pay
+- Shop Pay
+- PayPal
+
+Q: Is it possible to pay with VISA?
+A: Yes
+
+Q: Is it possible to pay with multiple credit cards?
+A: No
+
+Q: Apart from VISA, AMEX and Pay Pal, what other payment methods do you offer?
+A: Credit card, debit card, Klarna, Apple Pay, Google Pay, Shop Pay.
+
+Q: Explain the domestic return delivery process including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product?
+A: To return a product, the process involves the following steps:
+
+1. **Initiate Return Request**: Visit Hey Harper’s returns portal available on their website to acknowledge the return request.
+2. **Return Label**: If the service is available in your country, a return label will be provided. If not, register the return and ship it back at your own expense.
+3. **Condition**: Ensure products are in their original condition for acceptance. They must be suitable for resale, in good condition with original packaging, and include any accessories or manuals.
+4. **Reimbursement**: Upon acceptance of the return, you will be reimbursed for all payments made within 14 days, excluding delivery costs.
+5. **Return Timeline**: Ship items back within 14 days from the receipt of the order. Returns sent after this period may not be accepted.
+
+Q: Which products, if any, require a different return process?
+A: Personalized products, swimwear without protective bag and hygienic sticker, and engraved items require a different return process.

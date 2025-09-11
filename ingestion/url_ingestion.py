@@ -1,4 +1,5 @@
 import base64
+import os
 import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -70,11 +71,18 @@ def click_show_more(driver):
     return False
 
 def get_all_clickable_buttons(driver):
-    print("entrou no get_all_clickable")
+    #print("entrou no get_all_clickable")
     clickables = driver.find_elements(By.CSS_SELECTOR, "a, button, [role='button'], [onclick], [tabindex='0'], [href]")
+    #print(f"Clickables found: {clickables}")
     really_clickable = []
+    clickable_with_hrefs = []
     for element in clickables:
         try:
+            # Use JavaScript to get the href without clicking
+            link = element.get_attribute("href")
+            if link not in clickable_with_hrefs:
+                clickable_with_hrefs.append(link)
+
             if element.is_displayed() and element.is_enabled():
                 #element.click()
                 really_clickable.append(element)
@@ -85,7 +93,29 @@ def get_all_clickable_buttons(driver):
             if "element not interactable" in str(e).lower():
                 print("Not interactable\nDisplayed: ", element.is_displayed(), " Enabled: ", element.is_enabled())
     
+    print("clickables with hrefsfound :")
+    print(*clickable_with_hrefs, sep="\n")
+    print("clickckables with hrefs found: ", len(clickable_with_hrefs))
+    print("really clickable found: ", len(really_clickable))
+    #time.sleep(0.1)
     return really_clickable
+
+def get_all_hrefs(driver):
+    print("entrou no get_all_hrefs")
+    elements = driver.find_elements(By.CSS_SELECTOR, "a, button, [role='button'], [onclick], [tabindex='0'], [href]")
+    elements_list = []
+    for element in elements:
+        try:
+            # Use JavaScript to get the href without clicking
+            link = element.get_attribute("href")
+            if link not in elements_list:
+                elements_list.append(link)
+        except Exception as e:
+            # risky code probably
+            if "element not interactable" in str(e).lower():
+                print("Not interactable\nDisplayed: ", element.is_displayed(), " Enabled: ", element.is_enabled())
+    print("hrefs found: ", len(elements_list))
+    return elements_list
 
 def get_all_product_urls(driver):
     print("entrou no get_all_product_urls")
@@ -195,6 +225,7 @@ def open_all_toggles(driver):
     toggles = driver.find_elements(By.XPATH, "//button[@aria-label='accordion']")
 
     initial_text = get_all_text(driver)
+    initial_clickables = get_all_hrefs(driver)
     for toggle in toggles:
         try:
             if toggle.is_displayed() and toggle.is_enabled():
@@ -207,10 +238,13 @@ def open_all_toggles(driver):
                 time.sleep(0.1)
                 new_text = get_all_text(driver)
                 initial_text += get_new_content(initial_text, new_text)
+                clickables = get_all_hrefs(driver)
+                new_clickables = element_diff(initial_clickables, clickables)
+                initial_clickables += new_clickables
         except:
             continue
 
-    return initial_text
+    return initial_text, initial_clickables
 
 def get_all_text(driver):
     # Get all text that is visible
@@ -255,17 +289,17 @@ def crawl(driver, start_url, number_links_visited, filename):
         time.sleep(2)  # Wait for JS to load
         visited_urls.append(url)
 
-        try:
-            #print(f"\n--- Extracting from {url} ---")
-            new_text = open_all_toggles(driver)
-        except:
-            write_number_visited_links_at_the_end(links_count, filename)
 
         if number_links_visited > links_count:
             links_count += 1
             print("Skipping link ", links_count, " of ", number_links_visited, " : ", url)
 
         else:
+            try:
+                #print(f"\n--- Extracting from {url} ---")
+                new_text, hrefs = open_all_toggles(driver)
+            except:
+                write_number_visited_links_at_the_end(links_count, filename)
             """
             try:      
                 new_text = get_all_text(driver)
@@ -278,11 +312,16 @@ def crawl(driver, start_url, number_links_visited, filename):
                 file.write(new_text + "\n")
             #text += "\n" + new_text
             links_count += 1
-
+        
+        """
+        #I did this but understood I need to call this everytime I open a toggle
         try:
             clickable_elements = get_all_clickable_buttons(driver)
         except:
             write_number_visited_links_at_the_end(links_count, filename)
+        """
+        
+        
         '''
         hover_text, hover_clickable_elements = mouse_hover(driver, text, clickable_elements)
 
@@ -291,16 +330,16 @@ def crawl(driver, start_url, number_links_visited, filename):
 
         clickable_elements.append(hover_clickable_elements)
 '''
-
-        for element in clickable_elements:
-            try:
-                # Use JavaScript to get the href without clicking
-                link = element.get_attribute("href")
-                if link and (link.startswith(start_url) or link.startswith("https://checkout-eu.heyharper.com/")) and not link.startswith("https://heyharper.com/eu/en/products/") and link not in visited_urls:
-                    stack.append(link)
-            except:
-                continue  # Ignore elements that fail
-
+        #print(f"Length of stack before: {len(stack)}")
+        print(f"Length of hrefs: {len(hrefs)}")
+        #print("Actual clickable elements:")
+        #print(*hrefs, sep="\n")
+        for link in hrefs:
+            if link and (link.startswith(start_url) or link.startswith("https://checkout-eu.heyharper.com/")) and not link.startswith("https://heyharper.com/eu/en/products/") and link not in visited_urls and link not in stack:
+                stack.append(link)
+        print(f"Length of stack after: {len(stack)}")
+        print("Actual stack:")
+        print(*stack, sep="\n")
     print(f"\nCrawling completed. Visited {len(visited_urls)} pages.")
     return text
 
@@ -415,8 +454,9 @@ def main():
     openai_client = get_openai_client()
     try:
             
-        filename = "ingestion/heyharper_helper_text_reading_at_all_toggles.txt"
-        """
+        filename = "ingestion/heyharper_helper_text_reading_and_get_links_at_all_toggles.txt"
+        """os.remove(filename)
+        
         existing_text, number_links_visited = read_and_split_last_line(filename)
         if number_links_visited is None:
             number_links_visited = 0
@@ -434,7 +474,7 @@ def main():
         questions = ["What products do you sell?",
 "Do you sell bracelets?",
 "Do you sell rings?",
-"Do you sell dresses?"
+"Do you sell dresses?",
 "Apart  from products rings, bracelets, earrings, what other products do you offer?",
 "What payment methods do you offer?",
 "Is it possible to pay with VISA?",

@@ -1,0 +1,58 @@
+Q: What products do you sell?
+A: - Jewelry
+- Swimwear
+- Dresses
+- Watches
+
+Q: Do you sell bracelets?
+A: Yes
+
+Q: Do you sell rings?
+A: Rings
+
+Q: Do you sell dresses?
+A: Dresses
+
+Q: Apart  from products rings, bracelets, earrings, what other products do you offer?
+A: Necklaces, anklets, watches, swimwear, athleisure, dresses.
+
+Q: What payment methods do you offer?
+A: - Credit card
+- Debit card
+- Klarna
+- Apple Pay
+- Google Pay
+- Shop Pay
+- PayPal
+
+Q: Is it possible to pay with VISA?
+A: Yes
+
+Q: Is it possible to pay with multiple credit cards?
+A: IDontKnow
+
+Q: Apart from VISA, AMEX and Pay Pal, what other payment methods do you offer?
+A: Credit Card, Debit Card, Klarna, Apple Pay, Google Pay, Shop Pay.
+
+Q: Explain the domestic return delivery process including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product?
+A: 1. Visit Hey Harper's returns portal on their website.
+2. Register your return on the portal to get a return label, if available in your country.
+3. If a return label is not provided, register the return and send the item back at your own expense to the address provided.
+4. Ensure products are returned in original condition, including packaging and any materials.
+5. Upon return acceptance, you'll be reimbursed within 14 days, excluding delivery costs.
+
+Q: Which products, if any, require a different return process?
+A: 1. Swimwear products that have been unsealed after delivery are not suitable for return due to health protection or hygiene reasons.
+2. Personalized products are also not suitable for return.
