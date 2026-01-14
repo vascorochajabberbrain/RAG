@@ -1,3 +1,4 @@
+import time
 from langchain.text_splitter import CharacterTextSplitter
 from qdrant_client.http.models import PointStruct
 import uuid
@@ -18,6 +19,8 @@ def get_text_chunks(text):
 '''
 
 def get_text_chunks(text, additional_prompt=None):
+    start_time = time.time()
+
     openai_client = get_openai_client()
 
     prompt = '''Decompose the "Content" into clear and simple propositions, ensuring they are interpretable out of context. 
@@ -30,7 +33,7 @@ def get_text_chunks(text, additional_prompt=None):
         Content:The earliest evidence for the Easter Hare (Osterhase) was recorded in south-west Germany in 1678 by the professor of medicine Georg Franck von Franckenau, but it remained unknown in other parts of Germany until the 18th century. Scholar Richard Sermon writes that "hares were frequently seen in gardens in spring, and thus may have served as a convenient explanation for the origin of the colored eggs hidden there for children. Alternatively, there is a European tradition that hares laid eggs, since a hare’s scratch or form and a lapwing’s nest look very similar, and both occur on grassland and are first seen in the spring. In the nineteenth century the influence of Easter cards, toys, and books was to make the Easter Hare/Rabbit popular throughout Europe. German immigrants then exported the custom to Britain and America where it evolved into the Easter Bunny." 
         Output: [ "The earliest evidence for the Easter Hare was recorded in south-west Germany in 1678 by Georg Franck von Franckenau.", "Georg Franck von Franckenau was a professor of medicine.", "The evidence for the Easter Hare remained unknown in other parts of Germany until the 18th century.", "Richard Sermon was a scholar.", "Richard Sermon writes a hypothesis about the possible explanation for the connection between hares and the tradition during Easter", "Hares were frequently seen in gardens in spring.", "Hares may have served as a convenient explanation for the origin of the colored eggs hidden in gardens for children.", "There is a European tradition that hares laid eggs.", "A hare’s scratch or form and a lapwing’s nest look very similar.", "Both hares and lapwing’s nests occur on grassland and are first seen in the spring.", "In the nineteenth century the influence of Easter cards, toys, and books was to make the Easter Hare/Rabbit popular throughout Europe.", "German immigrants exported the custom of the Easter Hare/Rabbit to Britain and America.", "The custom of the Easter Hare/Rabbit evolved into the Easter Bunny in Britain and America."]
     Adversarial Examples (examples that should not be generated):
-        "This process causes the boil to become filled with pus." - What process, feels like it is refering to a previously mentioned process but on its own it is not clear what is refering to'''
+        "This process causes the boil to become filled with pus." - What process? It feels like it is refering to a previously mentioned process but on its own it is not clear what is refering to'''
     if additional_prompt is not None:
         prompt += f"\nAdditionally:\n{additional_prompt}"
     completion = openai_client.chat.completions.create(
@@ -39,6 +42,8 @@ def get_text_chunks(text, additional_prompt=None):
                    {"role": "user", "content": text}]
         )
     #print(completion.choices[0].message.content)
+    end_time = time.time()
+    print(f"Chunking took: {end_time - start_time:.2f} seconds")
     return json.loads(completion.choices[0].message.content)
 
 def get_points(text_chunks, condition, initial_idx, model_id="text-embedding-ada-002"):
@@ -91,6 +96,16 @@ def get_embedding(text, model_id="text-embedding-ada-002"):
 
 def get_point_id():
     return str(uuid.uuid4())
+
+def create_batches_of_text(text, batch_size, overlap_size):
+    batches = []
+    start = 0
+    while start < len(text):
+        end = start + batch_size
+        batch = text[start:end]
+        batches.append(batch)
+        start += batch_size - overlap_size
+    return batches
 
 
 def insert_data(get_points, collection_name = None):

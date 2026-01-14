@@ -92,7 +92,7 @@ class GroupCollection(Collection):
     
     """----------Group related methods----------"""
 
-    def append_description(self, description, scs):
+    def append_description(self, description, scs=None):
         """
         Append a new Group with the given description.
         """
@@ -194,7 +194,7 @@ class GroupCollection(Collection):
         self._check_index(group_index)
         return self.items[group_index].is_full()
     
-    def _check_full_collection(self, scs):
+    def _check_full_collection(self, scs=None):
         if self.collection_is_full(scs):
             raise Exception("The collection is full, cannot add more groups before fulling another group.")
 

@@ -1,0 +1,330 @@
+Q: What products do you sell?
+A: Answer: Necklaces, bracelets, anklets, jewelry, swimwear, dresses, watches.
+
+Q: Do you sell bracelets?
+A: Yes
+
+Q: Do you sell rings?
+A: Yes
+
+Q: Do you sell dresses?
+A: Yes
+
+Q: Apart from rings, bracelets, and earrings, what other products do you offer?
+A: Necklaces, anklets, jewelry, swimwear, dresses, watches.
+
+Q: What payment methods do you offer?
+A: Apple Pay, Google Pay, Klarna, Shop Pay, PayPal.
+
+Q: Is it possible to pay with VISA?
+A: IDontKnow
+
+Q: Is it possible to pay with multiple credit cards?
+A: No
+
+Q: Apart from VISA, AMEX, and PayPal, what other payment methods do you offer?
+A: Answer: Klarna, Apple Pay, Google Pay, Shop Pay
+
+Q: Explain the domestic return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product?
+A: IDontKnow
+
+Q: Which products, if any, require a different return process?
+A: IDontKnow
+
+Q: Explain where your offices are located.
+A: IDontKnow
+
+Q: Do you have physical stores that customers can visit?
+A: IDontKnow
+
+Q: Explain how to review and change the language preferences.
+A: IDontKnow
+
+Q: Explain how to navigate the website.
+A: IDontKnow
+
+Q: Explain what a customer should do if your website is unresponsive.
+A: IDontKnow
+
+Q: Explain how to purchase only one product.
+A: IDontKnow
+
+Q: Explain how to purchase bracelet products.
+A: IDontKnow
+
+Q: Explain where to find the terms and conditions.
+A: IDontKnow
+
+Q: Explain how to add a user account.
+A: IDontKnow
+
+Q: Explain how to review and change the password.
+A: IDontKnow
+
+Q: Do you offer personalized products?
+A: IDontKnow
+
+Q: Do you offer digital gift vouchers?
+A: IDontKnow
+
+Q: Enter a general description of your products.
+A: IDontKnow
+
+Q: Describe the quality and reasons for the quality of your necklace products.
+A: The necklaces are designer in quality and finished with Physical Vapor Deposition (PVD) plating, which ensures they are waterproof. These necklaces are sweatproof, resistant to lotion or perfume, and can retain their shine, making them suitable for wearing on the beach or at parties. They are available in gold and silver and are designed in-house to allow you to show off your unique style.
+
+Q: Describe the range of prices of your products.
+A: IDontKnow
+
+Q: Describe the sizes your products are available in.
+A: IDontKnow
+
+Q: Explain how to select the correct size of your products.
+A: To select the correct size of your products, specifically rings, follow these steps:
+
+1. Use a Ring Sizer: Customers have the option to get a ring sizer from Hey Harper.
+
+2. Measure an Existing Ring: Check the inside diameter of a ring that currently fits you well.
+
+3. Compare Measurements: Use the measurements to compare against Hey Harper's size guide, which includes US sizes and their corresponding EU and UK sizes.
+
+4. Hey Harper Sizes: Available sizes are 5 US, 6 US, 7 US, 8 US, and 9 US. For example, a size 5 US is equivalent to EU size (mm) 15.7 and UK size J.
+
+These steps will help you determine the appropriate ring size to purchase.
+
+Q: Explain the general traits of your products.
+A: IDontKnow
+
+Q: Explain what is covered by the warranty that comes with your products.
+A: The warranty covers several aspects:
+
+1. Breakage Warranty: Begins from the delivery date. You must contact the Customer Support Team with photos or videos of the broken item for assessment. If verified, you may receive a store credit/discount or a replacement item. It does not cover items broken after 6 months or lost items.
+
+2. Limited International Warranty for Hey Harper watches: Covers manufacturing defects for 24 months from the purchase date.
+
+3. Color Warranty: A lifetime color warranty is available, specifically mentioned for necklaces and other products.
+
+Overall, these warranties cover breakages, manufacturing defects, and color retention, with specific conditions and durations.
+
+Q: Is an extended warranty offered on your products?
+A: IDontKnow
+
+Q: Enter a text about the products you recommend in general.
+A: IDontKnow
+
+Q: Enter a text about the more modern style products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the more traditional jewelry products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a child.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a girlfriend.
+A: IDontKnow
+
+Q: Explain which products are especially suitable for formal occasions.
+A: IDontKnow
+
+Q: Explain which products are especially suitable for the beach.
+A: The products especially suitable for the beach are the necklaces, which are sweatproof, resistant to lotion or perfume, and waterproof, and the swimwear, which is fully lined with fast dry technology, and comes in reusable pouches, making it ideal for beach use.
+
+Q: Explain what to do if a product is out of stock.
+A: If a product is out of stock, Hey Harper will follow these steps: 
+
+1. Inform the Customer: If the product ordered is no longer available, Hey Harper will immediately notify the customer.
+   
+2. Refund the Customer: Hey Harper will process a refund for the price of the unavailable product to the payment method used by the Customer during the purchase. 
+
+3. Timeline for Refund: The refund will occur within 10 days of becoming aware of the product’s unavailability.
+
+4. Inform about Delivery Issues: If Hey Harper cannot deliver the order within a 30-day timeframe due to product unavailability, they will inform the Customer.
+
+5. Reimburse Fully: They will fully reimburse the Customer within 30 days of the product's unavailability.
+
+Q: Explain how to replace the chain of a product.
+A: IDontKnow
+
+Q: Describe what the products come with.
+A: IDontKnow
+
+Q: Explain if the product comes with a gift box.
+A: IDontKnow
+
+Q: Explain how your products can be modified.
+A: IDontKnow
+
+Q: Explain if/how to engrave your jewelry products.
+A: IDontKnow
+
+Q: Enter a response to use if the customer has a general complaint about your products.
+A: IDontKnow
+
+Q: Explain what to do if the product has not been received.
+A: If the product has not been received, the following steps should be taken:
+
+1. Verify if the order has been marked as delivered by the carrier by checking the confirmation email or logging into your customer profile on Omer's website.
+2. If the order is marked as delivered but you did not receive it, contact Hey Harper’s Customer Service promptly.
+3. Make sure to reach out to Hey Harper’s Customer Service within 15 days after the order is marked as delivered by the carrier to make a delivery claim.
+4. If you notice that the order was not sent out when the support assistant reads your request, you can send an email to info@heyharper.com for updates.
+5. If necessary, provide any required details such as the order number and any other relevant information to assist customer support in resolving the issue.
+
+Q: Explain what to do if a product is losing quality.
+A: IDontKnow
+
+Q: Explain what to do if a product keeps breaking.
+A: To address a product that keeps breaking, follow these steps:
+
+1. Confirm the item is within the warranty period, which begins from the delivery date.
+2. Contact the Customer Support Team to check if the item qualifies for the Breakage Warranty.
+3. Provide photos or videos of the broken item to the Customer Support Team.
+4. If the team verifies the issue, you will receive either a store credit/discount code with the item value or a replacement.
+5. Note that the company will not cover replacements or repairs if items break after 6 months from the order receipt, and lost items are not covered by the warranty.
+
+Q: Explain what to do if a product is peeling off.
+A: Customers who experience a product peeling off should first email the Customer Support team within 14 days of receiving the item. The email must include clear photos of the product, the attached product tags, and the original packaging. The Customer Support team will then assess the situation to determine if the issue falls under warranty coverage.
+
+Q: Explain what to do if a product is too tight.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery time, please summarize for your domestic shipping options.
+A: IDontKnow
+
+Q: Provide a summary of all your domestic shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: Provide a summary of all your international shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery costs, please summarize for your international standard delivery options.
+A: IDontKnow
+
+Q: Explain if/how you ship to any state.
+A: IDontKnow
+
+Q: Explain where to find the delivery status.
+A: IDontKnow
+
+Q: Explain what to do if the delivery status has not changed for a while.
+A: IDontKnow
+
+Q: How long does it take to receive shipping confirmation?
+A: IDontKnow
+
+Q: Explain what to do if you entered the wrong shipping information before the order has been shipped.
+A: IDontKnow
+
+Q: Explain what to do if you entered the wrong shipping information after the order has been shipped.
+A: IDontKnow
+
+Q: Explain what to do if the order was returned to the company because the apartment number was not included in the delivery address.
+A: IDontKnow
+
+Q: Explain what a customer should do if they receive the wrong product.
+A: If a customer receives the wrong product, they should first email Hey Harper's Customer Support team within 14 days of receiving the item. The email should include clear photos of the product, the attached product tags, and the original packaging. Additionally, the customer or the authorized person should verify the order and products upon receipt and refuse delivery if there is an anomaly or damage. For further assistance, they can also contact Hey Harper’s Customer Service directly.
+
+Q: Explain what a customer should do if they receive the wrong color product or if they say the color looks different from what was advertised.
+A: Answer: If a customer receives the wrong color product or if the color looks different from what was advertised, they should take the following steps: 
+
+1. Verify the order upon its receipt to ensure the correct product was delivered. 
+2. If any issue is detected with the product, such as receiving the wrong color, the customer should refuse the delivery. 
+3. Promptly contact Hey Harper’s Customer Service to address the issue. 
+4. Provide a well-visible picture of the discolored item to customer support for further assistance. 
+5. Utilize the available contact options, such as chatting with the company, for more information and resolution.
+
+Q: Explain what to do if you only received one earring.
+A: To address receiving only one earring, you should promptly contact Hey Harper’s Customer Support team within 14 days of receiving the item. In your email, include clear photos of the product, the attached product tags, and the original packaging.
+
+Q: Explain what to do if a package arrived late.
+A: IDontKnow
+
+Q: Explain what to do if a product was damaged.
+A: If a product was damaged, follow these steps:
+
+1. Upon receipt, the customer or authorized person must verify the products for any damage, anomaly, or absence.
+2. If damage or an anomaly is evident, refuse the delivery and contact Hey Harper’s Customer Service promptly.
+3. If the damage or anomaly is detected after delivery, report it to Customer Service within 5 working days.
+4. Customer Service will analyze the issue.
+5. If Hey Harper is at fault, they will replace the items.
+6. If the carrier is at fault, Hey Harper will also replace the items.
+7. Refunds for items with anomalies will be made through the original payment method.
+
+Q: Explain how to track an order.
+A: To track an order, follow these steps:
+
+1. Find your order number in the order confirmation email or by logging into your customer profile on Omer's website.
+2. On the order tracking page, you will find a button labeled FIND MY ORDER.
+3. Use your email, zip, or phone along with the order number to locate your order. 
+
+If you encounter issues, such as a missing tracking number after dispatch, you can contact customer support for assistance. If the order is marked as delivered but not received, you can file a delivery claim within 15 days.
+
+Q: Explain about your domestic return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: Explain about your international return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: How much time does international return delivery normally take?
+A: IDontKnow
+
+Q: Explain the process for returning only one of a pair of articles.
+A: IDontKnow
+
+Q: Explain how returns work for products.
+A: To return a product, you need to follow these steps:
+
+1. **Start the Return**: Customers can initiate the return process, potentially by chatting with the company or using provided contacts.
+
+2. **Return Conditions**: Products must be returned in good condition, suitable for resale, and accompanied by their original packaging, accessories, and manuals.
+
+3. **Timeframe**: The product must be returned within 14 days from the day after receiving the order. Returns sent after this period will not be accepted.
+
+4. **Return Method**: Ensure that the delivery costs are not reimbursed as specified in the policy.
+
+5. **Refund Method**: Refunds will be processed through the same payment method used during the purchase.
+
+6. **Special Policies**: There are specific return and exchange policies for defective items, watches, clothing, and swimwear.
+
+7. **In-Store Options**: There are also options for returns and exchanges in-store.
+
+Each return follows the detailed timeline provided for receiving the refund.
+
+Q: Explain where to find the product return status.
+A: IDontKnow
+
+Q: Explain the main points of your product exchange policy.
+A: IDontKnow
+
+Q: Explain how much time the product exchange process normally takes.
+A: IDontKnow
+
+Q: Explain how to exchange jewelry products.
+A: IDontKnow
+
+Q: Explain any situations (and the charges) where you charge for exchanges of a discounted jewelry product.
+A: IDontKnow
+
+Q: Explain what to do if you have not received any instructions when making an exchange.
+A: IDontKnow
+
+Q: Explain what to do if the return portal is closed when making an exchange.
+A: IDontKnow
+
+Q: Explain what to do if the order is not found when making an exchange.
+A: IDontKnow

@@ -1,26 +1,31 @@
 from PyPDF2 import PdfReader
 
-from vectorization import get_text_chunks, get_embedding, insert_data
+from vectorization import get_text_chunks, get_embedding, insert_data, create_batches_of_text
 
 
 
 
 
 def read_data_from_pdf():
-  pdf_path = './first_full_retrieve_of_data_from_shopify_jb_test_store.pdf'
+  pdf_path = 'ingestion/data_to_ingest/pdfs/MI_peixes.osseos_costa.cont.portuguesa.pdf'
   text = "" # for storing the extracted text
   with open(pdf_path, 'rb') as file:
     pdf_reader = PdfReader(file)
     for page in pdf_reader.pages:
       text += page.extract_text()
+  print(text)
   return text
 
 
 def main():
-  get_raw_text=read_data_from_pdf()
-  chunks=get_text_chunks(get_raw_text)
-  vectors=get_embedding(chunks)
-  insert_data(vectors)
+  text=read_data_from_pdf()
+  batches = create_batches_of_text(text, 1000, 100)
+  chunks = []
+  for batch in batches:
+      chunks += get_text_chunks(batch)
+  return chunks
+  #vectors=get_embedding(chunks)
+  #insert_data(vectors)
 
   
 

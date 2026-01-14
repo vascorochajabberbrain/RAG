@@ -77,8 +77,15 @@ class QdrantTracker:
                     points = self._get_all_points_payload(collection_name, points)
                     
                     break
-        
-        collection_type = self.get_collection_type(points[0]) #any point will have collection information
+
+        try:
+            collection_type = self.get_collection_type(points[0]) #any new collection will have collection information on any point
+        except:#scenario when it is an old collection without collection information on any point
+            collection_type = input(f"""From the options: {', '.join(COLLECTIONS_TYPES_MAP.keys())}\nEnter the type of the collection you want: """)
+            while collection_type not in COLLECTIONS_TYPES_MAP:
+                print(f"QdrantTracker: Invalid collection type.")
+                collection_type = input(f"""From the options: {', '.join(COLLECTIONS_TYPES_MAP.keys())}\nEnter the type of the collection you want: """)
+
         collection = COLLECTIONS_TYPES_MAP[collection_type].init_from_qdrant(collection_name, points)
         self._open_collections.add(collection)
         print(f"QdrantTracker: Collection: {collection_name} is open.")

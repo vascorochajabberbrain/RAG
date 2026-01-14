@@ -1,0 +1,391 @@
+100g de Abrótea contém 70 Kcal de Energia  
+100g de Abrótea contém 81.5g de Água  
+100g de Abrótea contém 17.2g de Proteína  
+100g de Abrótea contém 0.1g de Gordura total  
+100g de Abrótea contém 0.0g de Ácidos gordos poliinsaturados  
+100g de Abrótea contém 1µg de Vitamina A  
+100g de Abrótea contém 0.4µg de Vitamina D  
+100g de Abrótea contém 0.4µg de Vitamina B12  
+100g de Abrótea contém 358mg de Potássio  
+100g de Abrótea contém 11mg de Cálcio  
+100g de Abrótea contém 229µg de Fósforo  
+100g de Abrótea contém 0.2mg de Ferro  
+100g de Abrótea contém 0.5mg de Zinco  
+
+100g de Atum contém 140 Kcal de Energia  
+100g de Atum contém 68.7g de Água  
+100g de Atum contém 24.1g de Proteína  
+100g de Atum contém 4.9g de Gordura total  
+100g de Atum contém 0.8g de Ácidos gordos poliinsaturados  
+100g de Atum contém 11µg de Vitamina A  
+100g de Atum contém 4.2µg de Vitamina D  
+100g de Atum contém 2.4µg de Vitamina B12  
+100g de Atum contém 355mg de Potássio  
+100g de Atum contém 4mg de Cálcio  
+100g de Atum contém 257µg de Fósforo  
+100g de Atum contém 2.2mg de Ferro  
+100g de Atum contém 1.5mg de Zinco  
+
+100g de Bacalhau (seco, salgado e demolhado) contém 80 Kcal de Energia  
+100g de Bacalhau (seco, salgado e demolhado) contém 76.2g de Água  
+100g de Bacalhau (seco, salgado e demolhado) contém 19.0g de Proteína  
+100g de Bacalhau (seco, salgado e demolhado) contém 0.4g de Gordura total  
+100g de Bacalhau (seco, salgado e demolhado) contém 0.1g de Ácidos gordos poliinsaturados  
+100g de Bacalhau (seco, salgado e demolhado) contém 4µg de Vitamina A  
+100g de Bacalhau (seco, salgado e demolhado) contém 4.5µg de Vitamina D  
+100g de Bacalhau (seco, salgado e demolhado) contém 1.0µg de Vitamina B12  
+100g de Bacalhau (seco, salgado e demolhado) contém 36mg de Potássio  
+100g de Bacalhau (seco, salgado e demolhado) contém 33mg de Cálcio  
+100g de Bacalhau (seco, salgado e demolhado) contém 116µg de Fósforo  
+100g de Bacalhau (seco, salgado e demolhado) contém 0.2mg de Ferro  
+100g de Bacalhau (seco, salgado e demolhado) contém 0.8mg de Zinco  
+
+100g de Cação contém 82 Kcal de Energia  
+100g de Cação contém 79.0g de Água  
+100g de Cação contém 20.0g de Proteína  
+100g de Cação contém 0.2g de Gordura total  
+100g de Cação contém 0.1g de Ácidos gordos poliinsaturados  
+100g de Cação contém 3µg de Vitamina A  
+100g de Cação contém 0.4µg de Vitamina D  
+100g de Cação contém 3.3µg de Vitamina B12  
+100g de Cação contém 294mg de Potássio  
+100g de Cação contém 14mg de Cálcio  
+100g de Cação contém 186µg de Fósforo  
+100g de Cação contém 0.1mg de Ferro  
+100g de Cação contém 0.3mg de Zinco  
+
+100g de Carapau contém 105 Kcal de Energia  
+100g de Carapau contém 75.6g de Água  
+100g de Carapau contém 19.7g de Proteína  
+100g de Carapau contém 2.9g de Gordura total  
+100g de Carapau contém 0.9g de Ácidos gordos poliinsaturados  
+100g de Carapau contém 15µg de Vitamina A  
+100g de Carapau contém 4.1µg de Vitamina D  
+100g de Carapau contém 5.7µg de Vitamina B12  
+100g de Carapau contém 403mg de Potássio  
+100g de Carapau contém 69mg de Cálcio  
+100g de Carapau contém 263µg de Fósforo  
+100g de Carapau contém 1.2mg de Ferro  
+100g de Carapau contém 1.2mg de Zinco  
+
+100g de Cavala contém 202 Kcal de Energia  
+100g de Cavala contém 64.3g de Água  
+100g de Cavala contém 20.3g de Proteína  
+100g de Cavala contém 13.4g de Gordura total  
+100g de Cavala contém 4.7g de Ácidos gordos poliinsaturados  
+100g de Cavala contém 28µg de Vitamina A  
+100g de Cavala contém 2.4µg de Vitamina D  
+100g de Cavala contém 14.0µg de Vitamina B12  
+100g de Cavala contém 360mg de Potássio  
+100g de Cavala contém 39mg de Cálcio  
+100g de Cavala contém 282µg de Fósforo  
+100g de Cavala contém 1.1mg de Ferro  
+100g de Cavala contém 2.2mg de Zinco  
+
+100g de Corvina contém 94 Kcal de Energia  
+100g de Corvina contém 76.7g de Água  
+100g de Corvina contém 20.4g de Proteína  
+100g de Corvina contém 1.4g de Gordura total  
+100g de Corvina contém 0.2g de Ácidos gordos poliinsaturados  
+100g de Corvina contém 1µg de Vitamina A  
+100g de Corvina contém 16.0µg de Vitamina D  
+100g de Corvina contém 0.3µg de Vitamina B12  
+100g de Corvina contém 430mg de Potássio  
+100g de Corvina contém 13mg de Cálcio  
+100g de Corvina contém 233µg de Fósforo  
+100g de Corvina contém 0.3mg de Ferro  
+100g de Corvina contém 0.5mg de Zinco  
+
+100g de Dourada contém 167 Kcal de Energia  
+100g de Dourada contém 68.9g de Água  
+100g de Dourada contém 19.7g de Proteína  
+100g de Dourada contém 9.8g de Gordura total  
+100g de Dourada contém 2.8g de Ácidos gordos poliinsaturados  
+100g de Dourada contém 11µg de Vitamina A  
+100g de Dourada contém 12.0µg de Vitamina D  
+100g de Dourada contém 4.8µg de Vitamina B12  
+100g de Dourada contém 383mg de Potássio  
+100g de Dourada contém 15mg de Cálcio  
+100g de Dourada contém 252µg de Fósforo  
+100g de Dourada contém 0.4mg de Ferro  
+100g de Dourada contém 0.8mg de Zinco  
+
+100g de Garoupa contém 95 Kcal de Energia  
+100g de Garoupa contém 76.5g de Água  
+100g de Garoupa contém 20.5g de Proteína  
+100g de Garoupa contém 1.4g de Gordura total  
+100g de Garoupa contém 0.4g de Ácidos gordos poliinsaturados  
+100g de Garoupa contém 50µg de Vitamina A  
+100g de Garoupa contém 2.6µg de Vitamina D  
+100g de Garoupa contém 1.0µg de Vitamina B12  
+100g de Garoupa contém 302mg de Potássio  
+100g de Garoupa contém 18mg de Cálcio  
+100g de Garoupa contém 164µg de Fósforo  
+100g de Garoupa contém 0.6mg de Ferro  
+100g de Garoupa contém 0.5mg de Zinco  
+
+100g de Linguado contém 82 Kcal de Energia  
+100g de Linguado contém 78.1g de Água  
+100g de Linguado contém 20.1g de Proteína  
+100g de Linguado contém 0.2g de Gordura total  
+100g de Linguado contém 0.1g de Ácidos gordos poliinsaturados  
+100g de Linguado contém 4µg de Vitamina A  
+100g de Linguado contém 9.4µg de Vitamina D  
+100g de Linguado contém 0.9µg de Vitamina B12  
+100g de Linguado contém 389mg de Potássio  
+100g de Linguado contém 21mg de Cálcio  
+100g de Linguado contém 218µg de Fósforo  
+100g de Linguado contém 0.3mg de Ferro  
+100g de Linguado contém 0.6mg de Zinco  
+
+100g de Maruca contém 70 Kcal de Energia  
+100g de Maruca contém 81.7g de Água  
+100g de Maruca contém 17.2g de Proteína  
+100g de Maruca contém 0.1g de Gordura total  
+100g de Maruca contém 0.1g de Ácidos gordos poliinsaturados  
+100g de Maruca contém 9µg de Vitamina A  
+100g de Maruca contém 0.4µg de Vitamina D  
+100g de Maruca contém 0.5µg de Vitamina B12  
+100g de Maruca contém 261mg de Potássio  
+100g de Maruca contém 25mg de Cálcio  
+100g de Maruca contém 181µg de Fósforo  
+100g de Maruca contém 0.2mg de Ferro  
+100g de Maruca contém 0.7mg de Zinco  
+
+100g de Peixe espada-branco contém 117 Kcal de Energia  
+100g de Peixe espada-branco contém 74.4g de Água  
+100g de Peixe espada-branco contém 20.3g de Proteína  
+100g de Peixe espada-branco contém 4.0g de Gordura total  
+100g de Peixe espada-branco contém 0.8g de Ácidos gordos poliinsaturados  
+100g de Peixe espada-branco contém 17µg de Vitamina A  
+100g de Peixe espada-branco contém 1.1µg de Vitamina D  
+100g de Peixe espada-branco contém 2.2µg de Vitamina B12  
+100g de Peixe espada-branco contém 252mg de Potássio  
+100g de Peixe espada-branco contém 16mg de Cálcio  
+100g de Peixe espada-branco contém 183µg de Fósforo  
+100g de Peixe espada-branco contém 0.4mg de Ferro  
+100g de Peixe espada-branco contém 0.6mg de Zinco  
+
+100g de Peixe espada-preto contém 88 Kcal de Energia  
+100g de Peixe espada-preto contém 79.7g de Água  
+100g de Peixe espada-preto contém 15.7g de Proteína  
+100g de Peixe espada-preto contém 2.8g de Gordura total  
+100g de Peixe espada-preto contém 0.2g de Ácidos gordos poliinsaturados  
+100g de Peixe espada-preto contém 23µg de Vitamina A  
+100g de Peixe espada-preto contém 2.1µg de Vitamina D  
+100g de Peixe espada-preto contém 1.7µg de Vitamina B12  
+100g de Peixe espada-preto contém 332mg de Potássio  
+100g de Peixe espada-preto contém 14mg de Cálcio  
+100g de Peixe espada-preto contém 181µg de Fósforo  
+100g de Peixe espada-preto contém 0.1mg de Ferro  
+100g de Peixe espada-preto contém 0.5mg de Zinco  
+
+100g de Pescada contém 83 Kcal de Energia  
+100g de Pescada contém 80.0g de Água  
+100g de Pescada contém 17.6g de Proteína  
+100g de Pescada contém 1.4g de Gordura total  
+100g de Pescada contém 0.4g de Ácidos gordos poliinsaturados  
+100g de Pescada contém 10µg de Vitamina A  
+100g de Pescada contém 1.4µg de Vitamina D  
+100g de Pescada contém 0.7µg de Vitamina B12  
+100g de Pescada contém 359mg de Potássio  
+100g de Pescada contém 31mg de Cálcio  
+100g de Pescada contém 193µg de Fósforo  
+100g de Pescada contém 0.3mg de Ferro  
+100g de Pescada contém 0.6mg de Zinco  
+
+100g de Raia contém 58 Kcal de Energia  
+100g de Raia contém 77.6g de Água  
+100g de Raia contém 14.1g de Proteína  
+100g de Raia contém 0.2g de Gordura total  
+100g de Raia contém 0.1g de Ácidos gordos poliinsaturados  
+100g de Raia contém 2µg de Vitamina A  
+100g de Raia contém 0.4µg de Vitamina D  
+100g de Raia contém 0.5µg de Vitamina B12  
+100g de Raia contém 262mg de Potássio  
+100g de Raia contém 161mg de Cálcio  
+100g de Raia contém 316µg de Fósforo  
+100g de Raia contém 0.3mg de Ferro  
+100g de Raia contém 0.8mg de Zinco  
+
+100g de Robalo contém 145 Kcal de Energia  
+100g de Robalo contém 71.8g de Água  
+100g de Robalo contém 18.5g de Proteína  
+100g de Robalo contém 7.9g de Gordura total  
+100g de Robalo contém 1.7g de Ácidos gordos poliinsaturados  
+100g de Robalo contém 36µg de Vitamina A  
+100g de Robalo contém 5.0µg de Vitamina D  
+100g de Robalo contém 1.3µg de Vitamina B12  
+100g de Robalo contém 346mg de Potássio  
+100g de Robalo contém 52mg de Cálcio  
+100g de Robalo contém 234µg de Fósforo  
+100g de Robalo contém 0.4mg de Ferro  
+100g de Robalo contém 1.2mg de Zinco  
+
+100g de Salmão contém 262 Kcal de Energia  
+100g de Salmão contém 60.5g de Água  
+100g de Salmão contém 16.2g de Proteína  
+100g de Salmão contém 21.9g de Gordura total  
+100g de Salmão contém 5.1g de Ácidos gordos poliinsaturados  
+100g de Salmão contém 33µg de Vitamina A  
+100g de Salmão contém 11.0µg de Vitamina D  
+100g de Salmão contém 1.9µg de Vitamina B12  
+100g de Salmão contém 301mg de Potássio  
+100g de Salmão contém 12mg de Cálcio  
+100g de Salmão contém 209µg de Fósforo  
+100g de Salmão contém 0.5mg de Ferro  
+100g de Salmão contém 0.5mg de Zinco  
+
+100g de Sardinha contém 221 Kcal de Energia  
+100g de Sardinha contém 63.4g de Água  
+100g de Sardinha contém 18.4g de Proteína  
+100g de Sardinha contém 16.4g de Gordura total  
+100g de Sardinha contém 5.6g de Ácidos gordos poliinsaturados  
+100g de Sardinha contém 47µg de Vitamina A  
+100g de Sardinha contém 21.0µg de Vitamina D  
+100g de Sardinha contém 10.0µg de Vitamina B12  
+100g de Sardinha contém 367mg de Potássio  
+100g de Sardinha contém 72mg de Cálcio  
+100g de Sardinha contém 314µg de Fósforo  
+100g de Sardinha contém 1.0mg de Ferro  
+100g de Sardinha contém 1.6mg de Zinco  
+
+100g de Solha contém 90 Kcal de Energia  
+100g de Solha contém 78.2g de Água  
+100g de Solha contém 19.0g de Proteína  
+100g de Solha contém 1.6g de Gordura total  
+100g de Solha contém 0.4g de Ácidos gordos poliinsaturados  
+100g de Solha contém 0µg de Vitamina A  
+100g de Solha contém 10.0µg de Vitamina D  
+100g de Solha contém 1.5µg de Vitamina B12  
+100g de Solha contém 234mg de Potássio  
+100g de Solha contém 54mg de Cálcio  
+100g de Solha contém 173µg de Fósforo  
+100g de Solha contém 0.4mg de Ferro  
+100g de Solha contém 0.6mg de Zinco  
+
+100g de Tamboril contém 73 Kcal de Energia  
+100g de Tamboril contém 80.4g de Água  
+100g de Tamboril contém 17.9g de Proteína  
+100g de Tamboril contém 0.2g de Gordura total  
+100g de Tamboril contém 0.1g de Ácidos gordos poliinsaturados  
+100g de Tamboril contém 24µg de Vitamina A  
+100g de Tamboril contém 0.0µg de Vitamina D  
+100g de Tamboril contém 0.3µg de Vitamina B12  
+100g de Tamboril contém 333mg de Potássio  
+100g de Tamboril contém 7mg de Cálcio  
+100g de Tamboril contém 207µg de Fósforo  
+100g de Tamboril contém 0.2mg de Ferro  
+100g de Tamboril contém 0.5mg de Zinco  
+
+100g de Choco contém 79 Kcal de Energia  
+100g de Choco contém 78.6g de Água  
+100g de Choco contém 18.9g de Proteína  
+100g de Choco contém 0.4g de Gordura total  
+100g de Choco contém 0.1g de Ácidos gordos poliinsaturados  
+100g de Choco contém 9.0µg de Vitamina A  
+100g de Choco contém 0.0µg de Vitamina D  
+100g de Choco contém 1.2µg de Vitamina B12  
+100g de Choco contém 320.0mg de Potássio  
+100g de Choco contém 8.0mg de Cálcio  
+100g de Choco contém 273.0µg de Fósforo  
+100g de Choco contém 0.1mg de Ferro  
+100g de Choco contém 1.7mg de Zinco  
+
+100g de Lula contém 71 Kcal de Energia  
+100g de Lula contém 81.4g de Água  
+100g de Lula contém 15.8g de Proteína  
+100g de Lula contém 0.9g de Gordura total  
+100g de Lula contém 0.4g de Ácidos gordos poliinsaturados  
+100g de Lula contém 10.0µg de Vitamina A  
+100g de Lula contém 3.5µg de Vitamina D  
+100g de Lula contém 1.1µg de Vitamina B12  
+100g de Lula contém 225.0mg de Potássio  
+100g de Lula contém 18.0mg de Cálcio  
+100g de Lula contém 261.0µg de Fósforo  
+100g de Lula contém 0.3mg de Ferro  
+100g de Lula contém 1.0mg de Zinco  
+
+100g de Polvo contém 73 Kcal de Energia  
+100g de Polvo contém 83.1g de Água  
+100g de Polvo contém 15.6g de Proteína  
+100g de Polvo contém 1.2g de Gordura total  
+100g de Polvo contém 0.6g de Ácidos gordos poliinsaturados  
+100g de Polvo contém 3.0µg de Vitamina A  
+100g de Polvo contém 0.0µg de Vitamina D  
+100g de Polvo contém 1.3µg de Vitamina B12  
+100g de Polvo contém 236.0mg de Potássio  
+100g de Polvo contém 13.0mg de Cálcio  
+100g de Polvo contém 165.0µg de Fósforo  
+100g de Polvo contém 0.7mg de Ferro  
+100g de Polvo contém 1.3mg de Zinco  
+
+100g de Amêijoa contém 66 Kcal de Energia  
+100g de Amêijoa contém 81.1g de Água  
+100g de Amêijoa contém 11.7g de Proteína  
+100g de Amêijoa contém 0.9g de Gordura total  
+100g de Amêijoa contém 0.2g de Ácidos gordos poliinsaturados  
+100g de Amêijoa contém 97.0µg de Vitamina A  
+100g de Amêijoa contém 0.1µg de Vitamina D  
+100g de Amêijoa contém 37.0µg de Vitamina B12  
+100g de Amêijoa contém 78.0mg de Potássio  
+100g de Amêijoa contém 51.0mg de Cálcio  
+100g de Amêijoa contém 178.0µg de Fósforo  
+100g de Amêijoa contém 8.5mg de Ferro  
+100g de Amêijoa contém 2.1mg de Zinco  
+
+100g de Berbigão contém 60 Kcal de Energia  
+100g de Berbigão contém 82.5g de Água  
+100g de Berbigão contém 10.5g de Proteína  
+100g de Berbigão contém 0.7g de Gordura total  
+100g de Berbigão contém 0.3g de Ácidos gordos poliinsaturados  
+100g de Berbigão contém 0.0µg de Vitamina A  
+100g de Berbigão contém 0.0µg de Vitamina D  
+100g de Berbigão contém 41.0µg de Vitamina B12  
+100g de Berbigão contém 62.0mg de Potássio  
+100g de Berbigão contém 56.0mg de Cálcio  
+100g de Berbigão contém 159.0µg de Fósforo  
+100g de Berbigão contém 5.9mg de Ferro  
+100g de Berbigão contém 1.1mg de Zinco  
+
+100g de Camarão contém 77 Kcal de Energia  
+100g de Camarão contém 79.2g de Água  
+100g de Camarão contém 17.6g de Proteína  
+100g de Camarão contém 0.6g de Gordura total  
+  100g de Camarão contém 0.3g de Ácidos gordos poliinsaturados  
+100g de Camarão contém 0.0µg de Vitamina A  
+100g de Camarão contém 0.0µg de Vitamina D  
+100g de Camarão contém 2.1µg de Vitamina B12  
+100g de Camarão contém 179.0mg de Potássio  
+100g de Camarão contém 87.0mg de Cálcio  
+100g de Camarão contém 150.0µg de Fósforo  
+100g de Camarão contém 1.8mg de Ferro  
+100g de Camarão contém 0.3mg de Zinco  
+
+100g de Lagostim contém 89 Kcal de Energia  
+100g de Lagostim contém 76.1g de Água  
+100g de Lagostim contém 20.9g de Proteína  
+100g de Lagostim contém 0.5g de Gordura total  
+100g de Lagostim contém 0.2g de Ácidos gordos poliinsaturados  
+100g de Lagostim contém 0.0µg de Vitamina A  
+100g de Lagostim contém 0.0µg de Vitamina D  
+100g de Lagostim contém 1.0µg de Vitamina B12  
+100g de Lagostim contém 190.0mg de Potássio  
+100g de Lagostim contém 37.0mg de Cálcio  
+100g de Lagostim contém 200.0µg de Fósforo  
+100g de Lagostim contém 1.0mg de Ferro  
+100g de Lagostim contém 1.5mg de Zinco  
+
+100g de Mexilhão contém 69 Kcal de Energia  
+100g de Mexilhão contém 82.5g de Água  
+100g de Mexilhão contém 12.1g de Proteína  
+100g de Mexilhão contém 1.5g de Gordura total  
+100g de Mexilhão contém 0.5g de Ácidos gordos poliinsaturados  
+100g de Mexilhão contém 360.0µg de Vitamina A  
+100g de Mexilhão contém 0.0µg de Vitamina D  
+100g de Mexilhão contém 19.0µg de Vitamina B12  
+100g de Mexilhão contém 280.0mg de Potássio  
+100g de Mexilhão contém 56.0mg de Cálcio  
+100g de Mexilhão contém 240.0µg de Fósforo  
+100g de Mexilhão contém 3.5mg de Ferro  
+100g de Mexilhão contém 4.1mg de Zinco

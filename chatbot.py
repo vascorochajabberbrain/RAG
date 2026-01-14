@@ -13,7 +13,7 @@ def make_conversation_file(conversation, standard_filename):
     with open(filename, "w", encoding="utf-8") as file:
         file.write(conversation)
 
-def get_retrieved_info(query, history, collection_name):
+def improve_query(query, history):
     openai_client = get_openai_client()
 
     content = """Rewrite the next user input, instead of answering, rewritte what the user said so that it becomes a self-contained question.
@@ -30,9 +30,13 @@ def get_retrieved_info(query, history, collection_name):
         )
     new_query = completion.choices[0].message.content
     print("----------------------------------------\nOld query: ", query, "\nNew query: ", new_query, "\n----------------------------------------\n")
+    return new_query
+
+def retrieve_from_vdb(query, collection_name):
+    openai_client = get_openai_client()
 
     response = openai_client.embeddings.create(
-        input=new_query,
+        input=query,
         model="text-embedding-ada-002"
     )
     embeddings = response.data[0].embedding
@@ -43,16 +47,19 @@ def get_retrieved_info(query, history, collection_name):
         query=embeddings,
         limit=3
     )
-    #print(search_result)
-    #print("Question: " ,query,'\n')
-    #print("Searching.......\n")
-    print("Retrieved chunks:+++++++++++++++++++++++++++++++++++++++++++\n")
+    print(search_result)
     prompt=""
     for result in search_result.points:
-        print("--", result.payload['text'])
-        prompt += result.payload['text'] + "\n"
+        print("--", result.payload['point']['text'])#this is very hardcoded and really depends on the sctructure of the payload
+        prompt += result.payload['point']['text'] + "\n"
     print()
     return prompt
+
+def get_retrieved_info(query, history, collection_name):
+    
+    new_query = improve_query(query, history)
+    
+    return retrieve_from_vdb(new_query, collection_name)
     
 def get_answer(history, retrieved_info, query, company):
     openai_client = get_openai_client()

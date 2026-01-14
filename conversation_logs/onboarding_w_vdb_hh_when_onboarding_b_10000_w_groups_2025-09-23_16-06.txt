@@ -1,0 +1,333 @@
+Q: What products do you sell?
+A: Answer: Necklaces, earrings, rings, bracelets, swimwear, watches, anklets.
+
+Q: Do you sell bracelets?
+A: Yes
+
+Q: Do you sell rings?
+A: IDontKnow
+
+Q: Do you sell dresses?
+A: Yes
+
+Q: Apart from rings, bracelets, and earrings, what other products do you offer?
+A: Answer: Necklaces, Swimwear, Watches, Anklets, Dresses
+
+Q: What payment methods do you offer?
+A: Answer: Credit Card, Debit Card, Apple Pay, PayPal, Klarna.
+
+Q: Is it possible to pay with VISA?
+A: IDontKnow
+
+Q: Is it possible to pay with multiple credit cards?
+A: No
+
+Q: Apart from VISA, AMEX, and PayPal, what other payment methods do you offer?
+A: Answer: Credit Card, Debit Card, Klarna, Apple Pay, Google Pay, Shop Pay
+
+Q: Explain the domestic return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product?
+A: To return a product, follow these steps:
+
+1. Start a return at Hey Harper's site within 14 days of receiving the order.
+2. Enter the returns portal on Hey Harper’s website to request a return.
+3. If eligible, Hey Harper will provide a return label; otherwise, register on the platform and ship at your own expense.
+4. Ensure the products are in original condition, unworn, with tags/seals attached, and suitable for resale.
+5. Ship the item back using the provided return address.
+6. If the return is accepted, reimbursement (excluding delivery costs) is processed within 14 days.
+Note: Personalized and certain unsealed products are not eligible for return.
+
+Q: Which products, if any, require a different return process?
+A: Defective products, products with non-conformity, products unsuitable for return due to health protection or hygiene reasons, and personalized products.
+
+Q: Explain where your offices are located.
+A: IDontKnow
+
+Q: Do you have physical stores that customers can visit?
+A: IDontKnow
+
+Q: Explain how to review and change the language preferences.
+A: IDontKnow
+
+Q: Explain how to navigate the website.
+A: IDontKnow
+
+Q: Explain what a customer should do if your website is unresponsive.
+A: IDontKnow
+
+Q: Explain how to purchase only one product.
+A: IDontKnow
+
+Q: Explain how to purchase bracelet products.
+A: To purchase bracelet products from Hey Harper, follow these steps: 
+
+1. Visit the Hey Harper website as they sell exclusively through their site.
+2. Browse the available products and navigate to the bracelets category to select your desired item.
+3. Add the selected bracelet to your shopping cart.
+4. Proceed to checkout to finalize your purchase.
+
+Note that purchasing pre-sale items separately is advised if you want to receive all products as soon as possible, and purchases are for strictly personal use.
+
+Q: Explain where to find the terms and conditions.
+A: Answer: Hey Harper's terms and conditions can be found under 'Terms & Conditions' on their website.
+
+Q: Explain how to add a user account.
+A: To add a user account, follow these steps:
+
+1. Go to the Hey Harper Site.
+2. Navigate to the ‘Create an Account’ section.
+3. Provide your name and email.
+4. Create a password for your account.
+5. Consent to receive promotional, advertising, and other emails from Hey Harper.
+6. By creating the account, you accept the Terms & Conditions and the Privacy Policy.
+
+Q: Explain how to review and change the password.
+A: IDontKnow
+
+Q: Do you offer personalized products?
+A: Yes
+
+Q: Do you offer digital gift vouchers?
+A: IDontKnow
+
+Q: Enter a general description of your products.
+A: IDontKnow
+
+Q: Describe the quality and reasons for the quality of your necklace products.
+A: The quality of the necklace products is high, as evidenced by their waterproof, sweatproof, and lotion or perfume-resistant characteristics. They are designed in-house and finished with PVD plating, known for its durability and ability to retain color. The necklaces can be confidently worn in various environments, such as the beach or a party. Furthermore, Hey Harper has extensively tested these necklaces in real-life conditions to ensure their color retention, boasting that 99.6% of their jewelry items have kept their color even in wet environments. Extensive research, customer feedback, and extreme testing have contributed to the decision to offer a lifetime color warranty, indicating high trust in the longevity and quality of their products.
+
+Q: Describe the range of prices of your products.
+A: IDontKnow
+
+Q: Describe the sizes your products are available in.
+A: IDontKnow
+
+Q: Explain how to select the correct size of your products.
+A: IDontKnow
+
+Q: Explain the general traits of your products.
+A: IDontKnow
+
+Q: Explain what is covered by the warranty that comes with your products.
+A: The warranty for Hey Harper products covers the following:
+
+1. **Jewelry Warranty:**
+   - All Hey Harper jewelry comes with a 6-month breakage warranty starting from the order delivery date.
+   - To determine if an item qualifies for the breakage warranty, customers must contact Hey Harper Customer Support.
+   - Photos or videos of the broken item are required for warranty assessment.
+   - If the warranty applies, Hey Harper will provide a store credit, discount code for the item's value, or a replacement.
+   - Items broken after the 6-month period are not covered.
+   - Lost items, enamel details, beads, shells, and pearls are excluded from the warranty.
+   - There is a lifetime color warranty for jewelry but it doesn't cover breakages, wear-and-tear marks, scratches, loss, or accidents, nor does it activate for slight darkening.
+
+2. **Watch Warranty:**
+   - Hey Harper watches have a Limited International Warranty for 24 months covering manufacturing defects.
+   - To activate this warranty, customers must contact Hey Harper Customer Support and provide photos or videos of the issue.
+   - The warranty excludes loss of the watch, non-Hey Harper watches, batteries, routine maintenance, cleaning, scratches, wear and tear, lack of care, improper maintenance, tampering, abuse, loss of color, rust, and water penetration.
+   - A photo or video is mandatory to activate the warranty.
+   - All warranty claims involve a careful assessment, and decisions are final.
+   - Hey Harper can deny requests for watch warranty activations.
+
+For all warranties, contact Hey Harper's Customer Support Team at info@heyharper.com for assistance.
+
+Q: Is an extended warranty offered on your products?
+A: IDontKnow
+
+Q: Enter a text about the products you recommend in general.
+A: IDontKnow
+
+Q: Enter a text about the more modern style products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the more traditional jewelry products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a child.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a girlfriend.
+A: IDontKnow
+
+Q: Explain which products are especially suitable for formal occasions.
+A: IDontKnow
+
+Q: Explain which products are especially suitable for the beach.
+A: The products especially suitable for the beach from the provided text include:
+
+1. Waterproof gold and silver necklaces, which are appropriate for beach environments due to their resistance to water.
+
+2. Hey Harper Swimwear, which is made of 80% recycled polyester and 20% elastane. It is fully lined with fast dry technology, ensuring comfort and practicality at the beach. The swimwear comes in recyclable pouches and features adjustable straps, ties, underwire, back hooks, and various bottom style options including high-leg cut and cheeky coverage for style and convenience at the beach.
+
+3. Dresses such as the Barcelona dress, which is effortlessly chic and a summer essential; the LA dress, which combines summer sophistication with floral fun; and the Miami dress designed to breeze through summer in style, which suggests suitability for beachwear with their light fabrics and breezy designs.
+
+Q: Explain what to do if a product is out of stock.
+A: If a product ordered is out of stock, Hey Harper will inform the customer immediately. Hey Harper will then refund the price of the unavailable product within 10 days. If Hey Harper is unable to deliver the order due to unavailability of the products, the company will also inform the customer and fully reimburse them within 30 days.
+
+Q: Explain how to replace the chain of a product.
+A: IDontKnow
+
+Q: Describe what the products come with.
+A: IDontKnow
+
+Q: Explain if the product comes with a gift box.
+A: IDontKnow
+
+Q: Explain how your products can be modified.
+A: IDontKnow
+
+Q: Explain if/how to engrave your jewelry products.
+A: IDontKnow
+
+Q: Enter a response to use if the customer has a general complaint about your products.
+A: IDontKnow
+
+Q: Explain what to do if the product has not been received.
+A: IDontKnow
+
+Q: Explain what to do if a product is losing quality.
+A: Contact Hey Harper's Customer Support Team at info@heyharper.com if a product is losing quality. Provide photos or videos of the defective or faulty item. If the issue is verified by their team, they will offer either a store credit, discount code, or a replacement for the item. Note that color fading on plated jewelry is inevitable and Hey Harper will not replace or repair items that break more than 6 months after purchase.
+
+Q: Explain what to do if a product keeps breaking.
+A: If a product keeps breaking, follow these steps:
+
+1. Gather evidence: Take photos or videos showing the defect or fault of the product.
+2. Contact Customer Support: Email Hey Harper's Customer Support Team at info@heyharper.com to report the faulty item.
+3. Provide Evidence: Send the photos or videos of the faulty item to the customer support team to assist with their verification process.
+4. Verification: Wait for Hey Harper's team to verify the issue with the faulty item.
+5. Resolution: If the issue is verified, choose between receiving a store credit, discount code, or a replacement for the item.
+6. Note Limitations: Items broken after 6 months from order receipt will not be eligible for replacement or repair. Lost items are not covered under warranty. 
+
+Make sure to check if your item is still within the applicable warranty period (6 months for jewelry, 24 months for watches) to address potential manufacturing defects.
+
+Q: Explain what to do if a product is peeling off.
+A: If a product is peeling off, you should contact Hey Harper's Customer Support Team at info@heyharper.com to address the issue. It is mandatory to provide photos or videos showing the defect. If Hey Harper's team is able to verify the issue with the item, they may provide a store credit, discount code, or a replacement for the item.
+
+Q: Explain what to do if a product is too tight.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery time, please summarize for your domestic shipping options.
+A: Text: Hey Harper offers domestic Express delivery options with estimated delivery times of 1 to 2 business days. For EU, US, and UK, Express delivery costs are 10€, 10$, and 6£ respectively. These delivery estimates do not account for order preparation time or additional delivery attempts and are not guaranteed as they can be influenced by location, shipping partners, and other periods like promotions and sales. Orders are expected to be shipped within 30 days after the agreement conclusion, and if this cannot be met due to product unavailability, a full reimbursement is provided within 30 days. You can track your package using a tracking link provided. 
+   
+Answer: For domestic shipping, express delivery is available, with estimated delivery times of 1 to 2 business days for EU, US, and UK, costing 10€, 10$, and 6£ respectively. These times aren't guaranteed and don't include order preparation time or additional delivery attempts.
+
+Q: Provide a summary of all your domestic shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: Provide a summary of all your international shipping options, including details of the delivery times and costs.
+A: Hey Harper offers multiple international express shipping options:
+- EU Express delivery costs 10€ and takes 1 to 2 business days.
+- US Express delivery costs 10$ and takes 1 to 2 business days.
+- UK Express delivery costs 6£ and takes 1 to 2 business days.
+
+Delivery times do not include order preparation time or any potential additional delivery attempts. Delivery estimates are not guaranteed. Tracking links are provided to follow the package on the courier’s platform, and if shipping from outside the EU, a tracking reference is given to identify the package.
+
+Q: For when customers specifically ask about delivery costs, please summarize for your international standard delivery options.
+A: IDontKnow
+
+Q: Explain if/how you ship to any state.
+A: IDontKnow
+
+Q: Explain where to find the delivery status.
+A: You will be given a tracking link to follow the package on the courier’s platform to find the delivery status.
+
+Q: Explain what to do if the delivery status has not changed for a while.
+A: If the delivery status has not changed for a while, the Customer should contact Hey Harper’s Customer Service for assistance. If there are issues with tracking the order, the Customer may also send an email to info@heyharper.com for help.
+
+Q: How long does it take to receive shipping confirmation?
+A: IDontKnow
+
+Q: Explain what to do if you entered the wrong shipping information before the order has been shipped.
+A: If you entered the wrong shipping information before the order has been shipped, you should try contacting Hey Harper’s Customer Service as soon as possible. Although they can't guarantee changes due to swift dispatch efforts, a request to change the delivery address might be able to be completed through the carrier’s website, depending on the service chosen.
+
+Q: Explain what to do if you entered the wrong shipping information after the order has been shipped.
+A: If you entered the wrong shipping information after the order has been shipped, you can try to change the delivery address through the carrier’s website, depending on the service you selected. Hey Harper cannot guarantee that they will be able to change the delivery address once the order is shipped.
+
+Q: Explain what to do if the order was returned to the company because the apartment number was not included in the delivery address.
+A: IDontKnow
+
+Q: Explain what a customer should do if they receive the wrong product.
+A: If a customer receives the wrong product, they should promptly contact Hey Harper’s Customer Service to report the issue. The customer must provide details of the anomaly within 5 working days of receipt and attach photos or videos showing the defect or wrong item. Customer Service will then analyze the situation. If it is determined that the mistake was Hey Harper's or the carrier's fault, the customer will either receive a replacement or a refund.
+
+Q: Explain what a customer should do if they receive the wrong color product or if they say the color looks different from what was advertised.
+A: If a customer receives the wrong color product or if the color looks different from what was advertised, they should contact Hey Harper's Customer Support Team at info@heyharper.com. It is necessary to provide photos or videos showing the discrepancy in color. Upon verification of the issue by Hey Harper's team, options such as a store credit, discount code, or a replacement for the item may be provided.
+
+Q: Explain what to do if you only received one earring.
+A: Contact Hey Harper's Customer Support Team at info@heyharper.com and provide photos or videos showing that you only received one earring. This evidence is mandatory for addressing the issue with faulty or incomplete items. If the team verifies the issue, Hey Harper will provide either a store credit, discount code, or a replacement for the item.
+
+Q: Explain what to do if a package arrived late.
+A: If a package arrives late, the Customer should contact Hey Harper's Customer Service. Delivery times are not guaranteed, and a late delivery does not automatically entitle the Customer to a refund or discount. If Hey Harper cannot deliver within 30 days due to product unavailability, the Customer will be informed and reimbursed within 30 days.
+
+Q: Explain what to do if a product was damaged.
+A: To address a damaged product, follow these steps:
+
+1. **Immediate Action**: Upon detecting damage or an anomaly during delivery, promptly contact Hey Harper’s Customer Service. If the issue is noticed after delivery, act quickly within 5 working days from receipt.
+
+2. **Evidence Submission**: Provide photos or videos displaying the defect to Hey Harper's Customer Support at info@heyharper.com.
+
+3. **Customer Service Review**: Hey Harper’s Customer Service will conduct a thorough analysis of the reported issue.
+
+4. **Resolution**: 
+   - If it’s determined that the damage or anomaly was due to Hey Harper or the carrier, the company will either replace the defective items or refund the amount spent.
+   - If confirmed, the customer may receive a store credit, discount code, or a replacement item.
+
+5. **Report Timeline**: Delivery claims should be made within 15 days after the carrier marks the order delivered.
+
+6. **Additional Consideration**: Hey Harper is not responsible for items broken after 6 months from order receipt. If jewelry items are discolored or do not meet expectations, customers should contact customer support with a picture of the item.
+
+Ensure to follow these steps promptly and provide necessary documentation for a smoother resolution process.
+
+Q: Explain how to track an order.
+A: IDontKnow
+
+Q: Explain about your domestic return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: Explain about your international return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: How much time does international return delivery normally take?
+A: IDontKnow
+
+Q: Explain the process for returning only one of a pair of articles.
+A: IDontKnow
+
+Q: Explain how returns work for products.
+A: IDontKnow
+
+Q: Explain where to find the product return status.
+A: IDontKnow
+
+Q: Explain the main points of your product exchange policy.
+A: IDontKnow
+
+Q: Explain how much time the product exchange process normally takes.
+A: IDontKnow
+
+Q: Explain how to exchange jewelry products.
+A: IDontKnow
+
+Q: Explain any situations (and the charges) where you charge for exchanges of a discounted jewelry product.
+A: IDontKnow
+
+Q: Explain what to do if you have not received any instructions when making an exchange.
+A: IDontKnow
+
+Q: Explain what to do if the return portal is closed when making an exchange.
+A: "IDontKnow"
+
+Q: Explain what to do if the order is not found when making an exchange.
+A: IDontKnow

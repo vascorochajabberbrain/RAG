@@ -15,6 +15,9 @@ A: Yes
 Q: Do you sell rings?
 A: Yes.
 
+Q: Do you sell dresses?
+A: Yes
+
 Q: Apart  from products rings, bracelets, earrings, what other products do you offer?
 A: Swimwear, Dresses, Watches, Anklets, Necklaces, Athleisure.
 
@@ -78,3 +81,213 @@ This is a general guideline; it's important to refer to the specific return poli
 
 Q: Which products, if any, require a different return process
 A: Personalized products, swimwear without protective bag and hygienic sticker, and engraved items require a different return process.
+
+Q: Explain where your offices are located.
+A:
+
+Q: Do you have physical stores that customers can visit?
+A:
+
+Q: Explain how to review and change the language preferences.
+A:
+
+Q: Explain how to navigate the website.
+A:
+
+Q: Explain what a customer should do if your website is unresponsive.
+A:
+
+Q: Explain how to purchase only one product.
+A:
+
+Q: Explain how to purchase bracelet products.
+A:
+
+Q: Explain where to find the terms and conditions.
+A:
+
+Q: Explain how to add a user account.
+A:
+
+Q: Explain how to review and change the password.
+A:
+
+Q: Do you offer personalized products?
+A:
+
+Q: Do you offer digital gift vouchers?
+A:
+
+Q: Enter a general description of your products.
+A:
+
+Q: Describe the quality and reasons for the quality of your necklace products.
+A:
+
+Q: Describe the range of prices of your products.
+A:
+
+Q: Describe the sizes your products are available in.
+A:
+
+Q: Explain how to select the correct size of your products.
+A:
+
+Q: Explain the general traits of your products.
+A:
+
+Q: Explain what is covered by the warranty that comes with your products.
+A:
+
+Q: Is an extended warranty offered on your products?
+A:
+
+Q: Enter a text about the products you recommend in general.
+A:
+
+Q: Enter a text about the more modern style products you recommend.
+A:
+
+Q: Enter a text about the more traditional jewelry products you recommend.
+A:
+
+Q: Enter a text about the low-cost products you recommend.
+A:
+
+Q: Enter a text about the low-cost products you recommend for a child.
+A:
+
+Q: Enter a text about the low-cost products you recommend for a girlfriend.
+A:
+
+Q: Explain which products are especially suitable for formal occasions.
+A:
+
+Q: Explain which products are especially suitable for the beach.
+A:
+
+Q: Explain what to do if a product is out of stock.
+A:
+
+Q: Explain how to replace the chain of a product.
+A:
+
+Q: Describe what the products come with.
+A:
+
+Q: Explain if the product comes with a gift box.
+A:
+
+Q: Explain how your products can be modified.
+A:
+
+Q: Explain if/how to engrave your jewelry products.
+A:
+
+Q: Enter a response to use if the customer has a general complaint about your products.
+A:
+
+Q: Explain what to do if the product has not been received.
+A:
+
+Q: Explain what to do if a product is losing quality.
+A:
+
+Q: Explain what to do if a product keeps breaking.
+A:
+
+Q: Explain what to do if a product is peeling off.
+A:
+
+Q: Explain what to do if a product is too tight.
+A:
+
+Q: For when customers specifically ask about delivery time, please summarize for your domestic shipping options.
+A:
+
+Q: Provide a summary of all your domestic shipping options, including details of the delivery times and costs.
+A:
+
+Q: Provide a summary of all your international shipping options, including details of the delivery times and costs.
+A:
+
+Q: For when customers specifically ask about delivery costs, please summarize for your international standard delivery options.
+A:
+
+Q: Explain if/how you ship to any state.
+A:
+
+Q: Explain where to find the delivery status.
+A:
+
+Q: Explain what to do if the delivery status has not changed for a while.
+A:
+
+Q: How long does it take to receive shipping confirmation?
+A:
+
+Q: Explain what to do if you entered the wrong shipping information before the order has been shipped.
+A:
+
+Q: Explain what to do if you entered the wrong shipping information after the order has been shipped.
+A:
+
+Q: Explain what to do if the order was returned to the company because the apartment number was not included in the delivery address.
+A:
+
+Q: Explain what a customer should do if they receive the wrong product.
+A:
+
+Q: Explain what a customer should do if they receive the wrong color product or if they say the color looks different from what was advertised.
+A:
+
+Q: Explain what to do if you only received one earring.
+A:
+
+Q: Explain what to do if a package arrived late.
+A:
+
+Q: Explain what to do if a product was damaged.
+A:
+
+Q: Explain how to track an order.
+A:
+
+Q: Explain about your domestic return delivery, including details of the time and cost.
+A:
+
+Q: Explain about your international return delivery, including details of the time and cost.
+A:
+
+Q: How much time does international return delivery normally take?
+A:
+
+Q: Explain the process for returning only one of a pair of articles.
+A:
+
+Q: Explain how returns work for products.
+A:
+
+Q: Explain where to find the product return status.
+A:
+
+Q: Explain the main points of your product exchange policy.
+A:
+
+Q: Explain how much time the product exchange process normally takes.
+A:
+
+Q: Explain how to exchange jewelry products.
+A:
+
+Q: Explain any situations (and the charges) where you charge for exchanges of a discounted jewelry product.
+A:
+
+Q: Explain what to do if you have not received any instructions when making an exchange.
+A:
+
+Q: Explain what to do if the return portal is closed when making an exchange.
+A:
+
+Q: Explain what to do if the order is not found when making an exchange.
+A:

@@ -1,0 +1,254 @@
+Q: What products do you sell?
+A: Answer: Jewelry.
+
+Q: Do you sell bracelets?
+A: Yes
+
+Q: Do you sell rings?
+A: Yes
+
+Q: Do you sell dresses?
+A: Answer: Yes
+
+Q: Apart from rings, bracelets, and earrings, what other products do you offer?
+A: Answer: Necklaces, Watches, Anklets
+
+Q: What payment methods do you offer?
+A: Credit Card, Debit Card, Apple Pay, PayPal
+
+Q: Is it possible to pay with VISA?
+A: IDontKnow
+
+Q: Is it possible to pay with multiple credit cards?
+A: IDontKnow
+
+Q: Apart from VISA, AMEX, and PayPal, what other payment methods do you offer?
+A: IDontKnow
+
+Q: Explain the domestic return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product?
+A: IDontKnow
+
+Q: Which products, if any, require a different return process?
+A: IDontKnow
+
+Q: Explain where your offices are located.
+A: IDontKnow
+
+Q: Do you have physical stores that customers can visit?
+A: IDontKnow
+
+Q: Explain how to review and change the language preferences.
+A: IDontKnow
+
+Q: Explain how to navigate the website.
+A: IDontKnow
+
+Q: Explain what a customer should do if your website is unresponsive.
+A: IDontKnow
+
+Q: Explain how to purchase only one product.
+A: IDontKnow
+
+Q: Explain how to purchase bracelet products.
+A: IDontKnow
+
+Q: Explain where to find the terms and conditions.
+A: IDontKnow
+
+Q: Explain how to add a user account.
+A: Answer: To add a user account, you need to provide your name and email, and create a password. The email address will be used as the user's login detail.
+
+Q: Explain how to review and change the password.
+A: IDontKnow
+
+Q: Do you offer personalized products?
+A: Answer: IDontKnow
+
+Q: Do you offer digital gift vouchers?
+A: IDontKnow
+
+Q: Enter a general description of your products.
+A: IDontKnow
+
+Q: Describe the quality and reasons for the quality of your necklace products.
+A: IDontKnow
+
+Q: Describe the range of prices of your products.
+A: IDontKnow
+
+Q: Describe the sizes your products are available in.
+A: IDontKnow
+
+Q: Explain how to select the correct size of your products.
+A: IDontKnow
+
+Q: Explain the general traits of your products.
+A: IDontKnow
+
+Q: Explain what is covered by the warranty that comes with your products.
+A: IDontKnow
+
+Q: Is an extended warranty offered on your products?
+A: IDontKnow
+
+Q: Enter a text about the products you recommend in general.
+A: IDontKnow
+
+Q: Enter a text about the more modern style products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the more traditional jewelry products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a child.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a girlfriend.
+A: IDontKnow
+
+Q: Explain which products are especially suitable for formal occasions.
+A: IDontKnow
+
+Q: Explain which products are especially suitable for the beach.
+A: IDontKnow
+
+Q: Explain what to do if a product is out of stock.
+A: If a product is out of stock, Hey Harper will immediately inform the customer about the unavailability of the product.
+
+Q: Explain how to replace the chain of a product.
+A: IDontKnow
+
+Q: Describe what the products come with.
+A: IDontKnow
+
+Q: Explain if the product comes with a gift box.
+A: Answer: IDontKnow
+
+Q: Explain how your products can be modified.
+A: IDontKnow
+
+Q: Explain if/how to engrave your jewelry products.
+A: IDontKnow
+
+Q: Enter a response to use if the customer has a general complaint about your products.
+A: IDontKnow
+
+Q: Explain what to do if the product has not been received.
+A: IDontKnow
+
+Q: Explain what to do if a product is losing quality.
+A: IDontKnow
+
+Q: Explain what to do if a product keeps breaking.
+A: IDontKnow
+
+Q: Explain what to do if a product is peeling off.
+A: IDontKnow
+
+Q: Explain what to do if a product is too tight.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery time, please summarize for your domestic shipping options.
+A: IDontKnow
+
+Q: Provide a summary of all your domestic shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: Provide a summary of all your international shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery costs, please summarize for your international standard delivery options.
+A: IDontKnow
+
+Q: Explain if/how you ship to any state.
+A: IDontKnow
+
+Q: Explain where to find the delivery status.
+A: Answer: From the confirmation email, customers can track their order. They will be given a tracking link to follow the package on the courier’s platform.
+
+Q: Explain what to do if the delivery status has not changed for a while.
+A: If the delivery status has not changed for a while, contact the Customer Support Team at info@heyharper.com for assistance.
+
+Q: How long does it take to receive shipping confirmation?
+A: IDontKnow
+
+Q: Explain what to do if you entered the wrong shipping information before the order has been shipped.
+A: IDontKnow
+
+Q: Explain what to do if you entered the wrong shipping information after the order has been shipped.
+A: IDontKnow
+
+Q: Explain what to do if the order was returned to the company because the apartment number was not included in the delivery address.
+A: IDontKnow
+
+Q: Explain what a customer should do if they receive the wrong product.
+A: IDontKnow
+
+Q: Explain what a customer should do if they receive the wrong color product or if they say the color looks different from what was advertised.
+A: Customers should contact Hey Harper's customer support and provide a visible picture of the discolored item.
+
+Q: Explain what to do if you only received one earring.
+A: IDontKnow
+
+Q: Explain what to do if a package arrived late.
+A: If a package arrived late, the customer should contact Customer Service.
+
+Q: Explain what to do if a product was damaged.
+A: If a product was damaged, the customer or the authorized person should refuse the delivery when the damage or anomaly is detected. The products should be in good condition and accompanied by their original packaging for the delivery to be accepted.
+
+Q: Explain how to track an order.
+A: Answer: From the confirmation email, the customer can track their order.
+
+Q: Explain about your domestic return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: Explain about your international return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: How much time does international return delivery normally take?
+A: IDontKnow
+
+Q: Explain the process for returning only one of a pair of articles.
+A: IDontKnow
+
+Q: Explain how returns work for products.
+A: IDontKnow
+
+Q: Explain where to find the product return status.
+A: IDontKnow
+
+Q: Explain the main points of your product exchange policy.
+A: IDontKnow
+
+Q: Explain how much time the product exchange process normally takes.
+A: IDontKnow
+
+Q: Explain how to exchange jewelry products.
+A: IDontKnow
+
+Q: Explain any situations (and the charges) where you charge for exchanges of a discounted jewelry product.
+A: IDontKnow
+
+Q: Explain what to do if you have not received any instructions when making an exchange.
+A: IDontKnow
+
+Q: Explain what to do if the return portal is closed when making an exchange.
+A: IDontKnow
+
+Q: Explain what to do if the order is not found when making an exchange.
+A: Answer: IDontKnow.

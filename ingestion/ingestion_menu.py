@@ -1,4 +1,7 @@
+from ingestion.txt_ingestion import main as txt_ingestion
+from ingestion.pdf_ingestion import main as pdf_ingestion
 from ingestion.csv_ingestion import csv_ingestion
+from ingestion.url_ingestion import main as url_ingestion
 from my_collections.SCS_Collection import SCS_Collection
 
 
@@ -21,13 +24,13 @@ def ingestion_menu(collection: SCS_Collection):
                 #for now the everything is done inside the function... even the name of the collection
                 csv_ingestion(collection)
             case "pdf":
-                print("To-do")
-                #pdf_ingestion()
+                chunks = pdf_ingestion()
+                collection.append_sentences(chunks)
             case "txt":
-                print("To-do")
-                #txt_ingestion()
+                chunks = txt_ingestion()
+                collection.append_sentences(chunks)
             case "url":
-                print("To-do")
-                #url_ingestion()
+                chunks = url_ingestion()
+                collection.append_sentences(chunks)
         
         action = input(menu)

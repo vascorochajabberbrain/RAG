@@ -1,5 +1,6 @@
 import base64
 import os
+import re
 import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -11,8 +12,8 @@ import difflib
 import time
 
 from llms.openai_utils import get_openai_client, openai_chat_completion
-from chatbot import make_conversation_file
-from vectorization import get_points, get_text_chunks, insert_data
+from chatbot import make_conversation_file, retrieve_from_vdb
+from vectorization import get_points, get_text_chunks, insert_data, create_batches_of_text
 
 
 def setup_driver(start_url):
@@ -47,6 +48,17 @@ def get_all_product_urls(driver):
                 continue  # Ignore elements that fail
 
     return products_urls
+
+"""--------Helper functions for other files----------"""
+#it is used on csv_ingestion
+def scrape_page(url):
+    time.sleep(0.1)
+    driver = setup_driver(url)
+    try:
+        text = get_all_text(driver)
+        return text
+    finally:
+        driver.quit()
 
 """-------------Specific functions------------------"""
 def find_show_more_id(driver):
@@ -309,63 +321,115 @@ def open_all_toggles(driver):
 
     return initial_text, initial_clickables
 
-"""-------------Answers functions------------------"""
-def ask_questions(text, questions):
-    """ Receives a list of questions and returns a list of answers. """
-    openai_client = get_openai_client()
-    answers = []
-    for question in questions:
-        response = openai_chat_completion("""Use the provided text to answer the question, notice that the text was generated from a website scrapping process.
-                                          If it is a yes or not questions only answer with Yes, No or IDontKnow.
-                                          If the provided text does not contain the answer, do not explain that the text does have the answer just answer IDontKnow.
-                                          If it is a question to list something, just name the items.
-                                          Overall try to be brieve, unless there is question on a process, in that case, explain all the steps""", "Question: " + question + "\nContext: " + text)
-        answers.append(response)
-    return answers
+"""-----------pos-scrapping functions-------------"""
+def apply_filters(text):
+    print("Initial text number characters:                    ", len(text))
 
-"""-------------RAG functions------------------"""
-#To-Do: transport to RAG files
-def add_context(chunk, text):
-    openai_client = get_openai_client()
-    response = openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": f"""I need you to rewrite this preposition: {chunk}. 
-                           In order to include a bit more context so that will better mach when used for embeddings
-                           The text is: {text}
-                           Note, I don't want to include any more information than the one that makes it so you do not need to know anything else to understand it.
-                           Please answer only the rewritten sentence.
-                           Example:
-                           if this was the preposition: "Options are: Minimalist, Trendy, or Surprise Me."
-                           your answer should be something like this: "For the product subscription, customers can choose the style of jewelry pieces they want: Minimalist, Trendy, or Surprise Me."
-                           This is a good example because it includes the context that we are refering to the product subscription, we refer who has the option to choose, and we use words that are used on the rest of the text, like style instead of options"""}
-                          ]
-    )
-    return response.choices[0].message.content
+    filtered_text = remove_end_of_page_info(text)
+    print("After removing end of page number characters:      ", len(filtered_text))
 
-def manual_chunks_filter(chunks, text):
-    chunksToKeep = []
+    filtered_text = remove_product_info_regex(filtered_text)
+    print("After removing product info number characters:     ", len(filtered_text))
+
+    filtered_text = remove_influencers_tags(filtered_text)
+    print("After removing influencers tags number characters: ", len(filtered_text))
+
+    return filtered_text
+
+def remove_product_info_ai(text):
+    examples = ["""4.7
+€45 with 40% Off
+Daphne
+Bracelet
+€75
+Add""",
+"""New
+€30 with 40% Off
+Daphne Alice
+Bracelet
+€50
+Add""",
+"""Bestseller
+€27 with 40% Off
+Nassau
+Bracelet
+€44
+Add"""]
+    new_text = text
+    chunk_size = 1000
+    chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
     for chunk in chunks:
-        print("\nchunk: ", chunk, "\n")
-        toKeep = input("""Do you want to keep this chunk as it is? if Yes type y
-        If it is too summarized and needs context, type 1
-        If you want to rewrite it yourself, type r""")
-        if toKeep == "y":
-            chunksToKeep.append(chunk)
-        elif toKeep == "1":
-            new_chunk = add_context(chunk, text)
-            print("new chunk: ", new_chunk)
-            toKeep = input("Write y to include like this, b to include it as before and r to rewrite it yourself")
-            if toKeep == "y":
-                chunksToKeep.append(new_chunk)
-            elif toKeep == "b":
-                chunksToKeep.append(chunk)
-        elif toKeep == "r":
-            new_chunk = input("Write the new chunk: ")
-            chunksToKeep.append(new_chunk)
-    return chunksToKeep
+        new_chunk = openai_chat_completion(f"""Please remove products from the previous scrapped text.
+                                      I want you to return just the text only removing a group of lines like these:
+                                      {examples}""", chunk)
+        new_text = new_text.replace(chunk, new_chunk)
+    
+    print("remove_product_info made the lenght go from this: ", len(text), " to ", len(new_text))
+    return new_text
 
+def optional_regex_line(regex):
+    return "(?:" + regex + ")?"
 
-"""-------------Main functions"""
+def remove_product_info_regex(text):
+    status_line = r"(?:New|Bestseller|Save on the Set|\d\.\d|50% Off|Out of stock)"
+    pos_status_line = r"(?:Save on the Set|Game Day Glow|Overtime Ready|All-Weather Ready)"
+    promotion_line = r"(?:€\d+(?:[ \t]+with[ \t]+\d+%[ \t]+Off)?|Final Sale)"
+    category_line = r"(?:Bracelet|Set|Set 2|Watch|Anklet|Subscription Box|Huggies|Earrings|Ring|Rings|Necklace|Jewelry Case|[\w \t\-]*Bikini|Shorts|Dress|Silver|Extenders|Pendant|Choker)"
+    name_line = r"[\w \t\-\&]+"
+    other_price_line = r"€\d+"
+    price_line = r"€\d+"
+    add_line = r"(?:Add|Notify me)"
+    composed_regex = ( "(?:" + #more normal structure
+                    optional_regex_line(status_line + r"\s*") +
+                    optional_regex_line(pos_status_line + r"\s*") +
+                    optional_regex_line(promotion_line + r"\s*") +
+                    name_line + r"\s*" +
+                    category_line + r"\s*" +
+                    optional_regex_line(other_price_line + r"\s*") +
+                    price_line + r"\s*" +
+                    add_line + r"\s*"
+                    + "|" + #found this structure sometimes
+                    name_line + r"\s*" +
+                    price_line + r"\s*" +
+                    promotion_line + r"\s*" +
+                    add_line + r"\s*"
+                    + ")"
+                    )
+    #regex = r"(?:(?:New|Bestseller|Save on the Set|\d\.\d|50% Off)?\s*)?(?:€\d+(?:[ \t]+with[ \t]+\d+%[ \t]+Off)?\s*)?[\w \t\-]+\s*(?:Bracelet|Set|Watch|Anklet|Subscription Box|Huggies|Earrings|Ring|Rings|Necklace|Jewelry Case|[\w \t\-]*Bikini|Shorts)\s*€\d+\s*(?:€\d+\s*)?Add\s*"
+    #print("regex: ", regex)
+    #print("composed regex: ", composed_regex)
+    new_text = re.sub(composed_regex, "", text, flags=re.DOTALL)
+    return new_text
+
+def remove_end_of_page_info(text):
+    pattern = """Free gift with 1st order
+Join our newsletter to claim it
+Product
+Brand
+Resources
+Support
+Join us
+Social
+EUR €
+English
+Terms of service
+·
+Privacy Policy"""
+
+    # Use re.sub to remove the matched section
+    cleaned_text = re.sub(pattern, "", text)
+
+    return cleaned_text
+
+#It can be dangerous if important information is starting with a @ for some reason
+#It is also important for privacy matters
+def remove_influencers_tags(text):
+    print("Performing influencers tag removal, be careful as a new line starting with @ will be removed")
+    pattern = r'^@.*\n'
+    cleaned_text = re.sub(pattern, "", text, flags=re.MULTILINE)
+    return cleaned_text
+
+"""-------------Main functions-------------"""
 def crawl(driver, start_url, number_links_visited, filename):
     """ Recursively crawls through all clickable elements and extracts text. """
     stack = [start_url]  # URLs to visit
@@ -375,8 +439,6 @@ def crawl(driver, start_url, number_links_visited, filename):
     links_count = 0
 
     while stack:
-        #if links_count == 10:
-        #    break
         url = stack.pop()
         
         if url in visited_urls:
@@ -432,24 +494,26 @@ def crawl(driver, start_url, number_links_visited, filename):
         print(f"Length of hrefs: {len(hrefs)}")
         #print("Actual clickable elements:")
         #print(*hrefs, sep="\n")
+
         for link in hrefs:
-            if link and (link.startswith(start_url) or link.startswith("https://checkout-eu.heyharper.com/")) and not link.startswith("https://heyharper.com/eu/en/products/") and link not in visited_urls and link not in stack:
+            if link and (link.startswith("https://store.peixefresco.com.pt/receitas")) and link not in visited_urls and link not in stack:
                 stack.append(link)
+
         print(f"Length of stack after: {len(stack)}")
         print("Actual stack:")
         print(*stack, sep="\n")
     print(f"\nCrawling completed. Visited {len(visited_urls)} pages.")
     return text
 
-
 def main():
-    start_url = "https://heyharper.com/eu/en"
+    start_url = "https://store.peixefresco.com.pt/blog-de-receitas-peixe-fresco/"
     driver = setup_driver(start_url)
 
-    openai_client = get_openai_client()
+    #openai_client = get_openai_client()
     try:
             
-        filename = "ingestion/heyharper_helper_text_reading_and_get_links_at_all_toggles.txt"
+        filename = "ingestion/peixefresco.txt"
+        #filename = "ingestion/aux_text_to_test_filters.txt"
         """os.remove(filename)
         
         existing_text, number_links_visited = read_and_split_last_line(filename)
@@ -462,35 +526,25 @@ def main():
 
         text = crawl(driver, start_url, number_links_visited, filename)
         """
+
+        """
+        # Process to filter the scraped text
+        chunks = []
         with open(filename, 'r') as file:
             text = file.read()
 
+        filtered_text = apply_filters(text)       
 
-        questions = ["What products do you sell?",
-"Do you sell bracelets?",
-"Do you sell rings?",
-"Do you sell dresses?",
-"Apart  from products rings, bracelets, earrings, what other products do you offer?",
-"What payment methods do you offer?",
-"Is it possible to pay with VISA?",
-"Is it possible to pay with multiple credit cards?",
-"Apart from VISA, AMEX and Pay Pal, what other payment methods do you offer?",
-"Explain the domestic return delivery process including details of the time and cost.",
-"What is the fee for domestic return delivery?",
-"Explain the international return delivery process including details of the time and cost.",
-"What is the fee for international return delivery?",
-"What is the process to return a product?",
-"Which products, if any, require a different return process?"]
+        # Write the filtered text to a new file
+        filename = "ingestion/heyharper_helper_text_reading_and_get_links_at_all_toggles_regex_filtered.txt"
+        with open(filename, 'w') as file:
+            file.write(filtered_text)
+        """
+        """os.remove(filename)
+        text = crawl(driver, start_url, 0, filename)
+
+        """
         
-        answers = ask_questions(text, questions)
-
-        formatted_lines = [
-    f"Q: {question}\nA: {answer}\n" for question, answer in zip(questions, answers)
-]
-        formatted_output = "\n".join(formatted_lines)
-
-        make_conversation_file(formatted_output, "conversation_logs/onboarding")
-        print(formatted_output)
 
         """
         text = ""
@@ -501,33 +555,45 @@ def main():
         print("scraping done")
 
         """
+        #print(openai_chat_completion("From the text the user will give you understand if bracelets are sold or not by this website.", text))
         
-        print(openai_chat_completion("From the text the user will give you understand if bracelets are sold or not by this website.", text))
-        
-        """chunks=get_text_chunks(text)
-
-        print("chunks: \n", chunks)
-
-        chunksToKeep = manual_chunks_filter(chunks, text)
-
-        print("chunks to keep: \n", chunksToKeep)
-        #chunksToKeep = ['Hey Harper offers monthly surprise jewelry subscriptions.', 'Customers can choose the style of jewelry pieces they want: Minimalist, Trendy, or Surprise Me.', 'Customers can subscribe and save money by paying monthly.', 'By paying monthly, customers can save 50%.', 'Hey Harper offers free delivery from March 17th to 24th.', 'The subscription costs $30 and can be cancelled or paused anytime without commitments.', "The jewelry pieces are either from Hey Harper's core collection or upcoming new drops.", "Each jewelry piece is chosen by Hey Harper's design team.", 'Customers can choose their style, add their address, and the first piece ships immediately.', 'The subscription service is available only to the USA and Canada.', 'Images displayed are examples of jewelry pieces.', 'Monthly subscription pieces ship monthly on the same date as the first order to the given address.', 'Prepaid subscriptions ship on the first week of each month to the given address.', 'Customers receive a confirmation email with tracking information for each new shipment.', 'Customers can cancel or pause their subscription anytime, easily and for free.', 'All subscription pieces are non-refundable and non-exchangeable.', "Hey Harper's jewelry is made from stainless steel metal with 14K gold PVD coating.", 'The 14K gold PVD coating is durable and waterproof.', 'Hey Harper offers a lifetime color warranty for their jewelry.', "Hey Harper's waterproof jewelry is designed to endure daily routines, including showering, working out, and swimming.", 'If the jewelry loses color, customers can contact customer support with a visible picture of their item to claim the warranty.', 'Hey Harper offers a monthly surprise jewelry piece at a fraction of the price.', 'Customers can pay monthly and cancel anytime easily and for free.', 'Customers can select their subscription style.']
-        #chunksToKeep = ['Please note that the Heart Jewelry Box is not included.', 'To ensure perfect fit, we are only offering necklaces and earrings. ']
+        """
+        #Create Chunks with batches
+        filename = "ingestion/heyharper_helper_text_reading_and_get_links_at_all_toggles_regex_filtered.txt"
+        with open(filename, 'r') as file:
+            text = file.read()
 
         
-        vectors=get_points(chunksToKeep)
+        batches = create_batches_of_text(text, 10000, 100)
+        chunks = []
+        for batch in batches:
+            chunks += get_text_chunks(batch)
+        """
+
+        with open(filename, 'r') as file:
+            text = file.read()
+        batches = create_batches_of_text(text, 10000, 100)
+        chunks = []
+        for batch in batches:
+            chunks += get_text_chunks(batch)
+        #chunks = get_text_chunks(text)
+        #print(*chunks, sep="\n")
+        print("number of chunks: ", len(chunks))
+        
+
+        """
+        #chunksToKeep = manual_chunks_filter(chunks, text)
+        #print("chunks to keep: \n", chunksToKeep)
+        #vectors=get_points(chunksToKeep)
         #insert_data(vectors)
-        """
 
         """
-        chunks=get_text_chunks(text_2)
-        vectors=get_embedding(chunks)
-        insert_data(vectors)
-        """
-
+        return chunks
+        
     finally:
         # Close the browser
         driver.quit()
+        pass
 
 
 if __name__ == '__main__':

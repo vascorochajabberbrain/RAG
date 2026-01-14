@@ -1,0 +1,449 @@
+Q: What products do you sell?
+A: Jewelry, Swimwear, Dresses, Watches
+
+Q: Do you sell bracelets?
+A: Yes
+
+Q: Do you sell rings?
+A: Rings
+
+Q: Do you sell dresses?
+A: Dresses
+
+Q: Apart from rings, bracelets, and earrings, what other products do you offer?
+A: Necklaces, Anklets, Watches, Swimwear, and Dresses.
+
+Q: What payment methods do you offer?
+A: - Credit card
+- Debit card
+- Klarna
+- Apple Pay
+- Google Pay
+- Shop Pay
+- PayPal
+
+Q: Is it possible to pay with VISA?
+A: Yes
+
+Q: Is it possible to pay with multiple credit cards?
+A: IDontKnow
+
+Q: Apart from VISA, AMEX, and PayPal, what other payment methods do you offer?
+A: Credit card, Debit card, Klarna, Apple Pay, Google Pay, Shop Pay.
+
+Q: Explain the domestic return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product?
+A: 1. Request a Return: Enter the Hey Harper's returns portal on the website to acknowledge the return request. 
+2. Provide Return Label: Hey Harper will provide a return label if the service is available in your country.
+3. Prepare the Item: Products must be in original condition, including the packaging, accessories, manuals, and any other materials.
+4. Ship the Item: If Hey Harper cannot provide a return label, the customer must ship the item at their own expense to the provided return address.
+5. Receive Reimbursement: Upon acceptance, customers will be reimbursed within 14 days, excluding delivery costs, through the original payment method. 
+6. Follow Return Timeframe: Return requests must be made within 14 days of receipt, and items must be shipped within 14 days of requesting the return. Returns will not be accepted if shipped after this date.
+
+Q: Which products, if any, require a different return process?
+A: 1. Swimwear without protective bag and hygienic sticker. 
+2. Personalized products.
+
+Q: Explain where your offices are located.
+A: 1. Hey Harper UK, Bath House, 6-8 Bath Street, Bristol BS1 6HL, United Kingdom.
+2. Hey Harper Shop Trading LTD, 230 Works Business Centre 2nd Floor, Eucharistic Congress Road, Mosta, MST 9039 Malta.
+
+Q: Do you have physical stores that customers can visit?
+A: IDontKnow
+
+Q: Explain how to review and change the language preferences.
+A: IDontKnow
+
+Q: Explain how to navigate the website.
+A: 1. Navigate to the website: Open your web browser and enter the website URL to access the site.
+2. Main Menu: Use the main menu at the top of the page to explore categories such as Jewelry, Swimwear, Dresses, Watches, etc.
+3. Promotions: Look for promotional banners like "Buy 2, Get 25% Off" and click for more details.
+4. Product Categories: Click on categories like Necklaces, Rings, Anklets under the Jewelry section to view products.
+5. Product Filters: Use filters to sort products by popularity, price, or newest.
+6. Customer Support: Access "Chat with us" for live support or visit the Contacts/FAQ section for help.
+7. Rewards Program: Sign up for the Loyalty Rewards Program to earn and redeem points.
+8. Checkout: Once you have added items to your cart, proceed to checkout and follow the prompts to complete your purchase.
+9. User Account: Log in or create an account to manage orders and track deliveries.
+10. Privacy & Cookies: Manage your cookie preferences by clicking "Manage" or "Accept all" for cookies use. 
+
+This navigation should help you effectively browse, shop, and interact with the website.
+
+Q: Explain what a customer should do if your website is unresponsive.
+A: IDontKnow
+
+Q: Explain how to purchase only one product.
+A: 1. Select the product you wish to purchase by visiting the product page.
+2. Click the "Add" button next to the product to add it to your cart.
+3. Go to your cart by clicking on the shopping bag icon, usually located at the top right of the page.
+4. Review your order to ensure it is correct and that no additional items have been added.
+5. Proceed to checkout by clicking the "Checkout" button.
+6. Enter your shipping address and select your preferred shipping method.
+7. Fill in your payment details using one of the accepted methods such as credit card, PayPal, etc.
+8. Review your order once more to ensure all details are correct.
+9. Confirm your purchase by selecting the option to finalize your order.
+
+Completing these steps will allow you to purchase a single product from the store.
+
+Q: Explain how to purchase bracelet products.
+A: To purchase bracelet products, follow these steps:
+
+1. Visit the Hey Harper website.
+2. Browse the Bracelets section to view available options.
+3. Select the desired bracelet(s) and add them to your shopping cart.
+4. Ensure you are aware of available promotions, such as "Buy 2, Get 25% Off" or "Buy 3, Get 40% Off."
+5. Proceed to checkout by clicking on the shopping cart icon.
+6. Provide the necessary details such as shipping address and preferred payment method.
+7. Confirm your order and complete the purchase.
+8. You will receive an email confirmation of your order.
+
+Consider signing up for their newsletter to receive a free gift with your first order.
+
+Q: Explain where to find the terms and conditions.
+A: Terms and Conditions can be found under "Terms of Service."
+
+Q: Explain how to add a user account.
+A: To add a user account on the Hey Harper website:
+
+1. Go to the Hey Harper website.
+2. Locate the 'Create an Account' section, which is usually on the homepage or under the login menu.
+3. Fill in the required information: your name, email address, and create a password.
+4. Submit the form by clicking the 'Sign Up' or 'Create Account' button.
+
+Upon completion, your account will be successfully created, and you will also be enrolled in their Loyalty Rewards Program.
+
+Q: Explain how to review and change the password.
+A: IDontKnow
+
+Q: Do you offer personalized products?
+A: IDontKnow
+
+Q: Do you offer digital gift vouchers?
+A: IDontKnow
+
+Q: Enter a general description of your products.
+A: - Jewelry
+- Swimwear
+- Dresses
+- Watches
+
+Q: Describe the quality and reasons for the quality of your necklace products.
+A: - Stainless steel
+- Gold PVD coating
+- Silver PVD coating
+- Waterproof
+- Lifetime color warranty
+
+Q: Describe the range of prices of your products.
+A: IDontKnow
+
+Q: Describe the sizes your products are available in.
+A: IDontKnow
+
+Q: Explain how to select the correct size of your products.
+A: IDontKnow
+
+Q: Explain the general traits of your products.
+A: 1. Waterproof Jewelry: Crafted from stainless steel with a gold PVD coating, making them durable and resistant to water, sweat, and everyday life without discoloration.
+
+2. Jewelry Types: Various items including bracelets, necklaces, rings, earrings, and anklets. They feature a 14k gold PVD coating and are sometimes available in silver.
+
+3. Collections: Items such as the Daphne Collection, including unique designs that promote fashion-forward statements while being practical for daily use.
+
+4. Discounts & Promotions: Offers include "Buy 2, Get 25% Off" and "Buy 3, Get 40% Off", encouraging multiple purchases.
+
+5. Warranty: Lifetime color warranty is offered for discoloration due to the PVD coating, emphasizing long-lasting quality.
+
+6. Rewards and Loyalty: Offers a free rewards program where points can be earned through purchases, reviews, and referrals, which can be redeemed for discounts.
+
+7. Packaging: Eco-friendly packaging focuses on sustainability, using recycled materials without compromising aesthetics.
+
+Q: Explain what is covered by the warranty that comes with your products.
+A: Lifetime Color Warranty
+Breakage Warranty (6 months)
+Watch Warranty (24 months)
+
+Q: Is an extended warranty offered on your products?
+A: IDontKnow
+
+Q: Enter a text about the products you recommend in general.
+A: 1. Jewelry
+2. Swimwear
+3. Dresses
+4. Watches
+
+Q: Enter a text about the more modern style products you recommend.
+A: - Waterproof Jewelry
+- Stainless Steel Jewelry
+- Gold PVD Coated Jewelry
+- Silver Jewelry
+
+Q: Enter a text about the more traditional jewelry products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend.
+A: - Daphne Collection
+- Necklaces
+- Earrings
+- Rings
+- Bracelets
+- Anklets
+- Swimwear
+- Dresses
+- Watches
+
+Q: Enter a text about the low-cost products you recommend for a child.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a girlfriend.
+A: The provided text does not contain a specific list of recommended low-cost products for a girlfriend. However, it does mention various promotional offers, such as "Buy 2, Get 25% Off" and "Buy 3, Get 40% Off," and features products like jewelry (necklaces, rings, earrings, bracelets), swimwear, and dresses, which are available on a discounted basis.
+
+Q: Explain which products are especially suitable for formal occasions.
+A: Jewelry and watches are especially suitable for formal occasions.
+
+Q: Explain which products are especially suitable for the beach.
+A: - Waterproof Jewelry
+- Swimwear
+- Dresses
+
+Q: Explain what to do if a product is out of stock.
+A: 1. If a product is out of stock, verify the stock status via the retailer's website or customer service.
+2. Provide alternative options or products to the customer.
+3. Offer customers the option to receive a notification when the product is back in stock.
+4. If the customer has placed an order already, inform them about the unavailability and proceed with a refund to the payment method used, typically within a set timeframe, such as 10 days.
+5. Communicate clearly about any backorder or expected restock dates if available.
+
+Q: Explain how to replace the chain of a product.
+A: IDontKnow
+
+Q: Describe what the products come with.
+A: - Essential characteristics for each product are available on the website.
+- Jewelry includes items like bracelets, anklets, earrings, necklaces, and rings.
+- Swimwear features fast-dry technology and comes with recyclable pouches and adjustable straps.
+- Watches focus on stylish design, equipped with Swiss quartz mechanisms.
+- All jewelry is made with stainless steel and gold PVD coating for durability and color resistance.
+- Jewelry is waterproof and covered by a lifetime color warranty.
+- First-time order includes a free gift if you join the newsletter.
+
+Q: Explain if the product comes with a gift box.
+A: IDontKnow
+
+Q: Explain how your products can be modified.
+A: IDontKnow
+
+Q: Explain if/how to engrave your jewelry products.
+A: We do not advise doing any type of engraving on our items. This will remove the coating and scratch the surface of the item, compromising the untarnished quality of the jewelry. If items are engraved, they will no longer be eligible for our lifetime color warranty.
+
+Q: Enter a response to use if the customer has a general complaint about your products.
+A: For a general complaint about products, consider responding with:
+
+"We're sorry to hear about your experience. We take customer feedback seriously and strive to improve our products constantly. Please reach out to our customer service team at info@heyharper.com and provide detailed information about your issue. We are here to assist you and find a suitable resolution."
+
+Q: Explain what to do if the product has not been received.
+A: If you have not received the product, follow these steps:
+
+1. Verify Order Status: Check your order status and tracking information via the confirmation email or by logging into your account on the website.
+
+2. Contact Customer Support: If the status shows delivered but you have not received it, contact Hey Harper's Customer Service within 15 days of the order being marked as delivered. You can reach them at info@heyharper.com. Provide your order number and any other relevant details.
+
+3. Check with Neighbors or Building Management: It's possible the package was delivered to a neighbor or left in a common area.
+
+4. Wait for an Update: If the order is still in transit past the expected delivery date without updates, reach out to customer support for further assistance.
+
+5. Refund or Replacement: If the package is confirmed lost or there was an error, discuss options for a refund or replacement with customer service.
+
+Q: Explain what to do if a product is losing quality.
+A: IDontKnow
+
+Q: Explain what to do if a product keeps breaking.
+A: If a product keeps breaking, follow these steps:
+
+1. **Check Warranty**: Verify if the product is still under warranty, which could cover defects or damages.
+
+2. **Contact Customer Support**: Reach out to the product's customer service for assistance. Provide details of the issue and any relevant proof of purchase or warranty information.
+
+3. **Request a Replacement or Repair**: Depending on the warranty terms, request a replacement, repair, or refund.
+
+4. **Document Issues**: Keep records of all communications and attempts to resolve the issue.
+
+5. **Consider Alternative Solutions**: If the manufacturer does not resolve the issue, explore other options such as repairing it locally or purchasing a different product.
+
+Q: Explain what to do if a product is peeling off.
+A: IDontKnow
+
+Q: Explain what to do if a product is too tight.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery time, please summarize for your domestic shipping options.
+A: EU Standard: 2 to 7 business days, Free (above 16€)
+EU Express: 1 to 2 business days, 10€
+US Standard: 2 to 7 business days, Free (above 16$)
+US Express: 1 to 2 business days, 10$
+UK Standard: 2 to 5 business days, Free (above 16£)
+UK Express: 1 to 2 business days, 6£
+CAN Standard: 5 to 9 business days, Free (above 16$)
+
+Q: Provide a summary of all your domestic shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: Provide a summary of all your international shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery costs, please summarize for your international standard delivery options.
+A: IDontKnow
+
+Q: Explain if/how you ship to any state.
+A: Hey Harper offers a variety of shipping methods and rates. The availability of these methods may change over time. Shipping costs are calculated at checkout based on the order and delivery address. Delivery times range from 1 to 9 business days depending on the region and chosen service, and shipping is free for orders above specified amounts (e.g., €16/£16/$16).
+
+Q: Explain where to find the delivery status.
+A: IDontKnow
+
+Q: Explain what to do if the delivery status has not changed for a while.
+A: If the delivery status of your order has not changed for a while, you should consider the following steps:
+
+1. Check Tracking Details: Verify any tracking details you received in your shipment confirmation email. Ensure there hasn't been a recent update that you might have missed.
+
+2. Verify the Delivery Timeframes: Compare the current status with the promised delivery timeframe to ensure it's genuinely delayed.
+
+3. Contact Customer Support: If there are no updates and the package is delayed beyond the expected delivery window, reach out to Hey Harper's customer support at info@heyharper.com for assistance.
+
+4. Ensure Correct Contact Information: Double-check that your contact information is correct so the courier or customer service can reach you if necessary.
+
+5. Be Patient: Sometimes delays happen due to unforeseen circumstances, such as weather or an influx in demand.
+
+Remember, Hey Harper advises customers to contact their Customer Support Team if the delivery times are not met.
+
+Q: How long does it take to receive shipping confirmation?
+A: IDontKnow
+
+Q: Explain what to do if you entered the wrong shipping information before the order has been shipped.
+A: If you have entered the wrong shipping information before the order has been shipped, it is recommended to send an email to info@heyharper.com as soon as possible with your request to update the shipping details. Include the order number, the incorrect information, and the correct shipping details in your email. If the request is received before the order is processed, there may be a chance to amend the details; however, if the order has already been dispatched, changes may not be possible.
+
+Q: Explain what to do if you entered the wrong shipping information after the order has been shipped.
+A: IDontKnow
+
+Q: Explain what to do if the order was returned to the company because the apartment number was not included in the delivery address.
+A: IDontKnow
+
+Q: Explain what a customer should do if they receive the wrong product.
+A: If a customer receives the wrong product, they should follow these steps:
+
+1. **Inspection Upon Receipt**: Immediately upon receiving the order, inspect the package and the products.
+
+2. **Report the Issue**: If the wrong product was received, contact Hey Harper's Customer Service promptly (contact details unavailable in provided text).
+
+3. **Timing**: Report any issues until 5 working days after receipt of the order.
+
+4. **Customer Service Response**: Customer Service will analyze the issue.
+
+5. **Resolution**: If it's deemed that the fault was Hey Harper's or the carrier’s, Hey Harper will replace the item with the correct product or provide a refund.
+
+6. **Return Incorrect Item**: Follow instructions from Customer Service if required to return the incorrect item.
+
+This process is in line with Hey Harper's customer service policies for handling delivery anomalies.
+
+Q: Explain what a customer should do if they receive the wrong color product or if they say the color looks different from what was advertised.
+A: If a customer receives the wrong color product or finds that the color looks different from what was advertised, they should contact Hey Harper's Customer Service team promptly. They can do so by reaching out via email at info@heyharpershop.com. The customer should provide details of the issue, preferably with a clear photo showing the color discrepancy. Hey Harper will evaluate the issue reported and, if it is determined that the discrepancy was their fault or due to the carrier, they will either replace the item or offer a refund, depending on the customer's preference.
+
+Q: Explain what to do if you only received one earring.
+A: If you only received one earring, you should promptly contact Hey Harper's Customer Service to report the issue. Ensure to do this within 5 working days after receipt. Provide details such as your order number and any necessary photos to support your claim. Hey Harper's Customer Service will then review the issue, and if they determine it's their error, they will either send out a replacement earring or issue a refund according to your preference.
+
+Q: Explain what to do if a package arrived late.
+A: If a package arrives late, and there are no recent updates on your tracking number, Hey Harper suggests contacting their Customer Support Team via email at info@heyharper.com. It's important to note that the delivery times are only estimates and not guarantees, so you might not be eligible for a refund or discount solely due to delivery delays.
+
+Q: Explain what to do if a product was damaged.
+A: If a product was damaged, you should:
+
+1. Verify the order and products upon receipt. If any damage or anomaly is detected upon delivery, refuse the delivery and contact Hey Harper’s Customer Service immediately.
+   
+2. If damage or anomaly is detected after receipt, report it to Customer Service within 5 working days.
+
+3. Customer Service will analyze the issue. If the damage is deemed the fault of Hey Harper or the carrier, Hey Harper will replace the item or refund the purchase, based on your preference.
+
+Q: Explain how to track an order.
+A: To track an order, follow these steps:
+
+1. **Order Confirmation**: Once your order is placed, you will receive a confirmation email with your order number.
+   
+2. **Shipping Notification**: When your order is shipped, you will get another email that includes a shipping confirmation and a tracking link.
+
+3. **Using the Tracking Link**: Follow the tracking link provided in the shipping confirmation email to view the current status and location of your package on the courier’s platform.
+
+4. **Check Your Account**: If you have an account on the seller's website, log in to see your order details and track the progress in your order history section.
+
+5. **Email Enquiries**: If you do not receive these emails or need further assistance, you can contact the customer support team at info@heyharper.com with your order number and personal details.
+
+6. **Recheck**: Ensure to check your spam/junk email folders in case the emails are inadvertently filtered there.
+
+If you face any issues, reaching out to customer support with the necessary details will help resolve them.
+
+Q: Explain about your domestic return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: Explain about your international return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: How much time does international return delivery normally take?
+A: IDontKnow
+
+Q: Explain the process for returning only one of a pair of articles.
+A: IDontKnow
+
+Q: Explain how returns work for products.
+A: 1. Customers have 14 days from the receipt of the order to request a return. 
+2. Exclusions apply for products not suitable for return due to health protection or hygiene reasons, such as unsealed products or personalized items.
+3. To initiate a return, customers should use Hey Harper's returns portal online to acknowledge the return and potentially receive a return label, depending on their location.
+4. If a return label isn’t provided, customers must register the return on the portal and ship the item back at their own expense.
+5. Products must be in original condition, including packaging, accessories, and manuals, and returned within 14 days of initiating the return request.
+6. Refunds are processed through the original payment method within 14 days, excluding delivery costs.
+7. Certain considerations apply to points in the loyalty rewards program if points were used to make the purchase.
+
+Q: Explain where to find the product return status.
+A: To find the product return status on the Hey Harper website, customers should visit the "Returns & Exchanges" section and use the return portal by entering their order number and relevant details such as email, zip, or phone to track their return.
+
+Q: Explain the main points of your product exchange policy.
+A: IDontKnow
+
+Q: Explain how much time the product exchange process normally takes.
+A: IDontKnow
+
+Q: Explain how to exchange jewelry products.
+A: To exchange jewelry products with Hey Harper, follow these steps:
+
+1. **Initiate Exchange Request**: 
+   - Enter the Hey Harper returns portal available on their website.
+   - Provide necessary details like order number and email or other identification inputs as required.
+
+2. **Return Shipping**:
+   - If a return label is available for your country, it will be provided by Hey Harper. Use this label to ship back the item.
+   - If a return label isn’t available in your location, you must register the return on Hey Harper's platform and ship the item back at your own expense.
+
+3. **Condition of Products**:
+   - Ensure the jewelry is returned in its original condition, suitable for resale. This means the product should not be damaged, altered, or show signs of wear and should include original packaging and any accessories.
+
+4. **Processing Time**:
+   - Once Hey Harper receives the jewelry in their warehouse, they will process the exchange.
+
+Note: Ensure you adhere to the specific exchange and returns policies and deadlines stated by Hey Harper, as exchanges might vary based on individual policies or product types.
+
+Q: Explain any situations (and the charges) where you charge for exchanges of a discounted jewelry product.
+A: IDontKnow
+
+Q: Explain what to do if you have not received any instructions when making an exchange.
+A: If you have not received any instructions when making an exchange, you should reach out to Hey Harper's Customer Service for guidance. You can contact them via email at info@heyharper.com. Make sure to provide them with details about your order and any specific issues you're experiencing to receive the appropriate assistance.
+
+Q: Explain what to do if the return portal is closed when making an exchange.
+A: IDontKnow
+
+Q: Explain what to do if the order is not found when making an exchange.
+A: IDontKnow

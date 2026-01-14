@@ -1,0 +1,268 @@
+Q: What products do you sell?
+A: IDontKnow
+
+Q: Do you sell bracelets?
+A: IDontKnow
+
+Q: Do you sell rings?
+A: IDontKnow
+
+Q: Do you sell dresses?
+A: Answer: Yes
+
+Q: Apart from rings, bracelets, and earrings, what other products do you offer?
+A: IDontKnow
+
+Q: What payment methods do you offer?
+A: Credit card, debit card, Klarna, Apple Pay, Google Pay, Shop Pay, PayPal.
+
+Q: Is it possible to pay with VISA?
+A: Yes
+
+Q: Is it possible to pay with multiple credit cards?
+A: No
+
+Q: Apart from VISA, AMEX, and PayPal, what other payment methods do you offer?
+A: Answer: Klarna, Apple Pay, Google Pay, Shop Pay, Credit Card, Debit Card
+
+Q: Explain the domestic return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for domestic return delivery?
+A: IDontKnow
+
+Q: Explain the international return delivery process, including details of the time and cost.
+A: IDontKnow
+
+Q: What is the fee for international return delivery?
+A: IDontKnow
+
+Q: What is the process to return a product?
+A: Answer: To return a product, the item must be in a condition suitable for resale. Once the product is received and processed at the warehouse, a refund, store credit, or exchange will be issued.
+
+Q: Which products, if any, require a different return process?
+A: IDontKnow
+
+Q: Explain where your offices are located.
+A: IDontKnow
+
+Q: Do you have physical stores that customers can visit?
+A: IDontKnow
+
+Q: Explain how to review and change the language preferences.
+A: IDontKnow
+
+Q: Explain how to navigate the website.
+A: IDontKnow
+
+Q: Explain what a customer should do if your website is unresponsive.
+A: IDontKnow
+
+Q: Explain how to purchase only one product.
+A: IDontKnow
+
+Q: Explain how to purchase bracelet products.
+A: IDontKnow
+
+Q: Explain where to find the terms and conditions.
+A: Answer: To find the terms and conditions, visit Hey Harper's page where they publish their Terms & Conditions document. It is recommended to check this document regularly for any changes.
+
+Q: Explain how to add a user account.
+A: IDontKnow
+
+Q: Explain how to review and change the password.
+A: IDontKnow
+
+Q: Do you offer personalized products?
+A: Answer: IDontKnow
+
+Q: Do you offer digital gift vouchers?
+A: IDontKnow
+
+Q: Enter a general description of your products.
+A: IDontKnow
+
+Q: Describe the quality and reasons for the quality of your necklace products.
+A: IDontKnow
+
+Q: Describe the range of prices of your products.
+A: IDontKnow
+
+Q: Describe the sizes your products are available in.
+A: IDontKnow
+
+Q: Explain how to select the correct size of your products.
+A: To select the correct size of swimwear products, follow these steps: First, check the sizing guide available on the swimwear's product pages. Make sure to review all available information about the product. If you have any questions or need further assistance with sizing, contact the team via chat or email at info@heyharper.com before making a purchase.
+
+Q: Explain the general traits of your products.
+A: IDontKnow
+
+Q: Explain what is covered by the warranty that comes with your products.
+A: IDontKnow
+
+Q: Is an extended warranty offered on your products?
+A: IDontKnow
+
+Q: Enter a text about the products you recommend in general.
+A: IDontKnow
+
+Q: Enter a text about the more modern style products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the more traditional jewelry products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a child.
+A: IDontKnow
+
+Q: Enter a text about the low-cost products you recommend for a girlfriend.
+A: IDontKnow
+
+Q: Explain which products are especially suitable for formal occasions.
+A: IDontKnow
+
+Q: Explain which products are especially suitable for the beach.
+A: IDontKnow
+
+Q: Explain what to do if a product is out of stock.
+A: IDontKnow
+
+Q: Explain how to replace the chain of a product.
+A: IDontKnow
+
+Q: Describe what the products come with.
+A: IDontKnow
+
+Q: Explain if the product comes with a gift box.
+A: Answer: IDontKnow
+
+Q: Explain how your products can be modified.
+A: IDontKnow
+
+Q: Explain if/how to engrave your jewelry products.
+A: IDontKnow
+
+Q: Enter a response to use if the customer has a general complaint about your products.
+A: Answer: Thank you for bringing this to our attention. Customer Service will conduct a thorough analysis of the issue reported. If necessary, we will analyze the product further to determine the best course of action for a substitution or a refund.
+
+Q: Explain what to do if the product has not been received.
+A: IDontKnow
+
+Q: Explain what to do if a product is losing quality.
+A: IDontKnow
+
+Q: Explain what to do if a product keeps breaking.
+A: Answer: If a product keeps breaking, you should provide photos or videos showing the broken item to assess the warranty and to activate it. If the product is confirmed to be defective or non-conforming, it can be returned free of charge.
+
+Q: Explain what to do if a product is peeling off.
+A: IDontKnow
+
+Q: Explain what to do if a product is too tight.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery time, please summarize for your domestic shipping options.
+A: IDontKnow
+
+Q: Provide a summary of all your domestic shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: Provide a summary of all your international shipping options, including details of the delivery times and costs.
+A: IDontKnow
+
+Q: For when customers specifically ask about delivery costs, please summarize for your international standard delivery options.
+A: IDontKnow
+
+Q: Explain if/how you ship to any state.
+A: Answer: IDontKnow
+
+Q: Explain where to find the delivery status.
+A: IDontKnow
+
+Q: Explain what to do if the delivery status has not changed for a while.
+A: IDontKnow
+
+Q: How long does it take to receive shipping confirmation?
+A: IDontKnow
+
+Q: Explain what to do if you entered the wrong shipping information before the order has been shipped.
+A: If you entered the wrong shipping information before the order has been shipped, you should contact customer service as soon as possible to update the delivery address. Specifically, you can reach out to them via info@heyharper.com before the order is dispatched.
+
+Q: Explain what to do if you entered the wrong shipping information after the order has been shipped.
+A: IDontKnow
+
+Q: Explain what to do if the order was returned to the company because the apartment number was not included in the delivery address.
+A: IDontKnow
+
+Q: Explain what a customer should do if they receive the wrong product.
+A: The customer should refuse the delivery if they detect any damage or anomaly in the package or product. They should also promptly contact Hey Harper’s Customer Service to report the issue.
+
+Q: Explain what a customer should do if they receive the wrong color product or if they say the color looks different from what was advertised.
+A: If a customer receives the wrong color product or if the color looks different from what was advertised, they should contact customer support and provide a visible picture of the jewelry item showing the color issue.
+
+Q: Explain what to do if you only received one earring.
+A: IDontKnow
+
+Q: Explain what to do if a package arrived late.
+A: IDontKnow
+
+Q: Explain what to do if a product was damaged.
+A: If a product was damaged, the following steps should be taken:
+
+1. If damage or anomaly is detected, refuse the delivery.
+2. Ensure that the product is returned in conditions suitable for resale.
+3. Promptly contact Hey Harper's Customer Service to report the damage or anomaly upon delivery.
+
+Q: Explain how to track an order.
+A: Answer: To track an order with Hey Harper, follow these steps:
+
+1. Receive a tracking link: Look for the tracking link provided by Hey Harper on the order dispatch confirmation email or the notification you receive.
+
+2. Access the courier's platform: Click on the tracking link to direct you to the courier’s platform responsible for delivering your package.
+
+3. Follow the package: Use the tracking information provided to monitor the progress of your package delivery on the courier's platform.
+
+Q: Explain about your domestic return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: Explain about your international return delivery, including details of the time and cost.
+A: IDontKnow
+
+Q: How much time does international return delivery normally take?
+A: Answer: Allow up to 20 business days for the return package to reach Hey Harper's address depending on location.
+
+Q: Explain the process for returning only one of a pair of articles.
+A: IDontKnow
+
+Q: Explain how returns work for products.
+A: To return a product, the customer must ensure it is in a condition suitable for resale. They then need to register the return on the merchant’s returns platform, where they will receive the return address. Finally, the customer must ship the item back at their own expense.
+
+Q: Explain where to find the product return status.
+A: IDontKnow
+
+Q: Explain the main points of your product exchange policy.
+A: Answer: The main points of the product exchange policy are as follows:
+
+1. Products must be returned in conditions suitable for resale.
+2. The product must have been purchased to be eligible for review.
+3. Hey Harper will analyze the returned product, and the customer will either receive a substitution or a refund based on this analysis.
+
+Q: Explain how much time the product exchange process normally takes.
+A: IDontKnow
+
+Q: Explain how to exchange jewelry products.
+A: IDontKnow
+
+Q: Explain any situations (and the charges) where you charge for exchanges of a discounted jewelry product.
+A: IDontKnow
+
+Q: Explain what to do if you have not received any instructions when making an exchange.
+A: IDontKnow
+
+Q: Explain what to do if the return portal is closed when making an exchange.
+A: IDontKnow
+
+Q: Explain what to do if the order is not found when making an exchange.
+A: IDontKnow

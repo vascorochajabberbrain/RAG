@@ -27,20 +27,33 @@ class Collection:
         
         if self._point_index(qdrant_points[0]) is not None:
             print("It is an ordered collection")
-            self.items = [None] * len(qdrant_points)  # Preallocate list with None
+            return self.init_from_qdrant_ordered(qdrant_points)
         else:
             print("It is an unordered collection")
-            self.items = []
+            return self.init_from_qdrant_unordered(qdrant_points)
+    
+    def init_from_qdrant_ordered(self, qdrant_points):
+        self.items = [None] * len(qdrant_points)  # Preallocate list with None
+        has_collection_data = self._check_collection_data_in_payload(qdrant_points[0])
+        print(f"has_collection_data: {has_collection_data}")
         for qdrant_point in qdrant_points:
-            #print(qdrant_point)
-            if self._point_index(qdrant_point) is None:
-
-                self.append_item(self.init_item_from_qdrant(self._get_only_point_data_from_payload(qdrant_point)))
-            else:
+            if has_collection_data: # if it has collection data, the point data has its own key on the payload
                 self.add_item(self._point_index(qdrant_point), self.init_item_from_qdrant(self._get_only_point_data_from_payload(qdrant_point)))
-        
+            else: # if it doesn't have collection data, the point data is in the payload itself
+                self.add_item(self._point_index(qdrant_point), self.init_item_from_qdrant(qdrant_point))
         return self
-
+    
+    def init_from_qdrant_unordered(self, qdrant_points):
+        self.items = []
+        has_collection_data = self._check_collection_data_in_payload(qdrant_points[0])
+        print(f"has_collection_data: {has_collection_data}")
+        for qdrant_point in qdrant_points:
+            if has_collection_data: # if it has collection data, the point data has its own key on the payload
+                self.append_item(self.init_item_from_qdrant(self._get_only_point_data_from_payload(qdrant_point)))
+            else: # if it doesn't have collection data, the point data is in the payload itself
+                self.append_item(self.init_item_from_qdrant(qdrant_point))
+        return self
+    
     @abstractmethod
     def init_item_from_qdrant(self, point_data):
         pass
@@ -156,6 +169,14 @@ class Collection:
             "point": point_payload
         }
     
+    def _check_collection_data_in_payload(self, point_payload):
+        #there was an update where collection data was added to the payload, prior to that all payload had point data
+        #making it unecessary to call _get_only_point_data_from_payload
+        if "collection" in point_payload:
+            return True
+        else:
+            return False
+
     def _get_only_point_data_from_payload(self, point_payload):
         return point_payload["point"]
     
@@ -163,8 +184,13 @@ class Collection:
         """
         Get the index of the point from the payload.
         """
-        print(f"The _point_index output is {point_payload['point'].get('idx', None)}")
-        return point_payload["point"].get("idx", None)
+        has_collection_data = self._check_collection_data_in_payload(point_payload)#same story of adapting to collections that don't have collection data at any point
+        if has_collection_data:
+            print(f"The _point_index output is {point_payload['point'].get('idx', None)}")
+            return point_payload["point"].get("idx", None)
+        else:
+            print(f"The _point_index output is {point_payload.get('idx', None)}")
+            return point_payload.get("idx", None)
     
     def _check_index(self, idx):
         """

@@ -1,3 +1,4 @@
+import time
 from my_collections.SCS_Collection import SCS_Collection
 from my_collections.groupCollection import GroupCollection
 from llms.openai_utils import openai_chat_completion
@@ -5,6 +6,8 @@ from llms.openai_utils import openai_chat_completion
 
 def grouping(sc: SCS_Collection, gc: GroupCollection):
     """Groups SCSs from the SCS_Collection into the GroupCollection based on some criteria."""
+    start_time = time.time()
+
     
     for scs in sc.get_all_scss():
 
@@ -32,7 +35,7 @@ def grouping(sc: SCS_Collection, gc: GroupCollection):
         
         possible_answers = gc.unfull_groups_indexes(scs)
         if not gc.collection_is_full(scs):
-            possible_answers[0].append(-1)
+            possible_answers.append(-1)
         
         groups_part_of_text = f"""Groups:{gc.to_string(gc.unfull_groups_indexes(scs))}"""
 
@@ -42,12 +45,11 @@ def grouping(sc: SCS_Collection, gc: GroupCollection):
 
                 So, possible answers are: {possible_answers}"""
         
+        text = f"{groups_part_of_text}\n{readable_text_to_print}"
         print(f"Grouping: sending: {text}")
 
-        text = f"{groups_part_of_text}\n{readable_text_to_print}"
         llm_response = openai_chat_completion(prompt, text)
-        
-        print(f"Grpuping: LLM response: {llm_response}")
+        print(f"Grouping: LLM response: {llm_response}")
         
         #repeat until the LLM ansers a valid response, this is dangerous though
         while True:
@@ -67,9 +69,11 @@ def grouping(sc: SCS_Collection, gc: GroupCollection):
 
         
     print("Grouping: Creating descriptions for all groups...")
-    gc.create_all_descriptions()
+    #gc.create_all_descriptions()
 
+    end_time = time.time()
     print("Grouping: Done.")
+    print(f"Elapsed time measured locally: {end_time - start_time:.2f} seconds")
 
 def check_valid_llm_response(response):
     try:
