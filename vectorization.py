@@ -3,7 +3,8 @@ from langchain_text_splitters import CharacterTextSplitter
 from qdrant_client.http.models import PointStruct
 import uuid
 
-import langchainhub
+from pydantic import BaseModel
+#import langchainhub
 
 from llms.openai_utils import get_openai_client
 from qdrant_utils import create_collection, insert_points
@@ -34,13 +35,20 @@ def get_text_chunks(text, additional_prompt=None):
         Output: [ "The earliest evidence for the Easter Hare was recorded in south-west Germany in 1678 by Georg Franck von Franckenau.", "Georg Franck von Franckenau was a professor of medicine.", "The evidence for the Easter Hare remained unknown in other parts of Germany until the 18th century.", "Richard Sermon was a scholar.", "Richard Sermon writes a hypothesis about the possible explanation for the connection between hares and the tradition during Easter", "Hares were frequently seen in gardens in spring.", "Hares may have served as a convenient explanation for the origin of the colored eggs hidden in gardens for children.", "There is a European tradition that hares laid eggs.", "A hare’s scratch or form and a lapwing’s nest look very similar.", "Both hares and lapwing’s nests occur on grassland and are first seen in the spring.", "In the nineteenth century the influence of Easter cards, toys, and books was to make the Easter Hare/Rabbit popular throughout Europe.", "German immigrants exported the custom of the Easter Hare/Rabbit to Britain and America.", "The custom of the Easter Hare/Rabbit evolved into the Easter Bunny in Britain and America."]
     Adversarial Examples (examples that should not be generated):
         "This process causes the boil to become filled with pus." - What process? It feels like it is refering to a previously mentioned process but on its own it is not clear what is refering to'''
+
+    # Define the structure you want
+    class PropositionList(BaseModel):
+        propositions: list[str]
+    
     if additional_prompt is not None:
         prompt += f"\nAdditionally:\n{additional_prompt}"
-    completion = openai_client.chat.completions.create(
+    completion = openai_client.beta.chat.completions.parse(
         model="gpt-4o",
         messages= [{"role": "system", "content": prompt},
-                   {"role": "user", "content": text}]
+                   {"role": "user", "content": text}],
+        response_format=PropositionList
         )
+    
     #print(completion.choices[0].message.content)
     end_time = time.time()
     print(f"Chunking took: {end_time - start_time:.2f} seconds")
