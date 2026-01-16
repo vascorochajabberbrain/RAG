@@ -1,9 +1,9 @@
 import time
-from langchain.text_splitter import CharacterTextSplitter
+from langchain_text_splitters import CharacterTextSplitter
 from qdrant_client.http.models import PointStruct
 import uuid
 
-from langchain import hub
+import langchainhub
 
 from llms.openai_utils import get_openai_client
 from qdrant_utils import create_collection, insert_points
