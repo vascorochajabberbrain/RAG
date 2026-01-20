@@ -26,7 +26,7 @@ def clean_json_response(text):
         text = text[:-len("```")].strip()
     return text
 
-def openai_chat_completion(prompt, text, model="gpt-4o"):
+def openai_chat_completion(prompt, text, model="gpt-4o-mini"):
     start_time = time.time()
     """
     Function to get a chat completion from OpenAI's API.
