@@ -41,7 +41,7 @@ def get_text_chunks(text, additional_prompt=None):
     if additional_prompt is not None:
         prompt += f"\nAdditionally:\n{additional_prompt}"
     completion = openai_client.beta.chat.completions.parse(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         messages= [{"role": "system", "content": prompt},
                    {"role": "user", "content": text}]
         )
