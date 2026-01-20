@@ -4,7 +4,7 @@ from vectorization import get_text_chunks, get_embedding, insert_data, create_ba
 
 
 def read_data_from_pdf():
-  pdf_path = 'ingestion/data_to_ingest/pdfs/MI_peixes_osseos_costa.cont.portuguesa.pdf'
+  pdf_path = 'ingestion/data_to_ingest/pdfs/caderno_de_receitas_do_mar.pdf'
   text = "" # for storing the extracted text
   with open(pdf_path, 'rb') as file:
     pdf_reader = PdfReader(file)
