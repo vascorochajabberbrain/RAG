@@ -24,8 +24,8 @@ def ingestion_menu(collection: SCS_Collection):
                 #for now the everything is done inside the function... even the name of the collection
                 csv_ingestion(collection)
             case "pdf":
-                chunks = pdf_ingestion()
-                collection.append_sentences(chunks)
+                chunks, source = pdf_ingestion()
+                collection.append_sentences(chunks, source)
             case "txt":
                 chunks = txt_ingestion()
                 collection.append_sentences(chunks)

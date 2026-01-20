@@ -3,8 +3,8 @@ from PyPDF2 import PdfReader
 from vectorization import get_text_chunks, get_embedding, insert_data, create_batches_of_text
 
 
-def read_data_from_pdf():
-  pdf_path = 'ingestion/data_to_ingest/pdfs/caderno_de_receitas_do_mar.pdf'
+def read_data_from_pdf(path):
+  pdf_path = path
   text = "" # for storing the extracted text
   with open(pdf_path, 'rb') as file:
     pdf_reader = PdfReader(file)
@@ -15,12 +15,14 @@ def read_data_from_pdf():
 
 
 def main():
-  text=read_data_from_pdf()
+  pdf_path = 'ingestion/data_to_ingest/pdfs/'
+  pdf_source = 'caderno_de_receitas_do_mar.pdf'
+  text=read_data_from_pdf(pdf_path + pdf_source)
   batches = create_batches_of_text(text, 1000, 100)
   chunks = []
   for batch in batches:
       chunks += get_text_chunks(batch)
-  return chunks
+  return chunks, pdf_source
   #vectors=get_embedding(chunks)
   #insert_data(vectors)
 
