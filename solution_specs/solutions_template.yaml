@@ -1,0 +1,14 @@
+# Copy this block into solutions.yaml (under the "solutions:" list) for each new RAG solution.
+# When you run the workflow or chatbot, you point it to one solution (by id or alias).
+
+# - id: my_new_solution          # unique key (e.g. my_client_faq)
+#   display_name: My Client FAQ  # human-readable name
+#   collection_name: my_client_faq   # Qdrant collection name
+#   company_name: My Client      # used in chatbot prompt ("virtual assistant of …")
+#   collection_type: scs        # scs | group
+#   scraper_name: peixefresco   # optional; for URL ingestion (must exist in ingestion/scrapers/configs/)
+#   aliases: ["mc", "faq"]      # optional; shortcuts for selection (e.g. "1", "FAQ")
+#   # chunking_defaults:        # optional
+#   #   batch_size: 10000
+#   #   overlap_size: 100
+#   #   use_proposition_chunking: true

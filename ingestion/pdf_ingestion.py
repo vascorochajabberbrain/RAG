@@ -14,6 +14,33 @@ def read_data_from_pdf(path):
   return text
 
 
+def read_from_pdf(path: str, silent: bool = False) -> str:
+    """
+    Extract raw text from a PDF file. Use this from the workflow.
+    If silent=True, does not print the extracted text.
+    """
+    text = ""
+    with open(path, "rb") as f:
+        reader = PdfReader(f)
+        for page in reader.pages:
+            text += page.extract_text() or ""
+    if not silent:
+        print(text)
+    return text
+
+
+def run_pdf_pipeline(path: str, batch_size: int = 10000, overlap: int = 100):
+    """Read PDF, chunk with LLM, return (chunks, source_label)."""
+    text = read_from_pdf(path, silent=True)
+    batches = create_batches_of_text(text, batch_size, overlap)
+    chunks = []
+    for batch in batches:
+        chunks += get_text_chunks(batch)
+    import os
+    source_label = os.path.basename(path)
+    return chunks, source_label
+
+
 def main():
   pdf_path = 'ingestion/data_to_ingest/pdfs/'
   pdf_source = 'caderno_de_receitas_do_mar.pdf'

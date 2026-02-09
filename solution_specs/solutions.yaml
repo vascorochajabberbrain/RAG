@@ -1,0 +1,45 @@
+# Solution specifications: one entry per RAG solution / bot / collection.
+# Code reads from here; later this can be replaced by a DB with the same schema.
+
+solutions:
+  - id: hey_harper_1
+    display_name: Hey Harper
+    collection_name: hey_harper_1
+    company_name: Hey Harper
+    collection_type: scs
+    aliases: ["1"]
+
+  - id: en_route_faq
+    display_name: En Route FAQ
+    collection_name: en_route_FAQ
+    company_name: En Route
+    collection_type: scs
+    aliases: ["FAQ", "faq"]
+
+  - id: first_shopify_test_store
+    display_name: First Shopify Test Store
+    collection_name: first_shopify_test_store
+    company_name: First Shopify Test Store
+    collection_type: scs
+    aliases: ["fsts"]
+
+  - id: hey_harper_ps
+    display_name: Hey Harper (product subscription)
+    collection_name: hey_harper_product_subscriptio_alpha
+    company_name: Hey Harper
+    collection_type: scs
+    aliases: ["ps"]
+
+  - id: hey_harper_ps_grouped
+    display_name: Hey Harper (PS with grouping)
+    collection_name: hh_ps_w_grouping
+    company_name: Hey Harper
+    collection_type: group
+    aliases: ["pswg"]
+
+  - id: peixefresco
+    display_name: Peixe Fresco Recipes
+    collection_name: peixefresco
+    company_name: Peixe Fresco
+    collection_type: scs
+    scraper_name: peixefresco

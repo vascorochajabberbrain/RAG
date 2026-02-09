@@ -1,3 +1,19 @@
+def read_txt_as_text(filename: str) -> str:
+    """
+    Read a text file and return its full content as a single string.
+    Use this from the workflow when source_type is txt.
+    """
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        print(f"Error: The file '{filename}' was not found.")
+        return ""
+    except Exception as e:
+        print(f"Error reading file: {e}")
+        return ""
+
+
 def txt_lines_as_an_array(filename):
     """
     Reads a text file and returns a list of non-empty lines as strings.

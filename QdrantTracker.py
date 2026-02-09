@@ -91,25 +91,29 @@ class QdrantTracker:
         print(f"QdrantTracker: Collection: {collection_name} is open.")
         return collection
     
-    def new(self, collection_name):
+    def new(self, collection_name=None, collection_type=None):
         """
         Create a new collection with the given name.
+        If collection_type is None, prompts user for type (interactive).
+        For workflow/API use, pass collection_type to avoid prompts (e.g. 'scs' or 'group').
         """
         if collection_name is None:
             collection_name = input("Insert the name of the collection:")
-        
+
         if self._existing_collection_name(collection_name):
             print(f"QdrantTracker: Collection {collection_name} already exists. Going to execute the open method...")
             return self.open(collection_name)
-        
-        while True:
-            collection_type = input(f"""From the options: {', '.join(COLLECTIONS_TYPES_MAP.keys())}\nEnter the type of the collection you want: """)
-        
-            if collection_type not in COLLECTIONS_TYPES_MAP:
-                print(f"QdrantTracker: Invalid collection type.")
-                continue
-            break
-        
+
+        if collection_type is None:
+            while True:
+                collection_type = input(f"""From the options: {', '.join(COLLECTIONS_TYPES_MAP.keys())}\nEnter the type of the collection you want: """)
+                if collection_type not in COLLECTIONS_TYPES_MAP:
+                    print("QdrantTracker: Invalid collection type.")
+                    continue
+                break
+        elif collection_type not in COLLECTIONS_TYPES_MAP:
+            raise ValueError(f"Invalid collection type: {collection_type}. Must be one of {list(COLLECTIONS_TYPES_MAP.keys())}")
+
         print(f"QdrantTracker: Creating new collection {collection_name}...")
         self._create_collection(collection_name)
 

@@ -1,0 +1,119 @@
+# RAG Project Overview
+
+## Summary
+
+This is a project that creates and maintains RAG (Retrieval-Augmented Generation) for our chat bot, either from PDF or by scraping a web site. Data is extracted, processed into semantic chunks, embedded, stored in Qdrant, and used to answer user questions via an LLM.
+
+---
+
+## Architecture
+
+### 1. Ingestion (Data Sources)
+
+- **PDF ingestion** (ingestion/pdf_ingestion.py): Extracts text from PDFs via PyPDF2, then processes in batches.
+- **Web scraping** (ingestion/url_ingestion.py): Uses Selenium to crawl websites (e.g., Peixe Fresco recipes, Hey Harper). Handles dynamic content (clicks accordion toggles), follows links, filters out product listings and influencer tags.
+- **Text** (ingestion/txt_ingestion.py) and **CSV** (ingestion/csv_ingestion.py): Additional ingestion paths.
+
+### 2. Chunking & Vectorization
+
+- **vectorization.py**:
+  - **Chunking**: Uses an LLM (GPT-4o-mini) to decompose text into clear, self-contained propositions instead of fixed-size chunks.
+  - **Embedding**: Uses OpenAI text-embedding-ada-002.
+  - **Storage**: Creates points (vector + payload) and inserts them into Qdrant.
+
+### 3. Vector Database (Qdrant)
+
+- **qdrant_utils.py**: Handles connection, collection creation (1536-dim vectors, cosine similarity), insert/delete/query operations.
+- Collections are named per use case (e.g., Hey Harper, En Route FAQ, Peixe Fresco).
+
+### 4. Grouping (Optional)
+
+- **grouping.py**: Groups semantically similar sentences (SCSs) into clusters using an LLM classifier, with optional group descriptions.
+
+### 5. Query / Chatbot
+
+- **chatbot.py**:
+  1. **Query rewriting**: improve_query() rewrites the user question into a self-contained form using conversation history.
+  2. **Retrieval**: Embeds the rewritten query, searches Qdrant, returns top 3 chunks.
+  3. **Answer generation**: Feeds retrieved chunks + question to GPT-4o with a system prompt defining the assistant persona (e.g., Hey Harper e-commerce).
+- **onboarding_answering.py**: Runs batch questions against scraped text or a collection (yes/no, lists, processes) for testing/onboarding.
+
+### 6. Entry Point
+
+- **initial_menu.py**: Main CLI for creating/opening collections, ingesting data, running grouping, and managing the Qdrant setup.
+
+### 7. Solution specifications (solution_specs/)
+
+- **solution_specs/solutions.yaml**: All solution-specific config in one place: collection name, company/assistant name, scraper, optional chunking defaults, aliases (e.g. "1", "FAQ").
+- **solution_specs/loader.py**: Loads specs and exposes get_solution(id), list_solutions(), resolve_alias(alias). Code stays generic; later the same schema can be loaded from a DB.
+- **chatbot.py** (and workflow/API) resolve collection/company via solution_specs so new solutions only require an entry in solutions.yaml.
+
+---
+
+## Data Flow
+
+PDF / URL / Text  →  Extract text  →  LLM chunking  →  Embeddings  →  Qdrant
+                                                                         ↓
+User question  →  Rewrite query  →  Embed  →  Similarity search  →  Top chunks  →  LLM  →  Answer
+
+---
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| initial_menu.py | Main entry point, collection management |
+| chatbot.py | Interactive Q&A using RAG |
+| vectorization.py | Chunking, embedding, point creation |
+| qdrant_utils.py | Qdrant client and operations |
+| ingestion/pdf_ingestion.py | PDF text extraction |
+| ingestion/url_ingestion.py | Web scraping with Selenium |
+| grouping.py | Semantic grouping of chunks |
+| onboarding_answering.py | Batch Q&A for testing |
+| solution_specs/solutions.yaml | Per-solution config (collection, company, scraper, aliases) |
+| solution_specs/loader.py | Load/list/resolve solutions (file now; DB later) |
+| web/app.py | Web UI: Build RAG + Chat (solution picker, no terminal) |
+| run_app.py | Launch web interface: python run_app.py (opens browser) |
+
+---
+
+## Review: Building a User-Friendly RAG Workflow (UX)
+
+### Current state
+
+- **What works well**: Qdrant connection and collections, embedding (OpenAI), LLM-based chunking and grouping, retrieval + answer pipeline, and collection types (SCS, group, group_sameSource) are in place and usable.
+- **What’s brittle**: Entry points are CLI-only (input prompts in initial_menu, ingestion_menu, SCS_Collection.menu). PDF ingestion has hardcoded paths; URL ingestion is one large, site-specific file (Peixe Fresco, Hey Harper) with hardcoded selectors, filters, and URLs. Each new site or new “click to display” / navigation challenge is solved by editing that file.
+- **What’s missing**: No explicit “workflow” (create → add source → scrape/fetch → clean → chunk → optional group → push → test). Chunking and grouping choices are buried in code; there’s no guided way to choose or tune them with AI help.
+
+### Recommendation: **Continue building on this project** (do not start from scratch)
+
+- The core (vectorization, qdrant_utils, chatbot, collection abstractions) is reusable and worth keeping. Rewriting from scratch would duplicate that work and risk regressions.
+- What you need is a **workflow and UX layer** on top, plus **scraping that can be adapted per site** (with your and AI’s help), not a new RAG engine.
+
+### Suggested evolution
+
+1. **Introduce a clear RAG workflow**
+   - Define steps: create/open collection → add source (PDF / URL / file) → fetch (for URL: run scraper) → optional clean → chunk → optional group → push to Qdrant → test Q&A.
+   - Implement this as a **pipeline** (e.g. a small workflow module or script) that calls existing code (ingestion, vectorization, grouping, qdrant_utils). Keep current menus as an alternative way to run the same steps.
+
+2. **Make the workflow user-friendly**
+   - Either:
+     - **Simple web UI**: Small app (e.g. Flask/FastAPI + minimal front end) that drives the workflow (forms, run step, show status, “review / edit with AI”), or
+     - **Guided CLI**: Step-by-step prompts with defaults and “run / review / get AI suggestion” at each step.
+   - The system does automated parts; you (or the user) do choices and reviews; the AI helps when stuck (e.g. “how should I chunk this?” or “this scrape failed, what to click?”).
+
+3. **Scraping: configurable per site, AI-assisted fixes**
+   - Refactor so that **site-specific behavior is not one giant url_ingestion.py**.
+   - For each site: a **scraper config** (or small script) that defines e.g. start URL, which links to follow, which elements to click before scraping (e.g. “Show more”, accordions), and optional text filters. The crawler engine (Selenium, etc.) runs from that config.
+   - When a new site or new challenge appears (new button, new layout): you describe it, and the AI proposes changes to the config or a small snippet. You paste/apply and re-run. That way “we do something, you help us” is natural and iterative.
+
+4. **Chunking and grouping: expose choices, AI can advise**
+   - Keep current LLM-based chunking and grouping as the default.
+   - In the workflow, add **simple options**: e.g. batch size/overlap for raw text, proposition-based vs simple split, whether to run grouping. When you’re unsure, a “suggest” step can ask the AI (with a short summary of the content type) to recommend settings; you confirm or override in the UX.
+
+### Summary
+
+- **Continue on this codebase.** Add a workflow layer and a friendlier UX (web or guided CLI) that call existing ingestion, vectorization, grouping, and Qdrant logic.
+- **Scraping**: Move toward per-site configs/scripts and an engine that runs them, so new “click to display” / navigation issues are fixed by editing config or small code with AI help.
+- **Chunking/grouping**: Keep current behavior, expose knobs in the workflow, and use the AI to suggest settings when needed.
+- The “system does stuff, we do something, you help us” loop fits this design: the system runs the pipeline steps; you trigger, review, and configure; the AI helps with scraper logic and chunking/grouping decisions.

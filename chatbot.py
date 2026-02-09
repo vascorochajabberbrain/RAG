@@ -80,35 +80,21 @@ Answer the user's query based on this data when applicable."""
 
 
 def main():
-    collection_name = input("Which collection should we use:")
-    match collection_name:
-        case "1":
-            collection_name = "hey_harper_1"
-            company = "Hey Harper"
-        case "FAQ" | "faq":
-            collection_name = "en_route_FAQ"
-            company = "En Route"
-        case "fsts":
-            collection_name = "first_shopify_test_store"
-            company = "First Shopify Test Store"
-        case "ps":
-            collection_name = "hey_harper_product_subscriptio_alpha"
-            company = "Hey Harper"
-        case "pswg":
-            collection_name = "hh_ps_w_grouping"
-            company = "Hey Harper"
-        case _:  # Default case (optional)
-            company = None  # Or any default behavior
-    '''
-    if collection_name == "1":
-        collection_name = "hey_harper_1"
-        company = "Hey Harper"
-    elif collection_name == "FAQ" or collection_name == "faq":
-        collection_name = "en_route_FAQ"
-        company = "En Route"
-    elif collection_name == "fsts":
-        collection_name = "first_shopify_test_store"
-        company = "First Shopify Test Store"'''
+    user_input = input("Which collection should we use (name or alias, e.g. 1, FAQ, peixefresco): ").strip()
+    try:
+        from solution_specs import resolve_alias, get_solution
+        solution = resolve_alias(user_input) or get_solution(user_input)
+        if solution:
+            collection_name = solution["collection_name"]
+            company = solution.get("company_name") or solution.get("display_name")
+        else:
+            collection_name = user_input
+            company = None
+    except Exception:
+        collection_name = user_input
+        company = None
+    if company is None:
+        company = "the assistant"
 
     conversation_file = f"""Conversation with bot retrieving from `{company}`\n
     Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\n

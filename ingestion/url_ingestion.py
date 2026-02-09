@@ -429,6 +429,30 @@ def remove_influencers_tags(text):
     cleaned_text = re.sub(pattern, "", text, flags=re.MULTILINE)
     return cleaned_text
 
+"""-------------Workflow-friendly crawl (returns raw text)-------------"""
+def run_peixefresco_crawl(options=None) -> str:
+    """
+    Run the Peixe Fresco recipe blog crawl and return raw text.
+    options: start_url, output_file (for resume), link_prefix (e.g. receitas).
+    """
+    options = options or {}
+    start_url = options.get("start_url", "https://store.peixefresco.com.pt/blog-de-receitas-peixe-fresco/")
+    filename = options.get("output_file", "ingestion/peixefresco.txt")
+    driver = setup_driver(start_url)
+    try:
+        existing_text, number_links_visited = read_and_split_last_line(filename)
+        n = int(number_links_visited) if number_links_visited else 0
+        if existing_text:
+            with open(filename, "w", encoding="utf-8") as f:
+                f.writelines(existing_text)
+        text = crawl(driver, start_url, n, filename)
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(text)
+        return text
+    finally:
+        driver.quit()
+
+
 """-------------Main functions-------------"""
 def crawl(driver, start_url, number_links_visited, filename):
     """ Recursively crawls through all clickable elements and extracts text. """
@@ -470,7 +494,7 @@ def crawl(driver, start_url, number_links_visited, filename):
             print("Count of visited URLs: ", len(visited_urls), " Current URL: ", url)
             with open(filename, 'a') as file:
                 file.write(new_text + "\n")
-            #text += "\n" + new_text
+            text += "\n" + new_text
             links_count += 1
         
         """
@@ -514,7 +538,7 @@ def main():
             
         filename = "ingestion/peixefresco.txt"
         #filename = "ingestion/aux_text_to_test_filters.txt"
-        """os.remove(filename)
+        #os.remove(filename)
         
         existing_text, number_links_visited = read_and_split_last_line(filename)
         if number_links_visited is None:
@@ -525,7 +549,13 @@ def main():
                 file.writelines(existing_text)
 
         text = crawl(driver, start_url, number_links_visited, filename)
-        """
+
+        print(text)
+        
+        # Write the  text to a new file
+        with open(filename, 'w') as file:
+            file.write(text)
+
 
         """
         # Process to filter the scraped text

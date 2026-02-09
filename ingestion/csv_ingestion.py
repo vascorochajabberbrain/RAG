@@ -1,4 +1,5 @@
 import sys
+import os
 
 import json
 import pandas as pd
@@ -33,6 +34,29 @@ def filter_non_condition_chunks(chunks, condition):
 
 def filter_boots_chunks(chunks, condition):
     chunks = filter_non_condition_chunks(chunks, condition)
+    return chunks
+
+
+def read_csv_to_chunks(path: str, config: dict = None) -> list:
+    """
+    Simple CSV → list of text chunks for the workflow.
+    config can include: text_columns (list of column names to join), or default is to use all columns as string.
+    Returns list of non-empty strings (one per row, or per cell if multiple text columns).
+    """
+    config = config or {}
+    df = pd.read_csv(path)
+    chunks = []
+    text_columns = config.get("text_columns")
+    if text_columns:
+        for _, row in df.iterrows():
+            parts = [str(row[c]) for c in text_columns if c in df.columns and pd.notna(row.get(c))]
+            if parts:
+                chunks.append(" ".join(parts))
+    else:
+        for _, row in df.iterrows():
+            parts = [str(v) for v in row.values if pd.notna(v) and str(v).strip()]
+            if parts:
+                chunks.append(" ".join(parts))
     return chunks
 
 

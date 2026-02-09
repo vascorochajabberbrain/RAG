@@ -1,0 +1,8 @@
+# Peixe Fresco recipe blog scraper
+# Used by workflow FETCH when source_type=url and scraper_name=peixefresco
+name: peixefresco
+legacy: true
+start_url: "https://store.peixefresco.com.pt/blog-de-receitas-peixe-fresco/"
+link_prefix: "https://store.peixefresco.com.pt/receitas"
+click_before_scrape: accordion
+output_file: "ingestion/peixefresco.txt"
