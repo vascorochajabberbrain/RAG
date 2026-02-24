@@ -1,0 +1,105 @@
+[2026-02-10T10:25:00] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-10T10:25:09] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-10T10:35:13] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-11T10:00:02] Qdrant keep-alive FAILED:
+Traceback (most recent call last):
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+        pool_request.request
+    )
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+    raise exc
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py", line 78, in handle_request
+    stream = self._connect(request)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py", line 124, in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py", line 207, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.13/3.13.2/Frameworks/Python.framework/Versions/3.13/lib/python3.13/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno 8] nodename nor servname provided, or not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/http/api_client.py", line 134, in send_inner
+    response = self._client.send(request)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+        request,
+    ...<2 lines>...
+        history=[],
+    )
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+        request,
+        follow_redirects=follow_redirects,
+        history=history,
+    )
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.13/3.13.2/Frameworks/Python.framework/Versions/3.13/lib/python3.13/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno 8] nodename nor servname provided, or not known
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/johanahlund/PROGRAMMING/RAG/keep_qdrant_alive.py", line 58, in ping_qdrant
+    collections = conn.get_collections()
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/qdrant_client.py", line 1521, in get_collections
+    return self._client.get_collections(**kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/qdrant_remote.py", line 1786, in get_collections
+    self.http.collections_api.get_collections().result
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/http/api/collections_api.py", line 330, in get_collections
+    return self._build_for_get_collections()
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/http/api/collections_api.py", line 159, in _build_for_get_collections
+    return self.api_client.request(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        type_=m.InlineResponse2003,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        headers=headers if headers else None,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/http/api_client.py", line 95, in request
+    return self.send(request, type_)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/http/api_client.py", line 112, in send
+    response = self.middleware(request, self.send_inner)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/http/api_client.py", line 250, in __call__
+    return call_next(request)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.venv/lib/python3.13/site-packages/qdrant_client/http/api_client.py", line 136, in send_inner
+    raise ResponseHandlingException(e)
+qdrant_client.http.exceptions.ResponseHandlingException: [Errno 8] nodename nor servname provided, or not known
+
+[2026-02-16T10:00:02] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-17T10:00:02] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-18T10:00:02] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-19T10:00:03] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-20T10:00:03] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-22T10:00:03] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-23T10:00:03] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
+[2026-02-24T10:00:03] Qdrant keep-alive OK. Collections: peixefresco, peixefresco_scs, test_connection, peixefresco_group, peixe_fresco

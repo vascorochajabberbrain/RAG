@@ -1,0 +1,8 @@
+---
+description: Project overview and purpose
+alwaysApply: true
+---
+
+# Project Info
+
+This is a project that creates and maintains RAG for our chat bot, either from PDF or by scraping a web site.

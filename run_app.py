@@ -14,6 +14,35 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
 
+# Load .env file if present
+_env_path = os.path.join(os.getcwd(), ".env")
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+
+
+def _kill_port(port):
+    """Kill any process listening on the given port."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+        )
+        pids = result.stdout.strip().split()
+        for pid in pids:
+            try:
+                os.kill(int(pid), 9)
+            except Exception:
+                pass
+        if pids:
+            time.sleep(0.8)  # give OS time to release the port
+    except Exception:
+        pass
+
 
 def main():
     try:
@@ -24,10 +53,14 @@ def main():
 
     host = "127.0.0.1"
     port = 8000
+
+    # Kill anything already on our port, then wait for it to free up
+    _kill_port(port)
+
     url = f"http://{host}:{port}"
 
     def open_browser():
-        time.sleep(1.2)
+        time.sleep(1.5)
         webbrowser.open(url)
 
     threading.Thread(target=open_browser, daemon=True).start()
