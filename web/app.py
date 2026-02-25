@@ -46,6 +46,13 @@ def reset_state():
 
 app = FastAPI(title="RAG Workflow API")
 
+# Serve PDF files so the browser can open them with #page=N fragment
+_PDF_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "ingestion", "data_to_ingest", "pdfs")
+if os.path.isdir(_PDF_DIR):
+    app.mount("/pdfs", StaticFiles(directory=_PDF_DIR), name="pdfs")
+
+
 @app.on_event("startup")
 async def _capture_loop():
     global _loop
@@ -294,7 +301,9 @@ def qa(req: QARequest):
     history = []
     retrieved = get_retrieved_info(req.question, history, collection_names)
     answer = get_answer(history, retrieved, req.question, req.company)
-    return {"question": req.question, "answer": answer}
+    # retrieved is now a dict {text, sources}; pass sources through to the UI
+    sources = retrieved.get("sources", []) if isinstance(retrieved, dict) else []
+    return {"question": req.question, "answer": answer, "sources": sources}
 
 
 @app.post("/api/workflow/reset")
@@ -1687,9 +1696,35 @@ _INDEX_HTML = """
         const body = { collection_name: collection, question, company };
         if (collection === '__all__' && solId) body.solution_id = solId;
         const res = await api('/api/qa', body);
+
+        // Render answer text
         qaResult.textContent = 'Q: ' + res.question + '\\n\\nA: ' + res.answer;
         qaResult.classList.remove('error');
         qaResult.classList.add('success');
+
+        // Render source attribution chips below the answer
+        const existingSources = document.getElementById('qaSources');
+        if (existingSources) existingSources.remove();
+        const sources = res.sources || [];
+        if (sources.length > 0) {
+          const sourcesDiv = document.createElement('div');
+          sourcesDiv.id = 'qaSources';
+          sourcesDiv.style.cssText = 'margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;';
+          const label = document.createElement('span');
+          label.textContent = 'Sources:';
+          label.style.cssText = 'font-size:0.8rem;color:#888;font-weight:600;';
+          sourcesDiv.appendChild(label);
+          sources.forEach(src => {
+            const a = document.createElement('a');
+            a.href = src.url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = (src.type === 'pdf' ? '📄 ' : '🔗 ') + src.label + ' ↗';
+            a.style.cssText = 'display:inline-block;padding:0.2rem 0.55rem;border-radius:12px;font-size:0.78rem;text-decoration:none;background:' + (src.type === 'pdf' ? '#fff3e0' : '#e8f4fd') + ';color:' + (src.type === 'pdf' ? '#e65100' : '#1565c0') + ';border:1px solid ' + (src.type === 'pdf' ? '#ffcc80' : '#90caf9') + ';';
+            sourcesDiv.appendChild(a);
+          });
+          qaResult.insertAdjacentElement('afterend', sourcesDiv);
+        }
       } catch (e) {
         setLog(qaResult, e.message || String(e), true);
       }

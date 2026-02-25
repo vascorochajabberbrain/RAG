@@ -37,6 +37,9 @@ def retrieve_from_vdb(query, collection_names):
     Retrieve relevant chunks from one or more Qdrant collections.
     collection_names: str or list[str]
     When multiple collections are provided, all are queried and results are merged by score (top K overall).
+
+    Returns a dict: {"text": str, "sources": list[dict]}
+    Each source dict: {"url": str, "label": str, "type": "web"|"pdf"}
     """
     if isinstance(collection_names, str):
         collection_names = [collection_names]
@@ -65,25 +68,66 @@ def retrieve_from_vdb(query, collection_names):
     all_points.sort(key=lambda p: p.score, reverse=True)
     top_points = all_points[:5]
 
-    prompt = ""
+    text_parts = []
+    sources = []
+    seen_urls = set()
     for result in top_points:
-        print("--", result.payload['point']['text'])
-        prompt += result.payload['point']['text'] + "\n"
+        point_data = result.payload.get('point', {})
+        chunk_text = point_data.get('text', '')
+        print("--", chunk_text)
+        text_parts.append(chunk_text)
+
+        # Extract source URL from payload (stored during ingestion)
+        raw_url = point_data.get('source_url', '')
+        if raw_url and raw_url not in seen_urls:
+            seen_urls.add(raw_url)
+            if raw_url.startswith("pdf://"):
+                # Resolve pdf://basename#page=N → /pdfs/basename.pdf#page=N
+                rest = raw_url[len("pdf://"):]  # e.g. "caderno_de_receitas_do_mar#page=23"
+                if "#page=" in rest:
+                    name_part, page_part = rest.split("#page=", 1)
+                    page_num = page_part
+                else:
+                    name_part = rest
+                    page_num = "1"
+                url = f"/pdfs/{name_part}.pdf#page={page_num}"
+                # Human-readable label: "Caderno De Receitas Do Mar p.23"
+                display_name = name_part.replace("_", " ").title()
+                label = f"{display_name} p.{page_num}"
+                source_type = "pdf"
+            else:
+                url = raw_url
+                # Human-readable label from last URL segment
+                label = raw_url.rstrip("/").split("/")[-1].replace("-", " ").replace("_", " ").title() or raw_url
+                source_type = "web"
+            sources.append({"url": url, "label": label, "type": source_type})
+
     print()
-    return prompt
+    return {"text": "\n".join(text_parts), "sources": sources}
+
 
 def get_retrieved_info(query, history, collection_names):
     new_query = improve_query(query, history)
-    return retrieve_from_vdb(new_query, collection_names)
-    
+    result = retrieve_from_vdb(new_query, collection_names)
+    # Return just the text for backward compat with get_answer (which takes a string)
+    if isinstance(result, dict):
+        return result
+    return result
+
+
 def get_answer(history, retrieved_info, query, company):
     openai_client = get_openai_client()
+    # retrieved_info may be a dict {text, sources} or a plain string (legacy)
+    if isinstance(retrieved_info, dict):
+        context_text = retrieved_info.get("text", "")
+    else:
+        context_text = retrieved_info or ""
     messages = history.copy()
-    messages.append({"role": "system", "content": f"""You are the virtual assistant of `{company}`, an e-commerce store specializing in jewelry and clothing.  
-You will receive context before answering user questions. However, this context may not always be relevant.  
-Use it **only if it clearly provides helpful information**.  
+    messages.append({"role": "system", "content": f"""You are the virtual assistant of `{company}`, an e-commerce store specializing in jewelry and clothing.
+You will receive context before answering user questions. However, this context may not always be relevant.
+Use it **only if it clearly provides helpful information**.
 
-The available information for this answer is: `{retrieved_info}`.  
+The available information for this answer is: `{context_text}`.
 Answer the user's query based on this data when applicable."""
 })
     messages.append({"role": "user", "content": query})

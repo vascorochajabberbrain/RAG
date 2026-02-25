@@ -78,13 +78,14 @@ def _run_fetch(state: WorkflowState) -> str:
     config = state.source_config or {}
 
     if stype == "pdf":
-        from ingestion.pdf_ingestion import read_from_pdf
+        from ingestion.pdf_ingestion import read_from_pdf, read_from_pdf_pages
         path = config.get("path") or config.get("pdf_path")
         if not path:
             return "Error: source_config must contain 'path' or 'pdf_path' for PDF."
         state.raw_text = read_from_pdf(path)
+        state.pdf_pages = read_from_pdf_pages(path)  # per-page for source attribution
         state.source_label = config.get("source_label") or path.split("/")[-1]
-        return f"Fetched PDF: {len(state.raw_text)} characters."
+        return f"Fetched PDF: {len(state.raw_text)} characters ({len(state.pdf_pages)} pages)."
 
     if stype == "txt":
         from ingestion.txt_ingestion import read_txt_as_text
@@ -234,7 +235,7 @@ def _run_chunk(state: WorkflowState) -> str:
         return f"Chunked into {len(state.chunks)} chunks (1 per scraped page — no splitting needed)."
 
     if cfg.use_hierarchical_chunking:
-        return _run_chunk_hierarchical(state, cfg, text)
+        msg = _run_chunk_hierarchical(state, cfg, text)
     elif cfg.use_proposition_chunking:
         from vectorization import get_text_chunks, create_batches_of_text
         batches = create_batches_of_text(text, cfg.batch_size, cfg.overlap_size)
@@ -242,6 +243,7 @@ def _run_chunk(state: WorkflowState) -> str:
         for batch in batches:
             chunks.extend(get_text_chunks(batch))
         state.chunks = chunks
+        msg = f"Chunked into {len(state.chunks)} chunks."
     else:
         from langchain_text_splitters import CharacterTextSplitter
         splitter = CharacterTextSplitter(
@@ -251,8 +253,76 @@ def _run_chunk(state: WorkflowState) -> str:
             length_function=len,
         )
         state.chunks = splitter.split_text(text)
+        msg = f"Chunked into {len(state.chunks)} chunks."
 
-    return f"Chunked into {len(state.chunks)} chunks."
+    # For PDF sources: map each chunk to its source page and populate scraped_items
+    # with pdf:// URLs for source attribution in the chat UI.
+    if state.source_type == "pdf" and state.chunks:
+        _attach_pdf_page_urls(state)
+        msg += f" (page attribution: {len(state.scraped_items)} items with pdf:// URLs)"
+
+    return msg
+
+
+def _find_page_for_chunk(chunk: str, pdf_pages: list) -> int:
+    """
+    Find which PDF page (1-based) a chunk most likely came from.
+    Strategy: check if the first 200 chars of the chunk appear verbatim in a page's text.
+    Fallback: count common words between the sample and each page text, pick best match.
+    Returns 1 if no match found.
+    """
+    sample = chunk[:200]
+    best_page, best_score = 1, 0
+    for entry in pdf_pages:
+        page_text = entry.get("text", "")
+        if sample in page_text:
+            return entry["page"]
+        # Word-overlap fallback
+        score = sum(1 for w in sample.split() if w in page_text)
+        if score > best_score:
+            best_score = score
+            best_page = entry["page"]
+    return best_page
+
+
+def _attach_pdf_page_urls(state: WorkflowState) -> None:
+    """
+    After chunking a PDF source, map each chunk to its source page and populate
+    state.scraped_items with {text, url} entries using the pdf:// URI scheme.
+    This is called after any PDF chunking path (simple, hierarchical, proposition).
+    """
+    if not state.pdf_pages:
+        return  # no per-page data available, skip
+
+    source_label = state.source_label or "document"
+    # Strip file extension for use in the pdf:// URI
+    import os
+    base_name = os.path.splitext(source_label)[0]
+
+    total_chunks = len(state.chunks)
+    total_pages = len(state.pdf_pages)
+
+    items = []
+    for idx, chunk in enumerate(state.chunks):
+        # Try exact / word-overlap match first
+        page_num = _find_page_for_chunk(chunk, state.pdf_pages)
+        # If the chunk came from cleaned/translated text it won't match raw pages →
+        # the score will be 0 (or very low). Detect that and fall back to proportional.
+        sample = chunk[:200]
+        best_raw_score = max(
+            sum(1 for w in sample.split() if w in entry.get("text", ""))
+            for entry in state.pdf_pages
+        ) if state.pdf_pages else 0
+
+        if best_raw_score < 3 and total_pages > 0:
+            # Proportional fallback for translated text
+            page_num = max(1, round((idx / max(total_chunks - 1, 1)) * (total_pages - 1)) + 1)
+            page_num = min(page_num, total_pages)
+
+        url = f"pdf://{base_name}#page={page_num}"
+        items.append({"text": chunk, "url": url})
+
+    state.scraped_items = items
 
 
 def _run_chunk_hierarchical(state: WorkflowState, cfg, text: str) -> str:

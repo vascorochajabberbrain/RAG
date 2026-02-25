@@ -29,6 +29,20 @@ def read_from_pdf(path: str, silent: bool = False) -> str:
     return text
 
 
+def read_from_pdf_pages(path: str) -> list:
+    """
+    Extract text per page from a PDF file.
+    Returns a list of dicts: [{page: int (1-based), text: str}, ...]
+    Used for page-level source attribution in RAG responses.
+    """
+    result = []
+    with open(path, "rb") as f:
+        reader = PdfReader(f)
+        for i, page in enumerate(reader.pages, start=1):
+            result.append({"page": i, "text": page.extract_text() or ""})
+    return result
+
+
 def run_pdf_pipeline(path: str, batch_size: int = 10000, overlap: int = 100):
     """Read PDF, chunk with LLM, return (chunks, source_label)."""
     text = read_from_pdf(path, silent=True)
