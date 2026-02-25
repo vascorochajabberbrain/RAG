@@ -1407,9 +1407,10 @@ _INDEX_HTML = """
 
     const runStep = async (step) => {
       const stepBtnMap = { chunk: 'runChunk', push_to_qdrant: 'runPush', create_collection: 'runCreate' };
+      const stepLabelMap = { chunk: 'Chunking…', push_to_qdrant: 'Pushing to Qdrant…', create_collection: 'Creating collection…' };
       const stepBtn = stepBtnMap[step] ? document.getElementById(stepBtnMap[step]) : null;
       if (stepBtn) _btnRunning(stepBtn);
-      setLog(buildLog, 'Running…', false);
+      setLog(buildLog, stepLabelMap[step] || 'Running…', false);
       try {
         const res = await api('/api/workflow/step', { step, state_update: getStateUpdate() });
         const msg = res.message || res.detail || JSON.stringify(res);

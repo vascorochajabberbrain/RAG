@@ -1,7 +1,7 @@
 # CLAUDE.md — RAG Project Context (Jabberbrain)
 
 > This file is read automatically at the start of every Claude Code session.
-> Keep it updated as decisions are made. Last updated: 2026-02-25.
+> Keep it updated as decisions are made. Last updated: 2026-02-25 (pipeline complete).
 
 ---
 
@@ -167,7 +167,7 @@ Standard CSS selectors often don't work — content lives in separate Elementor 
 
 **RAG collections** (implemented, sitemap-driven Playwright):
 1. `peixefresco_products` — 1 chunk per product via `product-sitemap.xml`
-2. `peixefresco_recipes` — 1 chunk per recipe via `receitas-sitemap.xml` (custom JS extraction)
+2. `peixefresco_recipes` — 1 chunk per recipe via `receitas-sitemap.xml` (custom JS extraction) + PDF `caderno_de_receitas_do_mar.pdf` (76pp, bilingual PT/ES → Translate & Clean → appended)
 3. `peixefresco_pages` — static pages via `page-sitemap.xml` (httpx engine)
 
 ---
@@ -217,11 +217,29 @@ python -m workflow.cli     # Guided CLI workflow
 
 ## Open Questions / Next Steps
 
-- [ ] Run Phase C: full Peixe Fresco product sitemap scrape (101 URLs) → chunk → push → test Q&A
-- [ ] Run Phase D: recipes (11) and pages (4) collections
+- [x] Run Phase C: full Peixe Fresco product sitemap scrape → 96/101 chunks pushed to Qdrant
+- [x] Run Phase D: recipes (11 web + PDF caderno de receitas) and pages collections — DONE
 - [ ] Define API contract: how Session Engine calls this RAG layer (HTTP endpoint? direct Python import?)
 - [ ] Future: integrate two-step routing in Session Engine using `solutions.yaml` routing metadata
 - [ ] Future: migrate Hey Harper collections to new scraper (currently legacy Selenium data)
+
+### Peixe Fresco — Collection Status (as of 2026-02-25)
+
+| Collection | Source(s) | Status |
+|---|---|---|
+| `peixefresco_products` | Website sitemap (96/101 products) | ✅ Live in Qdrant |
+| `peixefresco_recipes` | Website (11 recipes) + PDF caderno do mar (bilingual PT/ES, translated) | ✅ Live in Qdrant |
+| `peixefresco_pages` | Static pages via httpx (about, FAQ, terms, legal) | ✅ Live in Qdrant |
+
+**Multi-source collections**: `peixefresco_recipes` combines two sources in one Qdrant collection.
+The append pattern (`QdrantTracker.append_points_to_collection()`) upserts new points without
+wiping existing ones — used for Run 2 (PDF) after Run 1 (website scrape).
+
+**LLM config for jBSE RAG responses**:
+- Query rewriting: `gpt-4o-mini`
+- Final answer generation: `gpt-4o`
+- Qdrant URL: `https://94e2704d-31c5-4e24-b42a-e28f2554b078.eu-central-1-0.aws.cloud.qdrant.io`
+- Embedding model: `text-embedding-ada-002` (OpenAI), 1536 dims, cosine similarity
 
 ---
 
