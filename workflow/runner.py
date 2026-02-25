@@ -310,9 +310,24 @@ def _run_push(state: WorkflowState) -> str:
     name = state.collection_name
     coll = state.collection_object
 
+    if not name:
+        return "Error: collection_name is required."
+
+    # collection_object is a live Python object — it is NOT persisted to .rag_state.json.
+    # If the state was loaded from disk (e.g. after Fetch+Chunk were run in a prior session),
+    # collection_object will be None here. Recreate it now.
+    if coll is None:
+        coll_type = "group" if state.grouping_enabled else "scs"
+        # Delete existing collection so we start fresh (matches CREATE_COLLECTION behaviour)
+        if tracker._existing_collection_name(name):
+            tracker._delete_collection(name)
+        coll = tracker.new(name, coll_type)
+        state.collection_object = coll
+
     if state.grouping_enabled:
         tracker.save_collection(name)
         return f"Saved group collection '{name}' to Qdrant."
+
     # SCS path: append chunks to collection then save (pass scraped_items for source_url annotation)
     coll.append_sentences(state.chunks, state.source_label, scraped_items=state.scraped_items or [])
     tracker.save_collection(name)

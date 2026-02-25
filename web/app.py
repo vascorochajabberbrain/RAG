@@ -8,6 +8,16 @@ from pydantic import BaseModel
 from typing import Optional, Any
 import os, queue, threading, asyncio
 
+# App version (read from VERSION file in project root)
+def _read_version() -> str:
+    try:
+        _vf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION")
+        return open(_vf).read().strip()
+    except Exception:
+        return "dev"
+
+APP_VERSION = _read_version()
+
 # In-memory state for single-user demo (one workflow at a time)
 _current_state: Optional[Any] = None
 _tracker: Optional[Any] = None
@@ -56,7 +66,22 @@ class QARequest(BaseModel):
 
 @app.get("/")
 def root():
-    return HTMLResponse(_INDEX_HTML)
+    html = _INDEX_HTML.replace("__APP_VERSION__", APP_VERSION)
+    return HTMLResponse(html)
+
+
+@app.get("/api/version")
+def api_version():
+    import subprocess
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            stderr=subprocess.DEVNULL, text=True
+        ).strip()
+    except Exception:
+        commit = "unknown"
+    return {"version": APP_VERSION, "commit": commit}
 
 
 @app.get("/api/collections")
@@ -1511,6 +1536,9 @@ _INDEX_HTML = """
       }
     };
   </script>
+  <footer style="text-align:center;padding:1.2rem 0 0.8rem;font-size:0.78rem;color:#aaa;">
+    jabberbrain RAG builder &nbsp;·&nbsp; v__APP_VERSION__
+  </footer>
 </body>
 </html>
 """

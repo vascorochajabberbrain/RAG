@@ -134,13 +134,19 @@ class WorkflowState:
         }
 
     def get_save_path(self) -> Optional[str]:
-        """Derive .rag_state.json path from the source PDF/file path."""
+        """Derive .rag_state.json path from source. File sources use a sibling file;
+        URL/scraper sources use a project-root file named after the collection."""
         if self.save_path:
             return self.save_path
+        # File-based sources: save next to the source file
         path = (self.source_config or {}).get("path") or (self.source_config or {}).get("pdf_path")
         if path:
             base = os.path.splitext(path)[0]
             return base + ".rag_state.json"
+        # URL/scraper sources: save in project root named after collection
+        if self.collection_name:
+            root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            return os.path.join(root, f".rag_state_{self.collection_name}.json")
         return None
 
     def save_to_disk(self) -> Optional[str]:
