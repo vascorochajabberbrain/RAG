@@ -1,10 +1,16 @@
 """
-Run a scraper by name. Supports legacy scrapers (e.g. peixefresco) and future YAML-driven scrapers.
+Run a scraper by name. Loads YAML config and dispatches to the correct engine.
+
+Engines:
+  playwright  — default. Handles JS, SPAs, dynamic content.
+  httpx       — fast, for confirmed SSR-only sites.
+  shopify     — uses Shopify /products.json API (no HTML scraping).
+
+Legacy scrapers (legacy: true in YAML) → url_ingestion_legacy.py (archived Selenium code).
 """
 import os
 import sys
 
-# Project root for imports
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -23,29 +29,38 @@ def _load_config(scraper_name: str) -> dict:
         return {"name": scraper_name}
 
 
-def run_scraper(scraper_name: str, options: dict = None) -> str:
+def run_scraper(scraper_name: str, options: dict = None) -> tuple:
     """
-    Run a scraper by name. Returns raw text.
-    options: optional overrides (start_url, output_file, etc.) and source_config from workflow.
+    Run a scraper by name. Returns (raw_text: str, scraped_items: list[dict]).
+    scraped_items is a list of {"url": str, "text": str} — one entry per scraped page.
+    options: optional overrides (engine, start_url, etc.) from the workflow/UI.
+             options take priority over YAML config values.
     """
     options = options or {}
     config = _load_config(scraper_name)
-    config.update(options)
+    config.update(options)  # UI/workflow overrides win over YAML defaults
 
+    # Legacy branch — archived Selenium scrapers (no per-URL metadata)
     if config.get("legacy"):
         if scraper_name == "peixefresco":
-            from ingestion.url_ingestion import run_peixefresco_crawl  # noqa: E402
-            return run_peixefresco_crawl(config)
-        return f"Error: Unknown legacy scraper '{scraper_name}'."
+            from ingestion.url_ingestion_legacy import run_peixefresco_crawl
+            return run_peixefresco_crawl(config), []
+        return f"Error: Unknown legacy scraper '{scraper_name}'.", []
 
-    # Future: generic YAML-driven Selenium crawl
-    return _run_generic_crawl(scraper_name, config)
+    # Engine dispatch — Playwright is the default
+    engine = config.get("engine", "playwright")
 
+    if engine == "playwright":
+        from ingestion.scrapers.playwright_scraper import run_playwright_scraper
+        return run_playwright_scraper(config)
 
-def _run_generic_crawl(scraper_name: str, config: dict) -> str:
-    """Generic Selenium crawl from config. Not fully implemented yet."""
-    start_url = config.get("start_url")
-    if not start_url:
-        return "Error: config must have start_url for generic crawl."
-    # Placeholder: could implement Selenium from config (link_selectors, click_before_scrape, etc.)
-    return "Error: Generic YAML crawl not implemented yet. Use legacy scrapers (e.g. peixefresco)."
+    if engine == "httpx":
+        from ingestion.scrapers.httpx_scraper import run_httpx_scraper
+        return run_httpx_scraper(config)
+
+    if engine == "shopify":
+        from ingestion.scrapers.shopify_scraper import run_shopify_scraper
+        # Shopify scraper returns a plain string; no per-URL metadata yet
+        return run_shopify_scraper(config), []
+
+    return f"Error: Unknown engine '{engine}' in config for scraper '{scraper_name}'.", []

@@ -2,8 +2,10 @@
 from solution_specs.loader import (
     list_solutions,
     get_solution,
+    get_collections,
+    get_collection_by_id,
     resolve_alias,
     reload,
 )
 
-__all__ = ["list_solutions", "get_solution", "resolve_alias", "reload"]
+__all__ = ["list_solutions", "get_solution", "get_collections", "get_collection_by_id", "resolve_alias", "reload"]

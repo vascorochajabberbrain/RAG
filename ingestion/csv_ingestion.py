@@ -7,7 +7,7 @@ import pandas as pd
 from my_collections.SCS_Collection import SCS_Collection
 from llms.openai_utils import openai_chat_completion
 from qdrant_utils import create_collection
-from ingestion.url_ingestion import scrape_page
+from ingestion.url_ingestion_legacy import scrape_page
 from vectorization import get_points, get_points_with_source, get_text_chunks, insert_data
 
 

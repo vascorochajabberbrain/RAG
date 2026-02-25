@@ -1,0 +1,23 @@
+# Peixe Fresco — product catalog (101 products via sitemap)
+# 1 structured chunk per product with name, price, attributes, description, URL
+name: peixefresco_products
+engine: playwright
+scrape_mode: sitemap
+sitemap_url: "https://store.peixefresco.com.pt/product-sitemap.xml"
+url_filter: "/produto/"
+structured_extraction:
+  name: ".product_title"
+  price: "h2.elementor-heading-title:has(.woocommerce-Price-amount)"
+  description: ".woocommerce-Tabs-panel--description"
+attribute_rows:
+  - row_name: "Finalidade"
+    field: "finalidade"
+  - row_name: "Preparação"
+    field: "preparacao"
+chunk_template: |
+  Product: {name}
+  Price: {price}
+  Finalidade: {finalidade}
+  Preparação: {preparacao}
+  Description: {description}
+  URL: {url}

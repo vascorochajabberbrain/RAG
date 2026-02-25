@@ -1,0 +1,54 @@
+# Peixe Fresco — recipe collection (11 recipes via sitemap)
+# 1 structured chunk per recipe with ingredients, steps, cross-link to product
+# Uses custom_js_extraction because the site uses Elementor page builder:
+#   - Content is in sibling Elementor widgets, not siblings of the H2
+#   - Products are listed as H2 elements, not WooCommerce loop classes
+name: peixefresco_recipes
+engine: playwright
+scrape_mode: sitemap
+sitemap_url: "https://store.peixefresco.com.pt/receitas-sitemap.xml"
+url_filter: "/receitas/"
+# NOTE: url_filter also matches the /receitas/ listing page; it will produce empty output and be skipped.
+custom_js_extraction: |
+  () => {
+    function getNextWidgetText(headingText) {
+      const h2s = Array.from(document.querySelectorAll("h2.elementor-heading-title"));
+      const target = h2s.find(h => h.innerText.trim().toLowerCase().includes(headingText.toLowerCase()));
+      if (!target) return "";
+      const headingWidget = target.parentElement.parentElement;
+      const nextWidget = headingWidget.nextElementSibling;
+      if (!nextWidget) return "";
+      return nextWidget.innerText.trim();
+    }
+
+    const allH2s = Array.from(document.querySelectorAll("h2.elementor-heading-title"));
+    const prodIdx = allH2s.findIndex(h => h.innerText.includes("Produto Utilizado"));
+
+    let linked_product = "";
+    let linked_product_url = "";
+
+    if (prodIdx !== -1 && allH2s[prodIdx + 1]) {
+      linked_product = allH2s[prodIdx + 1].innerText.trim();
+      const column = allH2s[prodIdx + 1].closest(".elementor-widget-wrap");
+      if (column) {
+        const link = column.querySelector("a[href*='/produto/']");
+        if (link) linked_product_url = link.href;
+      }
+    }
+
+    return {
+      title:    allH2s[0] ? allH2s[0].innerText.trim() : "",
+      ingredients:  getNextWidgetText("Ingredientes"),
+      preparation:  getNextWidgetText("Modo de Preparação"),
+      linked_product,
+      linked_product_url
+    };
+  }
+chunk_template: |
+  Recipe: {title}
+  Ingredients:
+  {ingredients}
+  Preparation:
+  {preparation}
+  Linked Product: {linked_product} — {linked_product_url}
+  URL: {url}

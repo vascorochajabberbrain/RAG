@@ -1,0 +1,13 @@
+# Peixe Fresco — static pages (sobre-nos, FAQ, termos, informacoes-legais)
+# Uses httpx (fast) — these are plain static WordPress pages, no JS needed
+# Raw text returned → normal CHUNK step handles splitting
+name: peixefresco_pages
+engine: httpx
+scrape_mode: sitemap
+sitemap_url: "https://store.peixefresco.com.pt/page-sitemap.xml"
+url_allowlist:
+  - "sobre-nos"
+  - "perguntas-frequentes"
+  - "termos-e-condicoes"
+  - "informacoes-legais"
+text_selector: ".entry-content"

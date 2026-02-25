@@ -280,3 +280,153 @@ class QdrantTracker:
             collection_name=collection_name,
             vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
         )
+
+    # -------------------------------------------------------------------------
+    # Incremental sync — re-scrape URLs, compare content_hash, re-embed changes
+    # -------------------------------------------------------------------------
+
+    def sync_collection(self, scraper_name: str, collection_name: str, scraper_options: dict = None) -> dict:
+        """
+        Incrementally sync a URL-scraped collection:
+          1. Re-scrape all URLs using the named scraper
+          2. Compare content_hash per URL with what's in Qdrant
+          3. Delete points for removed URLs
+          4. Re-embed and insert changed or new pages
+          5. Skip unchanged pages (hash matches)
+
+        Returns a diff dict: {added, updated, deleted, unchanged, errors}
+        """
+        import hashlib
+        from datetime import datetime, timezone
+        from qdrant_client.http.models import PointStruct, Filter, FieldCondition, MatchValue, PointIdsList
+        from ingestion.scrapers.runner import run_scraper
+        from vectorization import get_embedding, get_point_id
+
+        diff = {"added": 0, "updated": 0, "deleted": 0, "unchanged": 0, "errors": []}
+
+        # 1. Re-scrape all URLs
+        try:
+            _, scraped_items = run_scraper(scraper_name, scraper_options or {})
+        except Exception as e:
+            diff["errors"].append(f"Scrape failed: {e}")
+            return diff
+
+        fresh_by_url = {item["url"]: item["text"] for item in scraped_items}
+        if not fresh_by_url:
+            diff["errors"].append("Scraper returned no items — aborting sync to avoid wiping collection.")
+            return diff
+
+        # 2. Get existing {source_url: content_hash} from Qdrant
+        existing_by_url = self._get_existing_hashes_by_url(collection_name)
+
+        # 3. Delete points for URLs no longer in sitemap
+        stale_urls = set(existing_by_url.keys()) - set(fresh_by_url.keys())
+        for url in stale_urls:
+            try:
+                self._delete_points_by_url(collection_name, url)
+                diff["deleted"] += 1
+            except Exception as e:
+                diff["errors"].append(f"Delete failed for {url}: {e}")
+
+        # 4. For each current URL: skip unchanged, replace changed, insert new
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for url, fresh_text in fresh_by_url.items():
+            fresh_hash = hashlib.sha256(fresh_text.encode("utf-8")).hexdigest()
+            if url in existing_by_url:
+                if existing_by_url[url] == fresh_hash:
+                    diff["unchanged"] += 1
+                    continue
+                # Changed — delete old points then insert fresh
+                try:
+                    self._delete_points_by_url(collection_name, url)
+                except Exception as e:
+                    diff["errors"].append(f"Delete-before-update failed for {url}: {e}")
+                    continue
+                diff["updated"] += 1
+            else:
+                diff["added"] += 1
+
+            # Embed and insert one point per page (structured scraping: 1 page = 1 chunk)
+            try:
+                vector = get_embedding(fresh_text)
+                payload = {
+                    "collection": {"type": "scs"},
+                    "point": {
+                        "text": fresh_text,
+                        "source": scraper_name,
+                        "source_url": url,
+                        "content_hash": fresh_hash,
+                        "scraped_at": now_iso,
+                    },
+                }
+                self._upsert_points(collection_name, [PointStruct(
+                    id=get_point_id(),
+                    vector=vector,
+                    payload=payload,
+                )])
+            except Exception as e:
+                diff["errors"].append(f"Embed/insert failed for {url}: {e}")
+
+        return diff
+
+    def _get_existing_hashes_by_url(self, collection_name: str) -> dict:
+        """
+        Scroll all points that have a source_url, return {url: content_hash}.
+        Uses Qdrant FieldCondition(is_empty=False) to filter only URL-annotated points.
+        """
+        from qdrant_client.http.models import Filter, FieldCondition
+
+        scroll_filter = Filter(
+            must=[FieldCondition(key="point.source_url", is_empty=False)]
+        )
+        existing = {}
+        offset = None
+        while True:
+            result, offset = self._connection.scroll(
+                collection_name=collection_name,
+                scroll_filter=scroll_filter,
+                with_payload=True,
+                with_vectors=False,
+                offset=offset,
+                limit=100,
+            )
+            for point in result:
+                p = point.payload.get("point", {})
+                url = p.get("source_url")
+                h = p.get("content_hash")
+                if url:
+                    existing[url] = h  # may be None for legacy points
+            if offset is None:
+                break
+        return existing
+
+    def _delete_points_by_url(self, collection_name: str, url: str) -> None:
+        """
+        Delete all Qdrant points whose point.source_url matches the given URL.
+        """
+        from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointIdsList
+
+        url_filter = Filter(
+            must=[FieldCondition(key="point.source_url", match=MatchValue(value=url))]
+        )
+        # Collect IDs to delete via scroll (delete-by-filter not always available on older Qdrant)
+        ids_to_delete = []
+        offset = None
+        while True:
+            result, offset = self._connection.scroll(
+                collection_name=collection_name,
+                scroll_filter=url_filter,
+                with_payload=False,
+                with_vectors=False,
+                offset=offset,
+                limit=100,
+            )
+            ids_to_delete.extend(point.id for point in result)
+            if offset is None:
+                break
+
+        if ids_to_delete:
+            self._connection.delete(
+                collection_name=collection_name,
+                points_selector=PointIdsList(points=ids_to_delete),
+            )

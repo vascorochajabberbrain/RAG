@@ -1,7 +1,7 @@
 from my_collections.Colletion import Collection
 from objects.SCS import SCS
 
-from ingestion.url_ingestion import main as url_ingestion
+from ingestion.url_ingestion_legacy import main as url_ingestion
 from llms.openai_utils import openai_chat_completion
 
 
@@ -69,13 +69,27 @@ class SCS_Collection(Collection):
     def append_sentence(self, sentence, source=None):
         self.append_item(SCS(sentence, source))
 
-    def append_sentences(self, sentences, source=None):
+    def append_sentences(self, sentences, source=None, scraped_items=None):
         if not isinstance(sentences, list):
             raise TypeError("Expected a list of sentences.")
+        # Build URL lookup from scraped_items for per-chunk source_url annotation
+        url_lookup = {item["text"]: item["url"] for item in (scraped_items or [])}
         for sentence in sentences:
             if not isinstance(sentence, str):
                 raise TypeError("Expected a string in the list of sentences.")
-            self.append_item(SCS(sentence, source))
+            source_url = None
+            if url_lookup:
+                if sentence in url_lookup:
+                    # Exact match: structured scraping (1 page = 1 chunk)
+                    source_url = url_lookup[sentence]
+                else:
+                    # Prefix match: plain-text pages chunked into multiple pieces
+                    prefix = sentence[:100]
+                    for page_text, url in url_lookup.items():
+                        if prefix in page_text:
+                            source_url = url
+                            break
+            self.append_item(SCS(sentence, source, source_url=source_url))
 
     def insert_sentence(self, idx, sentence, source=None):
         self.insert_item(idx, SCS(sentence, source))

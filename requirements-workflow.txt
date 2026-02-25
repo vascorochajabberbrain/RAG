@@ -3,3 +3,8 @@
 fastapi>=0.100.0
 uvicorn[standard]>=0.22.0
 pyyaml>=6.0
+
+# Scraper engines
+playwright>=1.40.0          # Default browser engine. After install run: playwright install chromium
+httpx[http2]>=0.25.0        # HTTP client for httpx engine + sitemap fetching in playwright engine
+beautifulsoup4>=4.12.0      # HTML parsing for httpx engine + Shopify description stripping

@@ -32,34 +32,49 @@ def improve_query(query, history):
     print("----------------------------------------\nOld query: ", query, "\nNew query: ", new_query, "\n----------------------------------------\n")
     return new_query
 
-def retrieve_from_vdb(query, collection_name):
-    openai_client = get_openai_client()
+def retrieve_from_vdb(query, collection_names):
+    """
+    Retrieve relevant chunks from one or more Qdrant collections.
+    collection_names: str or list[str]
+    When multiple collections are provided, all are queried and results are merged by score (top K overall).
+    """
+    if isinstance(collection_names, str):
+        collection_names = [collection_names]
 
+    openai_client = get_openai_client()
     response = openai_client.embeddings.create(
         input=query,
         model="text-embedding-ada-002"
     )
     embeddings = response.data[0].embedding
-    
+
     connection = get_qdrant_connection()
-    search_result = connection.query_points(
-        collection_name=collection_name,
-        query=embeddings,
-        limit=3
-    )
-    print(search_result)
-    prompt=""
-    for result in search_result.points:
-        print("--", result.payload['point']['text'])#this is very hardcoded and really depends on the sctructure of the payload
+    all_points = []
+    for collection_name in collection_names:
+        try:
+            search_result = connection.query_points(
+                collection_name=collection_name,
+                query=embeddings,
+                limit=5
+            )
+            all_points.extend(search_result.points)
+        except Exception as e:
+            print(f"[retrieve_from_vdb] Warning: could not query '{collection_name}': {e}")
+
+    # Sort by score descending and take top 5 across all collections
+    all_points.sort(key=lambda p: p.score, reverse=True)
+    top_points = all_points[:5]
+
+    prompt = ""
+    for result in top_points:
+        print("--", result.payload['point']['text'])
         prompt += result.payload['point']['text'] + "\n"
     print()
     return prompt
 
-def get_retrieved_info(query, history, collection_name):
-    
+def get_retrieved_info(query, history, collection_names):
     new_query = improve_query(query, history)
-    
-    return retrieve_from_vdb(new_query, collection_name)
+    return retrieve_from_vdb(new_query, collection_names)
     
 def get_answer(history, retrieved_info, query, company):
     openai_client = get_openai_client()
@@ -80,25 +95,31 @@ Answer the user's query based on this data when applicable."""
 
 
 def main():
-    user_input = input("Which collection should we use (name or alias, e.g. 1, FAQ, peixefresco): ").strip()
+    user_input = input("Which solution should we use (name or alias, e.g. pf, hh, peixefresco): ").strip()
     try:
-        from solution_specs import resolve_alias, get_solution
+        from solution_specs import resolve_alias, get_solution, get_collections
         solution = resolve_alias(user_input) or get_solution(user_input)
         if solution:
-            collection_name = solution["collection_name"]
+            colls = get_collections(solution["id"])
+            collection_names = [c["collection_name"] for c in colls if c.get("collection_name")]
             company = solution.get("company_name") or solution.get("display_name")
         else:
-            collection_name = user_input
+            # Fallback: treat input as a direct collection name
+            collection_names = [user_input]
             company = None
     except Exception:
-        collection_name = user_input
+        collection_names = [user_input]
         company = None
     if company is None:
         company = "the assistant"
+    if not collection_names:
+        collection_names = [user_input]
+
+    print(f"Querying collections: {', '.join(collection_names)}")
 
     conversation_file = f"""Conversation with bot retrieving from `{company}`\n
-    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\n
-    retrieved information of all products individual page.\nConversation starts second next line:\n\n"""
+    Collections: {', '.join(collection_names)}\n
+    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\nConversation starts second next line:\n\n"""
     
     history = []
 
@@ -115,7 +136,7 @@ def main():
             final_conversation_comments += input("Any final comments?")
             break
 
-        retrieved_info = get_retrieved_info(question, history, collection_name)
+        retrieved_info = get_retrieved_info(question, history, collection_names)
         #print("+++++++++++++++++++++++++++++++++++++++++++\nRetrieved chunks:\n", retrieved_info, "+++++++++++++++++++++++++++++++++++++++++++\n")
         answer = get_answer(history, retrieved_info, question, company)
 
@@ -127,7 +148,7 @@ def main():
         #print("searching completed")
 
     conversation_file += conversation + "\n\n" + final_conversation_comments
-    make_conversation_file(conversation_file)
+    make_conversation_file(conversation_file, f"conversation_{company.replace(' ','_')}")
 
 
 if __name__ == '__main__':

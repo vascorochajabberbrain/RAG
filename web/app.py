@@ -480,6 +480,37 @@ def pick_file(source_type: str = "pdf"):
         return {"path": "", "error": str(e)}
 
 
+class SyncRequest(BaseModel):
+    scraper_name: str
+    collection_name: str
+    scraper_options: dict = {}
+
+
+@app.post("/api/sync")
+def sync_collection_api(req: SyncRequest):
+    """
+    Incremental sync: re-scrape all URLs, compare content_hash, re-embed only changed pages.
+    Returns a diff summary: {added, updated, deleted, unchanged, errors, message}.
+    """
+    tracker = get_state().tracker
+    if tracker is None:
+        from QdrantTracker import QdrantTracker
+        tracker = QdrantTracker()
+        get_state().tracker = tracker
+
+    diff = tracker.sync_collection(req.scraper_name, req.collection_name, req.scraper_options or {})
+    msg = (
+        f"Sync complete: "
+        f"+{diff['added']} added, "
+        f"~{diff['updated']} updated, "
+        f"-{diff['deleted']} deleted, "
+        f"{diff['unchanged']} unchanged"
+    )
+    if diff["errors"]:
+        msg += f" | {len(diff['errors'])} error(s): " + "; ".join(diff["errors"][:3])
+    return {"message": msg, "diff": diff}
+
+
 _INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -505,6 +536,8 @@ _INDEX_HTML = """
     .btn-secondary:hover { background: #dee2e6; }
     .btn-translate { background: #888; color: #fff; margin-left: 0.5rem; }
     .btn-translate:hover { background: #666; }
+    .btn-sync { background: #6a1b9a; color: #fff; margin-left: 0.5rem; }
+    .btn-sync:hover { background: #4a148c; }
     .progress-wrap { margin-top: 0.75rem; display: none; }
     .progress-bar-bg { background: #e9ecef; border-radius: 6px; height: 10px; overflow: hidden; }
     .progress-bar-fill { background: #2e7d32; height: 10px; width: 0%; transition: width 0.3s ease; border-radius: 6px; }
@@ -649,7 +682,9 @@ _INDEX_HTML = """
           </div>
         </div>
         <button type="button" class="btn-primary" id="runPush">4. Push to Qdrant</button>
+        <button type="button" class="btn-sync hidden" id="runSync">5. Sync (check for changes)</button>
         <button type="button" class="btn-secondary" id="runReset">Reset state</button>
+        <div id="syncResult" class="hidden" style="margin-top:0.6rem;padding:0.6rem 0.9rem;border-radius:8px;font-size:0.88rem;font-family:monospace;"></div>
         <div id="buildLog" class="log"></div>
       </div>
     </div>
@@ -983,6 +1018,8 @@ _INDEX_HTML = """
       const st = document.getElementById('sourceType').value;
       document.getElementById('filePickerRow').classList.toggle('hidden', st === 'url');
       document.getElementById('scraperRow').classList.toggle('hidden', st !== 'url');
+      // Show Sync button only for URL/scraper sources
+      document.getElementById('runSync').classList.toggle('hidden', st !== 'url');
     }
 
     // Show/hide Shopify URL field based on engine selection
@@ -1217,7 +1254,7 @@ _INDEX_HTML = """
       };
     };
 
-    const _pipelineBtns = () => ['runCreate','runFetch','runTranslate','runChunk','runPush'].map(id => document.getElementById(id)).filter(Boolean);
+    const _pipelineBtns = () => ['runCreate','runFetch','runTranslate','runChunk','runPush','runSync'].map(id => document.getElementById(id)).filter(Boolean);
     const _clearDone    = () => _pipelineBtns().forEach(b => { if (b.dataset.done) { b.style.background = ''; b.style.color = ''; delete b.dataset.done; } });
     const _btnRunning   = (btn) => { _clearDone(); btn.disabled = true; btn.style.background = '#e65c00'; btn.style.color = '#fff'; };
     const _btnDone      = (btn) => { btn.disabled = false; btn.style.background = ''; btn.style.color = ''; };
@@ -1277,6 +1314,7 @@ _INDEX_HTML = """
     document.getElementById('runTranslate').onclick = () => runTranslateWithProgress();
     document.getElementById('runChunk').onclick = () => runStep('chunk');
     document.getElementById('runPush').onclick = () => runStep('push_to_qdrant');
+    document.getElementById('runSync').onclick = () => runSync();
 
     async function runFetchWithProgress() {
       const btn = document.getElementById('runFetch');
@@ -1362,6 +1400,51 @@ _INDEX_HTML = """
         btn.disabled = false;
       }
     }
+    async function runSync() {
+      const btn = document.getElementById('runSync');
+      const resultDiv = document.getElementById('syncResult');
+      const st = getStateUpdate();
+      const scraperName = (st.source_config || {}).scraper_name || document.getElementById('scraperName')?.value || '';
+      const collName = getCollectionName();
+      if (!scraperName) { resultDiv.textContent = '❌ No scraper selected.'; resultDiv.className = ''; resultDiv.style.background = '#fdecea'; return; }
+      if (!collName) { resultDiv.textContent = '❌ No collection selected.'; resultDiv.className = ''; resultDiv.style.background = '#fdecea'; return; }
+
+      _btnRunning(btn);
+      resultDiv.className = '';
+      resultDiv.style.background = '#fffbe6';
+      resultDiv.textContent = '⏳ Syncing — re-scraping all URLs and comparing hashes…';
+
+      try {
+        const res = await api('/api/sync', { scraper_name: scraperName, collection_name: collName, scraper_options: st.source_config || {} });
+        const diff = res.diff || {};
+        const added   = diff.added   || 0;
+        const updated = diff.updated || 0;
+        const deleted = diff.deleted || 0;
+        const unchanged = diff.unchanged || 0;
+        const errors  = diff.errors  || [];
+
+        const parts = [];
+        if (added)     parts.push(`<span style="color:#2e7d32;font-weight:600;">+${added} added</span>`);
+        if (updated)   parts.push(`<span style="color:#e65c00;font-weight:600;">~${updated} updated</span>`);
+        if (deleted)   parts.push(`<span style="color:#c62828;font-weight:600;">-${deleted} deleted</span>`);
+        if (unchanged) parts.push(`<span style="color:#555;">${unchanged} unchanged</span>`);
+        if (errors.length) parts.push(`<span style="color:#c62828;">${errors.length} error(s)</span>`);
+
+        resultDiv.innerHTML = '✅ Sync complete: ' + (parts.join(' &nbsp;·&nbsp; ') || 'no changes');
+        if (errors.length) {
+          resultDiv.innerHTML += '<br><small>' + errors.slice(0, 3).map(e => '⚠ ' + e).join('<br>') + '</small>';
+          resultDiv.style.background = '#fff3e0';
+        } else {
+          resultDiv.style.background = '#e8f5e9';
+        }
+        _btnSuccess(btn);
+      } catch (e) {
+        resultDiv.textContent = '❌ ' + (e.message || String(e));
+        resultDiv.style.background = '#fdecea';
+        _btnDone(btn);
+      }
+    }
+
     document.getElementById('runReset').onclick = async () => {
       await api('/api/workflow/reset', {});
       setLog(buildLog, 'State reset.', false);

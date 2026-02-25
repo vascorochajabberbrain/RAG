@@ -1,7 +1,7 @@
 from ingestion.txt_ingestion import main as txt_ingestion
 from ingestion.pdf_ingestion import main as pdf_ingestion
 from ingestion.csv_ingestion import csv_ingestion
-from ingestion.url_ingestion import main as url_ingestion
+from ingestion.url_ingestion_legacy import main as url_ingestion
 from my_collections.SCS_Collection import SCS_Collection
 
 

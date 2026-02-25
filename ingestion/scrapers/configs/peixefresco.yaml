@@ -1,8 +1,21 @@
-# Peixe Fresco recipe blog scraper
-# Used by workflow FETCH when source_type=url and scraper_name=peixefresco
+# Peixe Fresco — recipe blog scraper (rebuilt with Playwright, replaces Selenium legacy)
+# Keeps name: peixefresco for backward compat with existing solutions.yaml entry.
 name: peixefresco
-legacy: true
-start_url: "https://store.peixefresco.com.pt/blog-de-receitas-peixe-fresco/"
-link_prefix: "https://store.peixefresco.com.pt/receitas"
-click_before_scrape: accordion
-output_file: "ingestion/peixefresco.txt"
+engine: playwright
+scrape_mode: sitemap
+sitemap_url: "https://store.peixefresco.com.pt/receitas-sitemap.xml"
+url_filter: "/receitas/"
+structured_extraction:
+  title: "h1"
+  ingredients: "li under Ingredientes"
+  preparation: "li under Modo de Preparação"
+  linked_product: ".woocommerce-loop-product__title"
+  linked_product_url: "url of .produto-utilizado a"
+chunk_template: |
+  Recipe: {title}
+  Ingredients:
+  {ingredients}
+  Preparation:
+  {preparation}
+  Linked Product: {linked_product} — {linked_product_url}
+  URL: {url}

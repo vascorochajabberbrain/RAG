@@ -50,6 +50,7 @@ class WorkflowState:
     # Fetched / cleaned text
     raw_text: Optional[str] = None
     cleaned_text: Optional[str] = None
+    scraped_items: list = field(default_factory=list)  # [{url, text}, ...] per scraped page; empty for PDF/TXT/CSV
 
     # Chunks (list of strings)
     chunks: list = field(default_factory=list)
@@ -83,6 +84,7 @@ class WorkflowState:
             "raw_text": self.raw_text[:5000] + "..." if self.raw_text and len(self.raw_text) > 5000 else self.raw_text,
             "cleaned_text": self.cleaned_text[:5000] + "..." if self.cleaned_text and len(self.cleaned_text) > 5000 else self.cleaned_text,
             "chunks_count": len(self.chunks),
+            "scraped_items_count": len(self.scraped_items),
             "source_label": self.source_label,
             "chunking_config": {
                 "batch_size": self.chunking_config.batch_size,
@@ -110,6 +112,7 @@ class WorkflowState:
             "source_config": self.source_config,
             "raw_text": self.raw_text,
             "cleaned_text": self.cleaned_text,
+            "scraped_items": self.scraped_items,
             "chunks": self.chunks,
             "source_label": self.source_label,
             "chunking_config": {
@@ -193,6 +196,7 @@ class WorkflowState:
             source_config=d.get("source_config"),
             raw_text=d.get("raw_text"),
             cleaned_text=d.get("cleaned_text"),
+            scraped_items=d.get("scraped_items", []),
             chunks=d.get("chunks", []),
             source_label=d.get("source_label"),
             chunking_config=chunking_config,

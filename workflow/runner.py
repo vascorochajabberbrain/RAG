@@ -100,9 +100,12 @@ def _run_fetch(state: WorkflowState) -> str:
         scraper_name = config.get("scraper_name") or config.get("scraper")
         if not scraper_name:
             return "Error: source_config must contain 'scraper_name' or 'scraper' for url."
-        state.raw_text = run_scraper(scraper_name, config)
+        raw_text, scraped_items = run_scraper(scraper_name, config)
+        state.raw_text = raw_text
+        state.scraped_items = scraped_items
         state.source_label = config.get("source_label") or scraper_name
-        return f"Fetched URL (scraper={scraper_name}): {len(state.raw_text)} characters."
+        items_info = f", {len(scraped_items)} pages with URL metadata" if scraped_items else ""
+        return f"Fetched URL (scraper={scraper_name}): {len(state.raw_text)} characters{items_info}."
 
     if stype == "csv":
         from ingestion.csv_ingestion import read_csv_to_chunks
@@ -310,8 +313,8 @@ def _run_push(state: WorkflowState) -> str:
     if state.grouping_enabled:
         tracker.save_collection(name)
         return f"Saved group collection '{name}' to Qdrant."
-    # SCS path: append chunks to collection then save
-    coll.append_sentences(state.chunks, state.source_label)
+    # SCS path: append chunks to collection then save (pass scraped_items for source_url annotation)
+    coll.append_sentences(state.chunks, state.source_label, scraped_items=state.scraped_items or [])
     tracker.save_collection(name)
     return f"Appended {len(state.chunks)} chunks and saved '{name}' to Qdrant."
 

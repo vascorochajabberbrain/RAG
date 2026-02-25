@@ -1,4 +1,4 @@
-from ingestion.url_ingestion import main as url_ingestion_main
+from ingestion.url_ingestion_legacy import main as url_ingestion_main
 from vectorization import get_text_chunks
 def main():
     #url_ingestion_main()
