@@ -503,8 +503,8 @@ _INDEX_HTML = """
     .btn-primary:hover { background: #0052a3; }
     .btn-secondary { background: #e9ecef; color: #333; margin-left: 0.5rem; }
     .btn-secondary:hover { background: #dee2e6; }
-    .btn-translate { background: #2e7d32; color: #fff; margin-left: 0.5rem; }
-    .btn-translate:hover { background: #1b5e20; }
+    .btn-translate { background: #888; color: #fff; margin-left: 0.5rem; }
+    .btn-translate:hover { background: #666; }
     .progress-wrap { margin-top: 0.75rem; display: none; }
     .progress-bar-bg { background: #e9ecef; border-radius: 6px; height: 10px; overflow: hidden; }
     .progress-bar-fill { background: #2e7d32; height: 10px; width: 0%; transition: width 0.3s ease; border-radius: 6px; }
@@ -1217,12 +1217,22 @@ _INDEX_HTML = """
       };
     };
 
+    const _pipelineBtns = () => ['runCreate','runFetch','runTranslate','runChunk','runPush'].map(id => document.getElementById(id)).filter(Boolean);
+    const _clearDone    = () => _pipelineBtns().forEach(b => { if (b.dataset.done) { b.style.background = ''; b.style.color = ''; delete b.dataset.done; } });
+    const _btnRunning   = (btn) => { _clearDone(); btn.disabled = true; btn.style.background = '#e65c00'; btn.style.color = '#fff'; };
+    const _btnDone      = (btn) => { btn.disabled = false; btn.style.background = ''; btn.style.color = ''; };
+    const _btnSuccess   = (btn) => { btn.disabled = false; btn.style.background = '#2e7d32'; btn.style.color = '#fff'; btn.dataset.done = '1'; };
+
     const runStep = async (step) => {
+      const stepBtnMap = { chunk: 'runChunk', push_to_qdrant: 'runPush', create_collection: 'runCreate' };
+      const stepBtn = stepBtnMap[step] ? document.getElementById(stepBtnMap[step]) : null;
+      if (stepBtn) _btnRunning(stepBtn);
       setLog(buildLog, 'Running…', false);
       try {
         const res = await api('/api/workflow/step', { step, state_update: getStateUpdate() });
         const msg = res.message || res.detail || JSON.stringify(res);
         const isError = msg.includes('Error') || !!res.detail;
+        if (stepBtn) { isError ? _btnDone(stepBtn) : _btnSuccess(stepBtn); }
         setLog(buildLog, msg, isError);
         // After chunk step: render collection metadata card if available
         if (step === 'chunk' && res.state && res.state.collection_metadata) {
@@ -1238,6 +1248,7 @@ _INDEX_HTML = """
           }
         }
       } catch (e) {
+        if (stepBtn) _btnDone(stepBtn);
         setLog(buildLog, e.message || String(e), true);
       }
     };
@@ -1269,7 +1280,7 @@ _INDEX_HTML = """
 
     async function runFetchWithProgress() {
       const btn = document.getElementById('runFetch');
-      btn.disabled = true;
+      _btnRunning(btn);
       btn.textContent = '2. Fetching…';
       setLog(buildLog, 'Fetching… (this may take a few minutes for large sites)', false);
       buildLog.style.maxHeight = '20rem';
@@ -1287,17 +1298,15 @@ _INDEX_HTML = """
           buildLog.scrollTop = buildLog.scrollHeight;
           buildLog.className = 'log success';
           es.close();
-          btn.disabled = false;
-          btn.textContent = '2. Fetch';
+          _btnSuccess(btn); btn.textContent = '2. Fetch';
         } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
           buildLog.textContent += '\\n❌ ' + data;
           buildLog.className = 'log error';
           es.close();
-          btn.disabled = false;
-          btn.textContent = '2. Fetch';
+          _btnDone(btn); btn.textContent = '2. Fetch';
         }
       };
-      es.onerror = () => { es.close(); btn.disabled = false; btn.textContent = '2. Fetch'; };
+      es.onerror = () => { es.close(); _btnDone(btn); btn.textContent = '2. Fetch'; };
 
       try {
         await api('/api/workflow/fetch', { step: 'fetch', state_update: getStateUpdate() });
@@ -1315,7 +1324,7 @@ _INDEX_HTML = """
       const bar = document.getElementById('translateBar');
       const label = document.getElementById('translateLabel');
 
-      btn.disabled = true;
+      _btnRunning(btn);
       wrap.style.display = 'block';
       bar.style.width = '0%';
       label.textContent = 'Starting…';
@@ -1336,13 +1345,13 @@ _INDEX_HTML = """
           label.textContent = 'Done!';
           setLog(buildLog, msg, false);
           es.close();
-          btn.disabled = false;
+          _btnSuccess(btn);
         } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
           es.close();
-          btn.disabled = false;
+          _btnDone(btn);
         }
       };
-      es.onerror = () => { es.close(); btn.disabled = false; };
+      es.onerror = () => { es.close(); _btnDone(btn); };
 
       // Kick off translate in background thread (returns immediately)
       try {
