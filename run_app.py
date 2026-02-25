@@ -26,20 +26,35 @@ if os.path.exists(_env_path):
 
 
 def _kill_port(port):
-    """Kill any process listening on the given port."""
+    """Kill any Python/uvicorn process listening on the given port (skips Chrome etc)."""
     import subprocess
+    import signal
+    import socket
     try:
         result = subprocess.run(
-            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+            ["lsof", "-i", f":{port}", "-n", "-P"],
+            capture_output=True, text=True
         )
-        pids = result.stdout.strip().split()
-        for pid in pids:
+        for line in result.stdout.splitlines()[1:]:  # skip header row
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            cmd = parts[0].lower()
+            pid = parts[1]
+            # Only kill Python/uvicorn processes — never Chrome, Safari, etc.
+            if any(x in cmd for x in ("python", "uvicorn")):
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except Exception:
+                    pass
+        time.sleep(0.8)  # give OS time to start releasing the port
+        # Wait for port to be free (up to 3 seconds)
+        for _ in range(6):
             try:
-                os.kill(int(pid), 9)
-            except Exception:
-                pass
-        if pids:
-            time.sleep(0.8)  # give OS time to release the port
+                with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                    time.sleep(0.5)
+            except OSError:
+                break  # port is free
     except Exception:
         pass
 
