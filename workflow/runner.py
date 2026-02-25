@@ -227,6 +227,12 @@ def _run_chunk(state: WorkflowState) -> str:
     if not text:
         return "Error: No text to chunk. Run FETCH (and optionally CLEAN) first."
 
+    # Fast path for URL/scraper sources: scraped_items already has exactly 1 entry per page,
+    # each pre-rendered by the chunk_template. Use them directly — no splitting needed.
+    if state.scraped_items:
+        state.chunks = [item["text"] for item in state.scraped_items]
+        return f"Chunked into {len(state.chunks)} chunks (1 per scraped page — no splitting needed)."
+
     if cfg.use_hierarchical_chunking:
         return _run_chunk_hierarchical(state, cfg, text)
     elif cfg.use_proposition_chunking:
