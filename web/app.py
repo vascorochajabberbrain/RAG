@@ -1279,18 +1279,18 @@ _INDEX_HTML = """
         const data = e.data;
         if (data.startsWith('LOG:')) {
           const line = data.replace('LOG:', '');
-          buildLog.textContent += (buildLog.textContent ? '\n' : '') + line;
+          buildLog.textContent += (buildLog.textContent ? '\\n' : '') + line;
           buildLog.scrollTop = buildLog.scrollHeight;
         } else if (data.startsWith('DONE:')) {
           const msg = data.replace('DONE:', '');
-          buildLog.textContent += '\n✅ ' + msg;
+          buildLog.textContent += '\\n✅ ' + msg;
           buildLog.scrollTop = buildLog.scrollHeight;
           buildLog.className = 'log success';
           es.close();
           btn.disabled = false;
           btn.textContent = '2. Fetch';
         } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
-          buildLog.textContent += '\n❌ ' + data;
+          buildLog.textContent += '\\n❌ ' + data;
           buildLog.className = 'log error';
           es.close();
           btn.disabled = false;
