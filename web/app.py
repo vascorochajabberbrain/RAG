@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional, Any
-import queue, threading, asyncio
+import os, queue, threading, asyncio
 
 # In-memory state for single-user demo (one workflow at a time)
 _current_state: Optional[Any] = None
@@ -48,9 +48,10 @@ class StepRequest(BaseModel):
 
 
 class QARequest(BaseModel):
-    collection_name: str
+    collection_name: str  # single name, "__all__", or comma-separated list
     question: str
     company: str = "Assistant"
+    solution_id: Optional[str] = None
 
 
 @app.get("/")
@@ -75,22 +76,27 @@ def list_solutions_api():
 
 @app.get("/api/solutions/{solution_id}/collections")
 def solution_collections(solution_id: str):
-    """Return all Qdrant collections registered under a solution, plus any in Qdrant with matching prefix."""
+    """Return all Qdrant collections registered under a solution."""
     try:
-        from solution_specs import get_solution
+        from solution_specs import get_solution, get_collections
         sol = get_solution(solution_id)
         if not sol:
             raise HTTPException(status_code=404, detail=f"Solution '{solution_id}' not found")
         tracker = get_state().tracker
         all_qdrant = tracker.all_collections()
-        # Collections explicitly listed in solutions.yaml for this solution
-        registered = [c for c in sol.get("collections", [sol.get("collection_name", "")]) if c]
-        # Also surface any Qdrant collections that start with the solution's base collection name
-        base = sol.get("collection_name", solution_id)
-        extras = [c for c in all_qdrant if c.startswith(base) and c not in registered]
-        combined = registered + extras
-        # Mark which ones actually exist in Qdrant
-        result = [{"name": c, "exists": c in all_qdrant} for c in combined if c]
+        # collections is always a list of dicts in the new schema
+        coll_entries = get_collections(solution_id)
+        result = [
+            {
+                "name": c["collection_name"],
+                "id": c.get("id", c["collection_name"]),
+                "display_name": c.get("display_name", c["collection_name"]),
+                "scraper_name": c.get("scraper_name", ""),
+                "routing": c.get("routing", {}),
+                "exists": c["collection_name"] in all_qdrant,
+            }
+            for c in coll_entries if c.get("collection_name")
+        ]
         return {"solution_id": solution_id, "collections": result}
     except HTTPException:
         raise
@@ -98,33 +104,44 @@ def solution_collections(solution_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _specs_file() -> str:
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "solution_specs", "solutions.yaml")
+
+
 class AddCollectionRequest(BaseModel):
     solution_id: str
     collection_name: str
     display_name: Optional[str] = None
+    scraper_name: Optional[str] = None
 
 @app.post("/api/solutions/add-collection")
 def add_collection_to_solution(req: AddCollectionRequest):
-    """Register a new collection under an existing solution in solutions.yaml."""
+    """Register a new collection dict under an existing solution in solutions.yaml."""
     import yaml
-    specs_file = "/Users/johanahlund/PROGRAMMING/RAG/solution_specs/solutions.yaml"
     try:
-        with open(specs_file, "r", encoding="utf-8") as f:
+        with open(_specs_file(), "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         solutions = data.get("solutions", [])
         sol = next((s for s in solutions if s["id"] == req.solution_id), None)
         if not sol:
             raise HTTPException(status_code=404, detail=f"Solution '{req.solution_id}' not found")
-        # Add to collections list (multi-collection support)
         if "collections" not in sol:
-            sol["collections"] = [sol.get("collection_name", "")]
-        if req.collection_name not in sol["collections"]:
-            sol["collections"].append(req.collection_name)
-        # Also update collection_name to the latest one
-        sol["collection_name"] = req.collection_name
-        with open(specs_file, "w", encoding="utf-8") as f:
-            yaml.dump(data, f, allow_unicode=True, sort_keys=False)
-        # Reload cache
+            sol["collections"] = []
+        existing_names = [c["collection_name"] for c in sol["collections"] if isinstance(c, dict)]
+        if req.collection_name not in existing_names:
+            new_entry = {
+                "id": req.collection_name,
+                "display_name": req.display_name or req.collection_name,
+                "collection_name": req.collection_name,
+                "collection_type": "scs",
+                "routing": {},
+            }
+            if req.scraper_name:
+                new_entry["scraper_name"] = req.scraper_name
+            sol["collections"].append(new_entry)
+        with open(_specs_file(), "w", encoding="utf-8") as f:
+            yaml.dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         from solution_specs import reload
         reload()
         return {"message": f"Added '{req.collection_name}' to solution '{req.solution_id}'"}
@@ -142,26 +159,21 @@ class DeleteCollectionRequest(BaseModel):
 def delete_collection_from_solution(req: DeleteCollectionRequest):
     """Delete a collection from Qdrant and remove it from solutions.yaml."""
     import yaml
-    specs_file = "/Users/johanahlund/PROGRAMMING/RAG/solution_specs/solutions.yaml"
     try:
         tracker = get_state().tracker
-        # Delete from Qdrant if it exists
         if tracker._existing_collection_name(req.collection_name):
             tracker._delete_collection(req.collection_name)
-        # Remove from solutions.yaml
-        with open(specs_file, "r", encoding="utf-8") as f:
+        with open(_specs_file(), "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         for sol in data.get("solutions", []):
             if sol["id"] == req.solution_id:
-                if "collections" in sol:
-                    sol["collections"] = [c for c in sol["collections"] if c != req.collection_name]
-                # If it was the primary collection_name, reset to first remaining or empty
-                if sol.get("collection_name") == req.collection_name:
-                    remaining = sol.get("collections", [])
-                    sol["collection_name"] = remaining[0] if remaining else ""
+                sol["collections"] = [
+                    c for c in sol.get("collections", [])
+                    if (c.get("collection_name") if isinstance(c, dict) else c) != req.collection_name
+                ]
                 break
-        with open(specs_file, "w", encoding="utf-8") as f:
-            yaml.dump(data, f, allow_unicode=True, sort_keys=False)
+        with open(_specs_file(), "w", encoding="utf-8") as f:
+            yaml.dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         from solution_specs import reload
         reload()
         return {"message": f"Deleted collection '{req.collection_name}'"}
@@ -169,6 +181,20 @@ def delete_collection_from_solution(req: DeleteCollectionRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class UpdateRoutingRequest(BaseModel):
+    routing: dict
+
+@app.put("/api/solutions/{solution_id}/collections/{collection_id}/routing")
+def update_collection_routing(solution_id: str, collection_id: str, req: UpdateRoutingRequest):
+    """Update the routing metadata block for a specific collection in solutions.yaml."""
+    from workflow.suggest import save_routing_metadata
+    success = save_routing_metadata(solution_id, collection_id, req.routing)
+    if not success:
+        raise HTTPException(status_code=404,
+                            detail=f"Collection '{collection_id}' in solution '{solution_id}' not found")
+    return {"message": f"Routing metadata updated for {solution_id}/{collection_id}"}
 
 
 @app.post("/api/workflow/step")
@@ -231,8 +257,17 @@ def run_workflow_step(req: StepRequest):
 @app.post("/api/qa")
 def qa(req: QARequest):
     from chatbot import get_retrieved_info, get_answer
+    # Resolve collection name(s)
+    if req.collection_name == "__all__" and req.solution_id:
+        from solution_specs import get_collections
+        colls = get_collections(req.solution_id)
+        collection_names = [c["collection_name"] for c in colls if c.get("collection_name")]
+    elif "," in req.collection_name:
+        collection_names = [s.strip() for s in req.collection_name.split(",") if s.strip()]
+    else:
+        collection_names = req.collection_name
     history = []
-    retrieved = get_retrieved_info(req.question, history, req.collection_name)
+    retrieved = get_retrieved_info(req.question, history, collection_names)
     answer = get_answer(history, retrieved, req.question, req.company)
     return {"question": req.question, "answer": answer}
 
@@ -306,25 +341,70 @@ def state_load(req: StateLoadRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _clear_progress_queue():
+    while not _progress_queue.empty():
+        try:
+            _progress_queue.get_nowait()
+        except Exception:
+            break
+
+
+def _apply_state_update(state, state_update: dict):
+    from workflow.models import ChunkingConfig
+    if not state_update:
+        return
+    for k, v in state_update.items():
+        if k == "source_config" and isinstance(v, dict):
+            state.source_config = v
+        elif k == "chunking_config" and isinstance(v, dict):
+            pass  # handled elsewhere
+        elif hasattr(state, k):
+            setattr(state, k, v)
+
+
+@app.post("/api/workflow/fetch")
+def run_fetch_streaming(req: StepRequest):
+    """Run FETCH in a background thread, streaming stdout lines via SSE progress queue."""
+    from workflow.models import Step, WorkflowState, ChunkingConfig
+    from workflow.runner import run_step
+    import io, sys
+
+    state = get_state()
+    _apply_state_update(state, req.state_update)
+    _clear_progress_queue()
+
+    class _QueueWriter(io.TextIOBase):
+        """Intercepts print() calls and forwards them to the SSE progress queue."""
+        def write(self, s):
+            s = s.strip()
+            if s:
+                _progress_queue.put(f"LOG:{s}")
+            return len(s)
+        def flush(self): pass
+
+    def _run():
+        old_stdout = sys.stdout
+        sys.stdout = _QueueWriter()
+        try:
+            msg = run_step(state, Step.FETCH)
+            _progress_queue.put(f"DONE:{msg}")
+        except Exception as e:
+            _progress_queue.put(f"ERROR:{e}")
+        finally:
+            sys.stdout = old_stdout
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"message": "Fetch started in background. Watch /api/progress for updates."}
+
+
 @app.post("/api/workflow/translate")
 def run_translate(req: StepRequest):
     """Run translate_and_clean in a background thread so SSE can stream progress."""
     from workflow.models import Step
     from workflow.runner import run_step
     state = get_state()
-    if req.state_update:
-        for k, v in req.state_update.items():
-            if k == "source_config" and isinstance(v, dict):
-                state.source_config = v
-            elif hasattr(state, k):
-                setattr(state, k, v)
-
-    # Clear any stale messages from the queue
-    while not _progress_queue.empty():
-        try:
-            _progress_queue.get_nowait()
-        except Exception:
-            break
+    _apply_state_update(state, req.state_update)
+    _clear_progress_queue()
 
     def _run():
         run_step(state, Step.TRANSLATE_AND_CLEAN)
@@ -477,6 +557,11 @@ _INDEX_HTML = """
           <div id="existingCollectionInfo" style="font-size:0.82rem;color:#555;margin-top:0.25rem;display:none;"></div>
         </div>
 
+        <!-- Sub-collection picker: shown when solution has multiple collections -->
+        <div id="subCollectionPicker" style="margin-top:0.5rem;"></div>
+        <!-- Routing metadata panel: shown when a specific sub-collection is selected -->
+        <div id="routingMetadataPanel" style="display:none;"></div>
+
         <!-- Shown when NO solution is selected: type collection name directly -->
         <div id="noSolutionRow" style="margin-top:0.75rem;display:block;">
           <label>Collection name <span style="font-weight:400;color:#888;font-size:0.85rem;">— or select a solution above</span></label>
@@ -511,7 +596,26 @@ _INDEX_HTML = """
         </div>
         <div id="scraperRow" class="hidden">
           <label>Scraper name</label>
-          <input type="text" id="scraperName" placeholder="e.g. peixefresco">
+          <input type="text" id="scraperName" placeholder="e.g. peixefresco_products">
+          <label style="margin-top:0.6rem;">Scraping engine</label>
+          <div style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.9rem;margin-top:0.2rem;">
+            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
+              <input type="radio" name="scraperEngine" value="playwright" checked onchange="onScraperEngineChange()" style="width:auto;margin-top:2px;">
+              <span><strong>Playwright</strong> <span style="color:#888;font-size:0.82rem;">— default. Handles JS, dynamic content, SPAs.</span></span>
+            </label>
+            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
+              <input type="radio" name="scraperEngine" value="httpx" onchange="onScraperEngineChange()" style="width:auto;margin-top:2px;">
+              <span><strong>httpx (fast)</strong> <span style="color:#888;font-size:0.82rem;">— SSR-only sites. ~10x faster, no browser needed.</span></span>
+            </label>
+            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
+              <input type="radio" name="scraperEngine" value="shopify" onchange="onScraperEngineChange()" style="width:auto;margin-top:2px;">
+              <span><strong>Shopify API</strong> <span style="color:#888;font-size:0.82rem;">— Shopify stores. Uses /products.json directly.</span></span>
+            </label>
+          </div>
+          <div id="shopifyUrlRow" class="hidden" style="margin-top:0.5rem;">
+            <label>Shop URL</label>
+            <input type="text" id="shopUrl" placeholder="https://mystore.myshopify.com">
+          </div>
         </div>
       </div>
       <div class="card">
@@ -595,9 +699,7 @@ _INDEX_HTML = """
           const o = document.createElement('option');
           o.value = s.id;
           o.textContent = s.display_name || s.id;
-          o.dataset.collection = s.collection_name || '';
           o.dataset.company = s.company_name || '';
-          o.dataset.scraper = s.scraper_name || '';
           parent.appendChild(o);
         };
         makeOpt(selBuild);
@@ -614,35 +716,36 @@ _INDEX_HTML = """
       if (!solId) {
         noSolRow.style.display = 'block';
         collSection.style.display = 'none';
+        renderSubCollectionPicker([]);
         return;
       }
       noSolRow.style.display = 'none';
       collSection.style.display = 'block';
 
-      // Pre-fill scraper if solution has one
-      const o = sel.options[sel.selectedIndex];
-      if (o.dataset.scraper) {
-        document.getElementById('sourceType').value = 'url';
-        document.getElementById('scraperName').value = o.dataset.scraper;
-        onSourceTypeChange();
-      }
-
-      // Load collections for this solution
+      // Load collections for this solution — renders pills + populates collectionSelect
       await loadSolutionCollections(solId);
       renderRecentFiles();
     }
+
+    // _currentCollections: full collection objects from the API, keyed by collection_name
+    let _currentCollections = {};
 
     async function loadSolutionCollections(solId) {
       const collSelect = document.getElementById('collectionSelect');
       collSelect.innerHTML = '<option value="">Loading…</option>';
       try {
         const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections').then(r => r.json());
+        _currentCollections = {};
+        res.collections.forEach(c => { _currentCollections[c.name] = c; });
+
         collSelect.innerHTML = '';
         res.collections.forEach(c => {
           const o = document.createElement('option');
           o.value = c.name;
-          o.textContent = c.name + (c.exists ? ' ✓' : ' (not in Qdrant)');
+          o.textContent = (c.display_name || c.name) + (c.exists ? ' ✓' : ' (not in Qdrant)');
           o.dataset.exists = c.exists ? '1' : '0';
+          o.dataset.scraper = c.scraper_name || '';
+          o.dataset.collId = c.id || c.name;
           collSelect.appendChild(o);
         });
         // Add "create new" at end
@@ -650,14 +753,153 @@ _INDEX_HTML = """
         newOpt.value = '__new__';
         newOpt.textContent = '＋ Create new collection…';
         collSelect.appendChild(newOpt);
-        // Auto-select first existing
-        const first = res.collections.find(c => c.exists);
-        if (first) collSelect.value = first.name;
-        onCollectionSelect();
+
+        // Render sub-collection pills
+        renderSubCollectionPicker(res.collections, solId);
+
+        // Auto-select first existing, or first option
+        const first = res.collections.find(c => c.exists) || res.collections[0];
+        if (first) {
+          collSelect.value = first.name;
+          onCollectionSelect();
+        } else {
+          onCollectionSelect();
+        }
       } catch(e) {
         collSelect.innerHTML = '<option value="__new__">＋ Create new collection…</option>';
+        renderSubCollectionPicker([], solId);
         onCollectionSelect();
       }
+    }
+
+    function renderSubCollectionPicker(collections, solId) {
+      const container = document.getElementById('subCollectionPicker');
+      if (!container) return;
+      container.innerHTML = '';
+      if (!collections || collections.length === 0) {
+        document.getElementById('routingMetadataPanel').style.display = 'none';
+        return;
+      }
+      if (collections.length === 1) {
+        // Single collection — auto-set scraper if available, no pills needed, but still show routing panel
+        const c = collections[0];
+        if (c.scraper_name) {
+          document.getElementById('sourceType').value = 'url';
+          document.getElementById('scraperName').value = c.scraper_name;
+          onSourceTypeChange();
+        }
+        renderRoutingMetadataPanel(c, solId);
+        return;
+      }
+      // Multiple collections — render pills
+      const label = document.createElement('p');
+      label.style.cssText = 'font-size:0.82rem;color:#888;margin:0 0 0.4rem 0;';
+      label.textContent = 'Select collection to build:';
+      container.appendChild(label);
+      const pillRow = document.createElement('div');
+      pillRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.6rem;';
+
+      function selectPill(btn, c) {
+        pillRow.querySelectorAll('button').forEach(b => {
+          b.style.background = '#222'; b.style.color = '#ccc'; b.style.borderColor = '#555';
+        });
+        btn.style.background = '#2a5caa'; btn.style.color = '#fff'; btn.style.borderColor = '#2a5caa';
+        if (c.scraper_name) {
+          document.getElementById('sourceType').value = 'url';
+          document.getElementById('scraperName').value = c.scraper_name;
+          onSourceTypeChange();
+        }
+        const collSelect = document.getElementById('collectionSelect');
+        if (collSelect) { collSelect.value = c.name; onCollectionSelect(); }
+        renderRoutingMetadataPanel(c, solId);
+      }
+
+      collections.forEach((c, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = c.display_name || c.name;
+        btn.style.cssText = 'padding:0.25rem 0.7rem;border-radius:999px;border:1px solid #555;background:#222;color:#ccc;cursor:pointer;font-size:0.85rem;';
+        btn.onclick = () => selectPill(btn, c);
+        pillRow.appendChild(btn);
+      });
+      container.appendChild(pillRow);
+
+      // Auto-select the first pill on load
+      const firstBtn = pillRow.querySelector('button');
+      if (firstBtn) selectPill(firstBtn, collections[0]);
+    }
+
+    function renderRoutingMetadataPanel(coll, solId) {
+      const panel = document.getElementById('routingMetadataPanel');
+      if (!panel) return;
+      const routing = coll.routing || {};
+      const isEmpty = !routing.description;
+      panel.style.display = 'block';
+      panel.innerHTML = `
+        <div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:0.8rem;margin-top:0.6rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+            <span style="font-size:0.82rem;color:#888;">Routing Metadata — <em>${coll.display_name || coll.name}</em></span>
+            <button type="button" id="btnEditRouting" style="font-size:0.78rem;padding:0.15rem 0.5rem;background:#333;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;">Edit</button>
+          </div>
+          ${isEmpty
+            ? '<p style="font-size:0.82rem;color:#666;margin:0;">No routing metadata yet. Will be auto-generated after chunking.</p>'
+            : `<div style="font-size:0.82rem;color:#aaa;line-height:1.6;">
+                <b>Description:</b> ${routing.description || '—'}<br>
+                <b>Keywords:</b> ${(routing.keywords || []).join(', ') || '—'}<br>
+                <b>Typical questions:</b> ${(routing.typical_questions || []).join(' | ') || '—'}<br>
+                <b>Not covered:</b> ${(routing.not_covered || []).join(', ') || '—'}<br>
+                <b>Language:</b> ${routing.language || '—'} &nbsp; <b>Type:</b> ${routing.doc_type || '—'}
+               </div>`
+          }
+          <div id="routingEditArea" style="display:none;margin-top:0.6rem;">
+            <textarea id="routingJsonInput" rows="10" style="width:100%;background:#111;border:1px solid #444;color:#ccc;font-family:monospace;font-size:0.78rem;padding:0.4rem;border-radius:4px;box-sizing:border-box;">${isEmpty ? JSON.stringify({description:'',keywords:[],typical_questions:[],not_covered:[],language:'',doc_type:''}, null, 2) : JSON.stringify(routing, null, 2)}</textarea>
+            <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
+              <button type="button" onclick="saveRoutingMetadata('${solId}','${coll.id || coll.name}')" style="padding:0.3rem 0.8rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;font-size:0.82rem;">Save</button>
+              <button type="button" onclick="document.getElementById('routingEditArea').style.display='none'" style="padding:0.3rem 0.8rem;background:#333;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
+            </div>
+          </div>
+        </div>`;
+      document.getElementById('btnEditRouting').onclick = () => {
+        const area = document.getElementById('routingEditArea');
+        area.style.display = area.style.display === 'none' ? 'block' : 'none';
+      };
+    }
+
+    async function saveRoutingMetadata(solId, collId) {
+      try {
+        const raw = document.getElementById('routingJsonInput').value;
+        const routing = JSON.parse(raw);
+        const res = await fetch(`/api/solutions/${encodeURIComponent(solId)}/collections/${encodeURIComponent(collId)}/routing`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routing })
+        }).then(r => r.json());
+        setLog(buildLog, res.message || res.detail, !!res.detail);
+        // Reload collections to refresh routing display
+        await loadSolutionCollections(solId);
+      } catch(e) {
+        setLog(buildLog, 'Failed to save routing metadata: ' + e.message, true);
+      }
+    }
+
+    async function autoSaveRoutingMetadata(solId, collId, meta) {
+      // Strip topics (not used for routing) and save the routing-relevant fields
+      const routing = {};
+      for (const k of ['description', 'keywords', 'typical_questions', 'not_covered', 'language', 'doc_type']) {
+        if (meta[k] != null) routing[k] = meta[k];
+      }
+      if (!routing.description) return;  // nothing meaningful to save
+      try {
+        const res = await fetch(`/api/solutions/${encodeURIComponent(solId)}/collections/${encodeURIComponent(collId)}/routing`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routing })
+        }).then(r => r.json());
+        if (!res.detail) {
+          setLog(buildLog, (res.message || 'Routing metadata saved.') + ' Edit it in the panel above if needed.', false);
+          await loadSolutionCollections(solId);
+        }
+      } catch(e) { /* silent — auto-save failure is non-critical */ }
     }
 
     function onCollectionSelect() {
@@ -741,6 +983,12 @@ _INDEX_HTML = """
       const st = document.getElementById('sourceType').value;
       document.getElementById('filePickerRow').classList.toggle('hidden', st === 'url');
       document.getElementById('scraperRow').classList.toggle('hidden', st !== 'url');
+    }
+
+    // Show/hide Shopify URL field based on engine selection
+    function onScraperEngineChange() {
+      const engine = document.querySelector('input[name="scraperEngine"]:checked').value;
+      document.getElementById('shopifyUrlRow').classList.toggle('hidden', engine !== 'shopify');
     }
 
     // ── Recent files (persisted in localStorage) ──────────────────────────
@@ -951,8 +1199,13 @@ _INDEX_HTML = """
       const scraper = document.getElementById('scraperName').value.trim();
       const chunkMode = document.querySelector('input[name="chunkMode"]:checked').value;
       let source_config = {};
-      if (st === 'url') source_config = { scraper_name: scraper || 'peixefresco', source_label: scraper || 'peixefresco' };
-      else if (path) source_config = { path, source_label: path.split('/').pop() };
+      if (st === 'url') {
+        const engine = (document.querySelector('input[name="scraperEngine"]:checked') || {}).value || 'playwright';
+        source_config = { scraper_name: scraper || 'peixefresco', source_label: scraper || scraper, engine };
+        if (engine === 'shopify') {
+          source_config.shop_url = (document.getElementById('shopUrl') || {}).value?.trim() || '';
+        }
+      } else if (path) source_config = { path, source_label: path.split('/').pop() };
       return {
         collection_name: getCollectionName(),
         source_type: st,
@@ -974,6 +1227,15 @@ _INDEX_HTML = """
         // After chunk step: render collection metadata card if available
         if (step === 'chunk' && res.state && res.state.collection_metadata) {
           renderMetadataCard(res.state.collection_metadata);
+        }
+        // After chunk: auto-save routing metadata if a solution + collection is selected
+        if (step === 'chunk' && res.state && res.state.collection_metadata) {
+          const solId = document.getElementById('solutionBuild').value;
+          const collSelect = document.getElementById('collectionSelect');
+          if (solId && collSelect && collSelect.value && collSelect.value !== '__new__') {
+            const collId = (collSelect.options[collSelect.selectedIndex] || {}).dataset?.collId || collSelect.value;
+            await autoSaveRoutingMetadata(solId, collId, res.state.collection_metadata);
+          }
         }
       } catch (e) {
         setLog(buildLog, e.message || String(e), true);
@@ -1000,10 +1262,52 @@ _INDEX_HTML = """
     }
 
     document.getElementById('runCreate').onclick = () => runStep('create_collection');
-    document.getElementById('runFetch').onclick = () => runStep('fetch');
+    document.getElementById('runFetch').onclick = () => runFetchWithProgress();
     document.getElementById('runTranslate').onclick = () => runTranslateWithProgress();
     document.getElementById('runChunk').onclick = () => runStep('chunk');
     document.getElementById('runPush').onclick = () => runStep('push_to_qdrant');
+
+    async function runFetchWithProgress() {
+      const btn = document.getElementById('runFetch');
+      btn.disabled = true;
+      btn.textContent = '2. Fetching…';
+      setLog(buildLog, 'Fetching… (this may take a few minutes for large sites)', false);
+      buildLog.style.maxHeight = '20rem';
+
+      const es = new EventSource('/api/progress');
+      es.onmessage = (e) => {
+        const data = e.data;
+        if (data.startsWith('LOG:')) {
+          const line = data.replace('LOG:', '');
+          buildLog.textContent += (buildLog.textContent ? '\n' : '') + line;
+          buildLog.scrollTop = buildLog.scrollHeight;
+        } else if (data.startsWith('DONE:')) {
+          const msg = data.replace('DONE:', '');
+          buildLog.textContent += '\n✅ ' + msg;
+          buildLog.scrollTop = buildLog.scrollHeight;
+          buildLog.className = 'log success';
+          es.close();
+          btn.disabled = false;
+          btn.textContent = '2. Fetch';
+        } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
+          buildLog.textContent += '\n❌ ' + data;
+          buildLog.className = 'log error';
+          es.close();
+          btn.disabled = false;
+          btn.textContent = '2. Fetch';
+        }
+      };
+      es.onerror = () => { es.close(); btn.disabled = false; btn.textContent = '2. Fetch'; };
+
+      try {
+        await api('/api/workflow/fetch', { step: 'fetch', state_update: getStateUpdate() });
+      } catch (e) {
+        setLog(buildLog, e.message || String(e), true);
+        es.close();
+        btn.disabled = false;
+        btn.textContent = '2. Fetch';
+      }
+    }
 
     async function runTranslateWithProgress() {
       const btn = document.getElementById('runTranslate');
@@ -1070,14 +1374,21 @@ _INDEX_HTML = """
         const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections').then(r => r.json());
         collSel.innerHTML = '';
         const existing = (res.collections || []).filter(c => c.exists);
+        if (existing.length > 1) {
+          // "All collections" option for multi-collection solutions
+          const allOpt = document.createElement('option');
+          allOpt.value = '__all__';
+          allOpt.textContent = '⚡ All collections (recommended)';
+          collSel.appendChild(allOpt);
+        }
         existing.forEach(c => {
           const o = document.createElement('option');
           o.value = c.name;
-          o.textContent = c.name;
+          o.textContent = c.display_name || c.name;
           collSel.appendChild(o);
         });
         if (!existing.length) {
-          collSel.innerHTML = '<option value="">No collections found</option>';
+          collSel.innerHTML = '<option value="">No collections found in Qdrant yet</option>';
         }
       } catch(e) {
         collSel.innerHTML = '<option value="">Error loading collections</option>';
@@ -1088,6 +1399,7 @@ _INDEX_HTML = """
       const sel = document.getElementById('solutionChat');
       const o = sel.options[sel.selectedIndex];
       const company = (o && o.value ? o.dataset.company : null) || 'Assistant';
+      const solId = sel.value || null;
       const collection = document.getElementById('chatCollectionSelect').value.trim();
       const question = document.getElementById('qaQuestion').value.trim();
       if (!collection || !question) {
@@ -1096,7 +1408,9 @@ _INDEX_HTML = """
       }
       setLog(qaResult, '…', false);
       try {
-        const res = await api('/api/qa', { collection_name: collection, question, company });
+        const body = { collection_name: collection, question, company };
+        if (collection === '__all__' && solId) body.solution_id = solId;
+        const res = await api('/api/qa', body);
         qaResult.textContent = 'Q: ' + res.question + '\\n\\nA: ' + res.answer;
         qaResult.classList.remove('error');
         qaResult.classList.add('success');
