@@ -319,23 +319,35 @@ def _run_push(state: WorkflowState) -> str:
     if not name:
         return "Error: collection_name is required."
 
-    # collection_object is a live Python object — it is NOT persisted to .rag_state.json.
-    # If the state was loaded from disk (e.g. after Fetch+Chunk were run in a prior session),
-    # collection_object will be None here. Recreate it now.
-    if coll is None:
-        coll_type = "group" if state.grouping_enabled else "scs"
-        # Delete existing collection so we start fresh (matches CREATE_COLLECTION behaviour)
-        if tracker._existing_collection_name(name):
-            tracker._delete_collection(name)
-        coll = tracker.new(name, coll_type)
-        state.collection_object = coll
-
     if state.grouping_enabled:
+        # collection_object not persisted to disk — recreate if needed
+        if coll is None:
+            coll = tracker.new(name, "group")
+            state.collection_object = coll
         tracker.save_collection(name)
         return f"Saved group collection '{name}' to Qdrant."
 
-    # SCS path: append chunks to collection then save (pass scraped_items for source_url annotation)
-    coll.append_sentences(state.chunks, state.source_label, scraped_items=state.scraped_items or [])
+    # collection_object is a live Python object — NOT persisted to .rag_state.json.
+    # When loaded from disk, coll is None. Two cases:
+    #   A) Collection already exists in Qdrant → append mode (don't wipe existing points)
+    #   B) Collection doesn't exist yet → fresh push (original behaviour)
+    if coll is None and tracker._existing_collection_name(name):
+        # Append mode: build a temp SCS_Collection, embed, upsert without deleting.
+        from my_collections.SCS_Collection import SCS_Collection
+        temp_coll = SCS_Collection(name)
+        temp_coll.append_sentences(state.chunks, state.source_label,
+                                   scraped_items=state.scraped_items or [])
+        points = temp_coll.points_to_save()  # embeds each chunk + builds PointStructs
+        tracker.append_points_to_collection(name, points)
+        return f"Appended {len(points)} chunks to existing '{name}' in Qdrant."
+
+    # Fresh push: collection doesn't exist yet — create + save all at once.
+    if coll is None:
+        coll = tracker.new(name, "scs")
+        state.collection_object = coll
+
+    coll.append_sentences(state.chunks, state.source_label,
+                          scraped_items=state.scraped_items or [])
     tracker.save_collection(name)
     return f"Appended {len(state.chunks)} chunks and saved '{name}' to Qdrant."
 

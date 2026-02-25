@@ -281,6 +281,16 @@ class QdrantTracker:
             vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
         )
 
+    def append_points_to_collection(self, collection_name: str, points: list):
+        """Upsert points into an existing collection without deleting it first.
+        Creates the collection if it doesn't exist. Used for multi-source ingestion."""
+        if not self._existing_collection_name(collection_name):
+            self._create_collection(collection_name)
+            print(f"QdrantTracker: Created new collection '{collection_name}'.")
+        print(f"QdrantTracker: Appending {len(points)} points to '{collection_name}'…")
+        self._upsert_points(collection_name, points)
+        print(f"QdrantTracker: Done appending to '{collection_name}'.")
+
     # -------------------------------------------------------------------------
     # Incremental sync — re-scrape URLs, compare content_hash, re-embed changes
     # -------------------------------------------------------------------------
