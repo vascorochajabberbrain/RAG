@@ -875,6 +875,7 @@ _INDEX_HTML = """
           document.getElementById('sourceType').value = 'url';
           document.getElementById('scraperName').value = c.scraper_name;
           onSourceTypeChange();
+          checkUrlSavedState(c.name);
         }
         renderRoutingMetadataPanel(c, solId);
         return;
@@ -899,6 +900,7 @@ _INDEX_HTML = """
         }
         const collSelect = document.getElementById('collectionSelect');
         if (collSelect) { collSelect.value = c.name; onCollectionSelect(); }
+        if (c.scraper_name) checkUrlSavedState(c.name);
         renderRoutingMetadataPanel(c, solId);
       }
 
