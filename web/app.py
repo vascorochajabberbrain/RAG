@@ -366,6 +366,29 @@ def state_load(req: StateLoadRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/state/check-by-collection")
+def state_check_by_collection(collection_name: str):
+    """Check if a .rag_state_{collection_name}.json exists in project root."""
+    import os, json
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    save_path = os.path.join(root, f".rag_state_{collection_name}.json")
+    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+        try:
+            with open(save_path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            return {
+                "found": True,
+                "save_path": save_path,
+                "completed_steps": d.get("completed_steps", []),
+                "collection_name": d.get("collection_name"),
+                "chunks_count": len(d.get("chunks", [])),
+                "scraped_items_count": len(d.get("scraped_items", [])),
+            }
+        except Exception as e:
+            return {"found": False, "error": str(e)}
+    return {"found": False}
+
+
 def _clear_progress_queue():
     while not _progress_queue.empty():
         try:
@@ -674,6 +697,11 @@ _INDEX_HTML = """
             <label>Shop URL</label>
             <input type="text" id="shopUrl" placeholder="https://mystore.myshopify.com">
           </div>
+          <div id="urlResumeBanner" style="display:none;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;margin-top:0.75rem;font-size:0.9rem;">
+            <strong>💾 Saved state found!</strong> <span id="urlResumeInfo"></span>
+            <button type="button" onclick="resumeUrlState()" style="margin-left:0.75rem;padding:0.25rem 0.75rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">Resume →</button>
+            <button type="button" onclick="dismissUrlResume()" style="margin-left:0.4rem;padding:0.25rem 0.5rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">Start fresh</button>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -978,6 +1006,9 @@ _INDEX_HTML = """
         const exists = opt.dataset.exists === '1';
         info.textContent = exists ? '✓ Collection exists in Qdrant' : '⚠ Not yet pushed to Qdrant';
         delBtn.style.display = exists ? 'block' : 'none';
+        // Check for URL-source saved state when collection changes
+        const st = document.getElementById('sourceType').value;
+        if (st === 'url') checkUrlSavedState(val);
       }
     }
 
@@ -1045,6 +1076,59 @@ _INDEX_HTML = """
       document.getElementById('scraperRow').classList.toggle('hidden', st !== 'url');
       // Show Sync button only for URL/scraper sources
       document.getElementById('runSync').classList.toggle('hidden', st !== 'url');
+      // Check for saved state when switching to URL source type
+      if (st === 'url') {
+        const collName = document.getElementById('collectionSelect').value;
+        if (collName && collName !== '__new__') checkUrlSavedState(collName);
+      } else {
+        document.getElementById('urlResumeBanner').style.display = 'none';
+      }
+    }
+
+    let _urlSavedStatePath = null;
+
+    async function checkUrlSavedState(collectionName) {
+      if (!collectionName || collectionName === '__new__') {
+        document.getElementById('urlResumeBanner').style.display = 'none';
+        return;
+      }
+      try {
+        const res = await fetch('/api/state/check-by-collection?collection_name=' + encodeURIComponent(collectionName)).then(r => r.json());
+        if (res.found) {
+          _urlSavedStatePath = res.save_path;
+          const steps = res.completed_steps.join(', ') || 'none';
+          const chunks = res.chunks_count ? ` ${res.chunks_count} chunks ready.` : '';
+          const items = res.scraped_items_count ? ` ${res.scraped_items_count} scraped pages.` : '';
+          document.getElementById('urlResumeInfo').textContent = `Steps done: ${steps}.${items}${chunks}`;
+          document.getElementById('urlResumeBanner').style.display = 'block';
+        } else {
+          _urlSavedStatePath = null;
+          document.getElementById('urlResumeBanner').style.display = 'none';
+        }
+      } catch(e) {
+        document.getElementById('urlResumeBanner').style.display = 'none';
+      }
+    }
+
+    async function resumeUrlState() {
+      if (!_urlSavedStatePath) return;
+      setLog(buildLog, 'Resuming saved state…', false);
+      try {
+        const res = await fetch('/api/state/load', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ save_path: _urlSavedStatePath })
+        }).then(r => r.json());
+        setLog(buildLog, res.message || res.detail, !!res.detail);
+        document.getElementById('urlResumeBanner').style.display = 'none';
+      } catch(e) {
+        setLog(buildLog, 'Resume failed: ' + e.message, true);
+      }
+    }
+
+    function dismissUrlResume() {
+      document.getElementById('urlResumeBanner').style.display = 'none';
+      _urlSavedStatePath = null;
     }
 
     // Show/hide Shopify URL field based on engine selection
