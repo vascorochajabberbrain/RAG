@@ -95,8 +95,9 @@ class Collection:
         """
         qdrant_points = []
 
+        total = len(self.items)
         for idx, item in enumerate(self.items):
-            print(item)
+            print(f"Embedding {idx + 1}/{total}…")
             qdrant_points.append(PointStruct(
                 id=get_point_id(),
                 vector=get_embedding(item.to_embed()),

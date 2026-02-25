@@ -445,6 +445,40 @@ def run_fetch_streaming(req: StepRequest):
     return {"message": "Fetch started in background. Watch /api/progress for updates."}
 
 
+@app.post("/api/workflow/push")
+def run_push_streaming(req: StepRequest):
+    """Run PUSH in a background thread, streaming stdout lines via SSE progress queue."""
+    from workflow.models import Step
+    from workflow.runner import run_step
+    import io, sys
+
+    state = get_state()
+    _apply_state_update(state, req.state_update)
+    _clear_progress_queue()
+
+    class _QueueWriter(io.TextIOBase):
+        def write(self, s):
+            s = s.strip()
+            if s:
+                _progress_queue.put(f"LOG:{s}")
+            return len(s)
+        def flush(self): pass
+
+    def _run():
+        old_stdout = sys.stdout
+        sys.stdout = _QueueWriter()
+        try:
+            msg = run_step(state, Step.PUSH_TO_QDRANT)
+            _progress_queue.put(f"DONE:{msg}")
+        except Exception as e:
+            _progress_queue.put(f"ERROR:{e}")
+        finally:
+            sys.stdout = old_stdout
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"message": "Push started in background. Watch /api/progress for updates."}
+
+
 @app.post("/api/workflow/translate")
 def run_translate(req: StepRequest):
     """Run translate_and_clean in a background thread so SSE can stream progress."""
@@ -1424,7 +1458,7 @@ _INDEX_HTML = """
     document.getElementById('runFetch').onclick = () => runFetchWithProgress();
     document.getElementById('runTranslate').onclick = () => runTranslateWithProgress();
     document.getElementById('runChunk').onclick = () => runStep('chunk');
-    document.getElementById('runPush').onclick = () => runStep('push_to_qdrant');
+    document.getElementById('runPush').onclick = () => runPushWithProgress();
     document.getElementById('runSync').onclick = () => runSync();
 
     async function runFetchWithProgress() {
@@ -1464,6 +1498,44 @@ _INDEX_HTML = """
         es.close();
         btn.disabled = false;
         btn.textContent = '2. Fetch';
+      }
+    }
+
+    async function runPushWithProgress() {
+      const btn = document.getElementById('runPush');
+      _btnRunning(btn);
+      setLog(buildLog, 'Pushing to Qdrant… (embedding each chunk with OpenAI)', false);
+      buildLog.style.maxHeight = '20rem';
+
+      const es = new EventSource('/api/progress');
+      es.onmessage = (e) => {
+        const data = e.data;
+        if (data.startsWith('LOG:')) {
+          const line = data.replace('LOG:', '');
+          buildLog.textContent += (buildLog.textContent ? '\\n' : '') + line;
+          buildLog.scrollTop = buildLog.scrollHeight;
+        } else if (data.startsWith('DONE:')) {
+          const msg = data.replace('DONE:', '');
+          buildLog.textContent += '\\n✅ ' + msg;
+          buildLog.scrollTop = buildLog.scrollHeight;
+          buildLog.className = 'log success';
+          es.close();
+          _btnSuccess(btn);
+        } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
+          buildLog.textContent += '\\n❌ ' + data;
+          buildLog.className = 'log error';
+          es.close();
+          _btnDone(btn);
+        }
+      };
+      es.onerror = () => { es.close(); _btnDone(btn); };
+
+      try {
+        await api('/api/workflow/push', { step: 'push_to_qdrant', state_update: getStateUpdate() });
+      } catch (e) {
+        setLog(buildLog, e.message || String(e), true);
+        es.close();
+        _btnDone(btn);
       }
     }
 
