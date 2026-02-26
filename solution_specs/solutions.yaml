@@ -1,102 +1,156 @@
-# Solution specifications: one entry per RAG solution / bot.
-# Each solution has a 'collections' list — one entry per content type (products, recipes, pages, FAQ, etc.).
-# The solution id maps 1:1 to a solution in the Jabberbrain Session Engine.
-# Code reads from here; later this can be replaced by a DB with the same schema.
-#
-# Collection routing.* fields are used by the Session Engine for two-step collection selection:
-#   Step 1 (HIRS): keyword match against routing.keywords — fast, free, deterministic
-#   Step 2 (LLM):  routing.description + typical_questions + not_covered fed to a small LLM prompt
-#                  when HIRS is uncertain. Returns JSON list of 1-3 collection ids to search.
-# routing blocks are auto-generated after chunking (workflow/suggest.py) and manually editable in the UI.
-
 solutions:
-
-  - id: hey_harper
-    display_name: Hey Harper
-    company_name: Hey Harper
-    aliases: ["hh"]
-    collections:
-      - id: hey_harper_1
-        display_name: Hey Harper (main)
-        collection_name: hey_harper_1
-        collection_type: scs
-        routing: {}
-
-      - id: hey_harper_ps
-        display_name: Hey Harper (product subscription)
-        collection_name: hey_harper_product_subscriptio_alpha
-        collection_type: scs
-        routing: {}
-
-      - id: hey_harper_ps_grouped
-        display_name: Hey Harper (PS with grouping)
-        collection_name: hh_ps_w_grouping
-        collection_type: group
-        routing: {}
-
+- id: hey_harper
+  display_name: Hey Harper
+  company_name: Hey Harper
+  language: en
+  aliases:
+  - hh
+  collections:
+  - id: hey_harper_1
+    display_name: Hey Harper (main)
+    collection_name: hey_harper_1
+    collection_type: scs
+    routing: {}
+  - id: hey_harper_ps
+    display_name: Hey Harper (product subscription)
+    collection_name: hey_harper_product_subscriptio_alpha
+    collection_type: scs
+    routing: {}
+  - id: hey_harper_ps_grouped
+    display_name: Hey Harper (PS with grouping)
+    collection_name: hh_ps_w_grouping
+    collection_type: group
+    routing: {}
+- id: first_shopify_test_store
+  display_name: First Shopify Test Store
+  company_name: First Shopify Test Store
+  language: en
+  aliases:
+  - fsts
+  collections:
   - id: first_shopify_test_store
-    display_name: First Shopify Test Store
-    company_name: First Shopify Test Store
-    aliases: ["fsts"]
-    collections:
-      - id: first_shopify_test_store
-        display_name: Products
-        collection_name: first_shopify_test_store
-        collection_type: scs
-        scraper_name: first_shopify_test_store
-        routing: {}
-
-  - id: peixefresco
-    display_name: Peixe Fresco
-    company_name: Peixe Fresco
-    aliases: ["pf"]
-    collections:
-      - id: peixefresco_products
-        display_name: Products
-        collection_name: peixefresco_products
-        collection_type: scs
-        scraper_name: peixefresco_products
-        routing:
-          description: "Seafood product catalog with prices, species info, and preparation methods for 101 products."
-          keywords: ["price", "buy", "order", "kg", "available", "dourada", "robalo", "bacalhau", "prego", "quanto", "custa"]
-          typical_questions:
-            - "How much does dourada cost?"
-            - "Is robalo available?"
-            - "What preparation options are there for bacalhau?"
-            - "What fish can I order online?"
-          not_covered: ["recipes", "cooking instructions", "delivery info", "company info", "terms"]
-          language: "pt"
-          doc_type: "product_catalog"
-
-      - id: peixefresco_recipes
-        display_name: Recipes
-        collection_name: peixefresco_recipes
-        collection_type: scs
-        scraper_name: peixefresco_recipes
-        routing:
-          description: "Seafood recipes with ingredients, preparation steps, and linked products."
-          keywords: ["recipe", "cook", "ingredients", "prepare", "oven", "fry", "receita", "ingredientes", "preparação"]
-          typical_questions:
-            - "How do I cook dourada?"
-            - "What can I make with bacalhau?"
-            - "Give me a recipe for grilled fish"
-          not_covered: ["prices", "product availability", "delivery", "company info", "terms"]
-          language: "pt"
-          doc_type: "recipe_book"
-
-      - id: peixefresco_pages
-        display_name: Pages
-        collection_name: peixefresco_pages
-        collection_type: scs
-        scraper_name: peixefresco_pages
-        routing:
-          description: "Static pages: about us, FAQ, delivery zones, terms and conditions."
-          keywords: ["delivery", "about", "faq", "terms", "contact", "zone", "entrega", "sobre", "contacto", "perguntas"]
-          typical_questions:
-            - "Do you deliver to Porto?"
-            - "What are your terms and conditions?"
-            - "Who is Peixe Fresco?"
-            - "How do I contact you?"
-          not_covered: ["products", "prices", "recipes", "cooking"]
-          language: "pt"
-          doc_type: "faq"
+    display_name: Products
+    collection_name: first_shopify_test_store
+    collection_type: scs
+    scraper_name: first_shopify_test_store
+    routing: {}
+- id: peixefresco
+  display_name: Peixe Fresco
+  company_name: Peixe Fresco
+  language: pt
+  aliases:
+  - pf
+  collections:
+  - id: peixefresco_products
+    display_name: Products
+    collection_name: peixefresco_products
+    collection_type: scs
+    scraper_name: peixefresco_products
+    routing:
+      description: This collection contains a variety of seafood and fish products
+        available for purchase, including detailed descriptions and prices.
+      keywords:
+      - peixefresco
+      - fresh fish products
+      - seafood prices
+      - cavala
+      - sapateira
+      - salmão fumado
+      - dourada
+      - carapau
+      - frozen appetizers
+      - choco
+      - marine delicacies
+      - prepared seafood
+      - bio salmon
+      - flor de sal
+      - Portuguese seafood
+      typical_questions:
+      - What types of fresh fish are available?
+      - How much does the sapateira cost?
+      - Can you tell me about the preparation methods for cavala?
+      - What are the best seafood products for cooking?
+      - Is there bio salmon available for purchase?
+      not_covered:
+      - meat products
+      - vegetarian options
+      - dairy
+      - snack foods
+      - beverages
+      language: pt
+      doc_type: product_catalog
+  - id: peixefresco_recipes
+    display_name: Recipes
+    collection_name: peixefresco_recipes
+    collection_type: scs
+    scraper_name: peixefresco_recipes
+    routing:
+      description: Esta coleção contém diversas receitas de pratos à base de peixe,
+        especialmente focadas na culinária do Algarve e do Alentejo.
+      keywords:
+      - peixe fresco
+      - receitas de peixe
+      - guisados
+      - sardinhas
+      - arroz carolino
+      - azeite virgem extra
+      - tomate maduro
+      - gastronomia alentejana
+      - mariscos
+      - culinária do Algarve
+      - pescados do mar
+      - receitas tradicionais
+      - cozinha mediterrânica
+      - tapas
+      - comida caseira
+      typical_questions:
+      - Quais são algumas receitas típicas de peixe do Algarve?
+      - Como preparar sardinhas grelhadas?
+      - Quais ingredientes são necessários para um guisado de peixe?
+      - Como faço uma receita de arroz de marisco?
+      - Quais são os principais pratos da cozinha alentejana?
+      not_covered:
+      - receitas vegetarianas
+      - sobremesas
+      - bebidas alcoólicas
+      - petiscos de carne
+      - comida rápida
+      language: pt
+      doc_type: recipe_book
+  - id: peixefresco_pages
+    display_name: Pages
+    collection_name: peixefresco_pages
+    collection_type: scs
+    scraper_name: peixefresco_pages
+    routing:
+      description: Esta coleção contém informações sobre produtos de peixe e marisco,
+        com ênfase na sustentabilidade e promoções.
+      keywords:
+      - peixe de pesca sustentável
+      - filetes
+      - postas
+      - bivalves
+      - marisco cozido
+      - aquicultura BIO
+      - entregas grátis
+      - desconto na primeira compra
+      - fumaça de peixe
+      - sal
+      - salgados
+      - refeições com peixe
+      - produtos do mar
+      - especialidades do mar
+      typical_questions:
+      - Quais tipos de peixe estão disponíveis?
+      - O que é aquicultura BIO?
+      - Como são preparados os produtos do mar?
+      - Quais são os benefícios da pesca sustentável?
+      - Que tipos de promoção estão atualmente disponíveis?
+      not_covered:
+      - receitas vegetarianas
+      - produtos de carne
+      - bebidas alcoólicas
+      - snacks não relacionados ao mar
+      - alimentos congelados que não sejam peixe
+      language: pt
+      doc_type: product_catalog

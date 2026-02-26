@@ -35,7 +35,7 @@ Reply with a JSON object only, no markdown, e.g. {"batch_size": 10000, "overlap_
         return {"batch_size": 10000, "overlap_size": 100, "use_proposition_chunking": True}
 
 
-def suggest_collection_metadata(chunks: list, source_label: str = "document") -> dict:
+def suggest_collection_metadata(chunks: list, source_label: str = "document", language: str = None) -> dict:
     """
     Analyze a sample of chunks and generate collection-level metadata for RAG routing.
     Used by the Session Engine (HIRS + LLM router) to decide which RAG collection(s) to query.
@@ -72,15 +72,26 @@ def suggest_collection_metadata(chunks: list, source_label: str = "document") ->
     sample_texts = [extract_text(c)[:400] for c in sampled]
     joined = "\n---\n".join(sample_texts)
 
+    # Build language instruction — enforce if solution language is known, otherwise detect
+    if language:
+        lang_instruction = (
+            f'- "language": must be "{language}" (this is the solution\'s base language — do not change it)\n'
+        )
+        lang_note = f"IMPORTANT: All text values (description, keywords, typical_questions, not_covered) must be written in the solution's base language ({language}), regardless of what language the chunks are in.\n\n"
+    else:
+        lang_instruction = '- "language": ISO 639-1 language code of the main content (e.g. "pt", "en", "es")\n'
+        lang_note = ""
+
     prompt = (
         "You are analyzing a document collection that has been split into chunks for a RAG retrieval system.\n"
+        f"{lang_note}"
         "Based on the sample chunks below, return a JSON object with these exact keys:\n"
         '- "topics": list of 3-7 short topic tags describing what this collection is about\n'
         '- "keywords": list of 10-20 specific keywords or phrases a user might search for\n'
         '- "description": one concise sentence describing what this collection contains\n'
         '- "typical_questions": list of 3-5 example user questions this collection can answer\n'
         '- "not_covered": list of 3-5 content types or topics explicitly NOT in this collection\n'
-        '- "language": ISO 639-1 language code of the main content (e.g. "pt", "en", "es")\n'
+        + lang_instruction +
         '- "doc_type": one of: recipe_book, faq, manual, product_catalog, legal, general\n\n'
         "Return only valid JSON, no markdown, no explanation."
     )

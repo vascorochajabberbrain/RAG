@@ -89,6 +89,32 @@ def get_collection_by_id(collection_id: str) -> Optional[dict]:
     return None
 
 
+def save_solution_language(solution_id: str, language: str) -> bool:
+    """
+    Persist the base language for a solution to solutions.yaml.
+    Returns True on success, False if solution not found.
+    """
+    import yaml
+    try:
+        with open(_SPECS_FILE, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        saved = False
+        for sol in data.get("solutions", []):
+            if sol.get("id") == solution_id:
+                sol["language"] = language
+                saved = True
+                break
+        if not saved:
+            return False
+        with open(_SPECS_FILE, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+        reload()
+        return True
+    except Exception as e:
+        print(f"[save_solution_language] Failed: {e}")
+        return False
+
+
 def reload():
     """Clear cache so next access re-reads the file (e.g. after edit)."""
     global _cache

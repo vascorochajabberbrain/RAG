@@ -52,6 +52,11 @@ _PDF_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if os.path.isdir(_PDF_DIR):
     app.mount("/pdfs", StaticFiles(directory=_PDF_DIR), name="pdfs")
 
+# Serve assets (favicon, icons, etc.)
+_ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+if os.path.isdir(_ASSETS_DIR):
+    app.mount("/assets", StaticFiles(directory=_ASSETS_DIR), name="assets")
+
 
 @app.on_event("startup")
 async def _capture_loop():
@@ -76,6 +81,18 @@ class QARequest(BaseModel):
 def root():
     html = _INDEX_HTML.replace("__APP_VERSION__", APP_VERSION)
     return HTMLResponse(html)
+
+
+@app.post("/api/shutdown")
+def api_shutdown():
+    """Gracefully shut down the server process."""
+    import threading, signal, os
+    def _kill():
+        import time
+        time.sleep(0.3)
+        os.kill(os.getpid(), signal.SIGTERM)
+    threading.Thread(target=_kill, daemon=True).start()
+    return {"message": "Server shutting down…"}
 
 
 @app.get("/api/version")
@@ -219,6 +236,9 @@ def delete_collection_from_solution(req: DeleteCollectionRequest):
 class UpdateRoutingRequest(BaseModel):
     routing: dict
 
+class UpdateLanguageRequest(BaseModel):
+    language: str
+
 @app.put("/api/solutions/{solution_id}/collections/{collection_id}/routing")
 def update_collection_routing(solution_id: str, collection_id: str, req: UpdateRoutingRequest):
     """Update the routing metadata block for a specific collection in solutions.yaml."""
@@ -228,6 +248,88 @@ def update_collection_routing(solution_id: str, collection_id: str, req: UpdateR
         raise HTTPException(status_code=404,
                             detail=f"Collection '{collection_id}' in solution '{solution_id}' not found")
     return {"message": f"Routing metadata updated for {solution_id}/{collection_id}"}
+
+
+@app.put("/api/solutions/{solution_id}/language")
+def update_solution_language(solution_id: str, req: UpdateLanguageRequest):
+    """Set the base language for a solution (stored in solutions.yaml)."""
+    from solution_specs.loader import save_solution_language
+    language = req.language.strip()
+    if not language:
+        raise HTTPException(status_code=400, detail="language is required")
+    success = save_solution_language(solution_id, language)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Solution '{solution_id}' not found")
+    return {"message": f"Base language for '{solution_id}' set to '{language}'"}
+
+
+@app.post("/api/solutions/{solution_id}/collections/{collection_id}/routing/suggest")
+def suggest_collection_routing(solution_id: str, collection_id: str):
+    """
+    Re-generate routing metadata for a collection by sampling its existing Qdrant points.
+    Calls suggest_collection_metadata() with the stored chunk texts, saves result to solutions.yaml.
+    """
+    from solution_specs.loader import get_solution
+    from qdrant_utils import get_points_from_collection
+    from workflow.suggest import suggest_collection_metadata, save_routing_metadata
+
+    # Resolve collection_name from solutions.yaml
+    sol = get_solution(solution_id)
+    if not sol:
+        raise HTTPException(status_code=404, detail=f"Solution '{solution_id}' not found")
+
+    coll = next((c for c in sol.get("collections", []) if c.get("id") == collection_id), None)
+    if not coll:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_id}' not found in solution '{solution_id}'")
+
+    collection_name = coll.get("collection_name", collection_id)
+
+    # Scroll all points from Qdrant and extract text
+    try:
+        points = get_points_from_collection(collection_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve points from Qdrant: {e}")
+
+    if not points:
+        raise HTTPException(status_code=404, detail=f"No points found in collection '{collection_name}'. Has it been pushed to Qdrant?")
+
+    # Extract text — payload structure is payload["point"]["text"] (new) or payload["text"] (legacy)
+    chunks = []
+    for p in points:
+        payload = p.payload or {}
+        text = payload.get("point", {}).get("text") or payload.get("text") or ""
+        if text:
+            chunks.append(text)
+
+    if not chunks:
+        raise HTTPException(status_code=404, detail="Points found but no text content could be extracted.")
+
+    # Use solution-level language if set (enforces consistent language across all collections)
+    base_language = sol.get("language") or None
+    if base_language:
+        print(f"[suggest_routing] Using solution base language: {base_language}")
+
+    print(f"[suggest_routing] Sampling {len(chunks)} chunks from '{collection_name}' for metadata generation...")
+
+    # Generate new metadata — pass language to enforce consistent output
+    metadata = suggest_collection_metadata(chunks, source_label=collection_name, language=base_language)
+    if not metadata:
+        raise HTTPException(status_code=500, detail="LLM metadata generation returned empty result.")
+
+    # Strip topics, keep only routing-relevant fields
+    # Always enforce solution base language in the saved routing block
+    routing = {
+        k: metadata[k]
+        for k in ("description", "keywords", "typical_questions", "not_covered", "language", "doc_type")
+        if metadata.get(k) is not None
+    }
+    if base_language:
+        routing["language"] = base_language  # guarantee it's saved correctly even if LLM drifted
+
+    # Save to solutions.yaml
+    save_routing_metadata(solution_id, collection_id, routing)
+
+    return {"routing": routing, "chunks_sampled": len(chunks)}
 
 
 @app.post("/api/workflow/step")
@@ -604,13 +706,228 @@ def sync_collection_api(req: SyncRequest):
     return {"message": msg, "diff": diff}
 
 
+# ── Shopify Stores — local config (gitignored) ────────────────────────────────
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _stores_path() -> str:
+    return os.path.join(_PROJECT_ROOT, ".shopify_stores.json")
+
+
+def _load_stores() -> dict:
+    import json
+    p = _stores_path()
+    if not os.path.exists(p):
+        return {"stores": []}
+    with open(p, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_stores(data: dict):
+    import json
+    with open(_stores_path(), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def _store_id_from_url(shop_url: str) -> str:
+    import re
+    hostname = re.sub(r"https?://", "", shop_url).rstrip("/").split("/")[0]
+    return re.sub(r"[^a-z0-9]", "", hostname.lower())
+
+
+class ShopifyStoreRequest(BaseModel):
+    display_name: str
+    shop_url: str
+    access_token: Optional[str] = ""
+    include: Optional[list] = None  # default set in endpoint
+    metafields: Optional[bool] = False
+
+
+@app.get("/api/shopify/stores")
+def shopify_list_stores():
+    """List all locally configured Shopify stores. Access tokens are masked."""
+    data = _load_stores()
+    result = []
+    for s in data.get("stores", []):
+        token = s.get("access_token", "")
+        result.append({
+            "id": s["id"],
+            "display_name": s.get("display_name", s["id"]),
+            "shop_url": s.get("shop_url", ""),
+            "include": s.get("include", ["products", "pages", "articles"]),
+            "metafields": s.get("metafields", False),
+            "last_fetched": s.get("last_fetched"),
+            "has_token": bool(token),
+            "token_hint": token[-4:] if token else "",
+        })
+    return {"stores": result}
+
+
+@app.post("/api/shopify/stores")
+def shopify_create_store(req: ShopifyStoreRequest):
+    """Register a new Shopify store config."""
+    data = _load_stores()
+    store_id = _store_id_from_url(req.shop_url)
+    if not store_id:
+        raise HTTPException(status_code=400, detail="Invalid shop_url — could not derive store ID")
+    if any(s["id"] == store_id for s in data["stores"]):
+        raise HTTPException(status_code=409, detail=f"Store '{store_id}' already exists")
+    new_store = {
+        "id": store_id,
+        "display_name": req.display_name,
+        "shop_url": req.shop_url.rstrip("/"),
+        "access_token": req.access_token or "",
+        "include": req.include if req.include is not None else ["products", "pages", "articles"],
+        "metafields": req.metafields or False,
+        "last_fetched": None,
+    }
+    data["stores"].append(new_store)
+    _save_stores(data)
+    return {"ok": True, "id": store_id}
+
+
+@app.put("/api/shopify/stores/{store_id}")
+def shopify_update_store(store_id: str, req: ShopifyStoreRequest):
+    """Update an existing Shopify store config. Blank access_token keeps the existing value."""
+    data = _load_stores()
+    store = next((s for s in data["stores"] if s["id"] == store_id), None)
+    if not store:
+        raise HTTPException(status_code=404, detail=f"Store '{store_id}' not found")
+    store["display_name"] = req.display_name
+    store["shop_url"] = req.shop_url.rstrip("/")
+    if req.access_token:  # blank = keep existing
+        store["access_token"] = req.access_token
+    store["include"] = req.include if req.include is not None else ["products", "pages", "articles"]
+    store["metafields"] = req.metafields or False
+    _save_stores(data)
+    return {"ok": True}
+
+
+@app.delete("/api/shopify/stores/{store_id}")
+def shopify_delete_store(store_id: str):
+    """Delete a Shopify store config."""
+    data = _load_stores()
+    before = len(data["stores"])
+    data["stores"] = [s for s in data["stores"] if s["id"] != store_id]
+    if len(data["stores"]) == before:
+        raise HTTPException(status_code=404, detail=f"Store '{store_id}' not found")
+    _save_stores(data)
+    return {"ok": True}
+
+
+@app.post("/api/shopify/stores/{store_id}/test")
+def shopify_test_store(store_id: str):
+    """Test connection to a Shopify store. Returns shop info or error."""
+    import httpx as _httpx
+    data = _load_stores()
+    store = next((s for s in data["stores"] if s["id"] == store_id), None)
+    if not store:
+        raise HTTPException(status_code=404, detail=f"Store '{store_id}' not found")
+
+    shop_url = store["shop_url"].rstrip("/")
+    token = store.get("access_token", "")
+
+    try:
+        if token:
+            headers = {"X-Shopify-Access-Token": token, "User-Agent": "RAG-bot/1.0"}
+            with _httpx.Client(headers=headers, follow_redirects=True, timeout=10) as client:
+                # Shop info
+                r = client.get(f"{shop_url}/admin/api/2024-01/shop.json")
+                r.raise_for_status()
+                shop_name = r.json().get("shop", {}).get("name", shop_url)
+                # Product count
+                r2 = client.get(f"{shop_url}/admin/api/2024-01/products/count.json")
+                r2.raise_for_status()
+                products = r2.json().get("count", 0)
+                # Page count
+                r3 = client.get(f"{shop_url}/admin/api/2024-01/pages/count.json")
+                r3.raise_for_status()
+                pages = r3.json().get("count", 0)
+            return {"ok": True, "mode": "admin", "shop_name": shop_name,
+                    "products": products, "pages": pages}
+        else:
+            r = _httpx.get(f"{shop_url}/products.json?limit=1",
+                           headers={"User-Agent": "RAG-bot/1.0"},
+                           follow_redirects=True, timeout=10)
+            r.raise_for_status()
+            count = len(r.json().get("products", []))
+            return {"ok": True, "mode": "public",
+                    "products": f"available ({count} on first page)"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/shopify/stores/{store_id}/fetch")
+def shopify_fetch_store(store_id: str):
+    """Fetch/scrape a Shopify store in the background. Watch /api/progress for updates."""
+    import io, sys
+    from ingestion.scrapers.runner import run_scraper
+
+    data = _load_stores()
+    store = next((s for s in data["stores"] if s["id"] == store_id), None)
+    if not store:
+        raise HTTPException(status_code=404, detail=f"Store '{store_id}' not found")
+
+    _clear_progress_queue()
+
+    # Capture store values now (closure-safe snapshot)
+    _shop_url = store["shop_url"]
+    _token = store.get("access_token", "")
+    _include = store.get("include", ["products", "pages", "articles"])
+    _metafields = store.get("metafields", False)
+    _display_name = store.get("display_name", store_id)
+
+    class _QueueWriter(io.TextIOBase):
+        def write(self, s):
+            s = s.strip()
+            if s:
+                _progress_queue.put(f"LOG:{s}")
+            return len(s)
+        def flush(self): pass
+
+    def _run():
+        from datetime import datetime, timezone
+        old_stdout = sys.stdout
+        sys.stdout = _QueueWriter()
+        try:
+            config = {
+                "engine": "shopify",
+                "shop_url": _shop_url,
+                "access_token": _token,
+                "include": _include,
+                "metafields": _metafields,
+            }
+            _raw_text, items = run_scraper(store_id, config)
+            # Update last_fetched
+            d = _load_stores()
+            for s in d["stores"]:
+                if s["id"] == store_id:
+                    s["last_fetched"] = datetime.now(timezone.utc).isoformat()
+                    break
+            _save_stores(d)
+            _progress_queue.put(f"DONE:Fetched {len(items)} items from {_display_name}")
+        except Exception as e:
+            _progress_queue.put(f"ERROR:{e}")
+        finally:
+            sys.stdout = old_stdout
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"message": "Fetch started in background. Watch /api/progress for updates."}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 _INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RAG – Build &amp; Chat</title>
+  <title>jB RAG Builder</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon_32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon_16.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon_192.png">
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 1.5rem; background: #f8f9fa; color: #1a1a1a; }
@@ -646,6 +963,15 @@ _INDEX_HTML = """
     .tab.active { background: #0066cc; color: #fff; }
     .tab:hover:not(.active) { background: #dee2e6; }
     .hidden { display: none; }
+    /* ── Shopify Stores tab ── */
+    .store-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; background: #fff; }
+    .badge { display: inline-block; font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600; }
+    .badge-admin { background: #d4f5ee; color: #007a5e; }
+    .badge-public { background: #f0f0f0; color: #666; }
+    .store-meta { color: #666; font-size: 0.85rem; margin: 0.25rem 0 0.35rem 0; }
+    .inline-result { margin-top: 0.6rem; font-size: 0.875rem; padding: 0.5rem 0.75rem; border-radius: 6px; }
+    .inline-result.ok { background: #d4f5ee; color: #005a44; }
+    .inline-result.err { background: #fde8e8; color: #c0392b; }
   </style>
 </head>
 <body>
@@ -656,6 +982,7 @@ _INDEX_HTML = """
     <div class="tabs">
       <button type="button" class="tab active" data-tab="build">Build RAG</button>
       <button type="button" class="tab" data-tab="chat">Chat / Test Q&A</button>
+      <button type="button" class="tab" data-tab="shopify">🛍 Shopify Stores</button>
     </div>
 
     <div id="panel-build" class="panel">
@@ -664,9 +991,20 @@ _INDEX_HTML = """
 
         <!-- Step 1: pick a solution -->
         <label>Solution</label>
-        <select id="solutionBuild" onchange="onSolutionChange()">
-          <option value="">— Select a solution —</option>
-        </select>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem;">
+          <select id="solutionBuild" onchange="onSolutionChange()" style="margin-bottom:0;flex:1;"></select>
+          <span id="solLangBadge" style="display:none;font-size:0.8rem;font-weight:600;padding:0.2rem 0.55rem;border-radius:12px;background:#e8f0fe;color:#1a56a0;white-space:nowrap;cursor:pointer;border:1px solid #b8d0f8;" title="Click to change base language" onclick="showLangEditor()"></span>
+        </div>
+        <!-- Inline language editor (hidden by default) -->
+        <div id="solLangEditor" style="display:none;background:#f8faff;border:1px solid #c0d4f0;border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.5rem;font-size:0.875rem;">
+          <strong style="font-size:0.8rem;color:#444;">Base language</strong>
+          <span style="color:#888;font-size:0.78rem;"> — ISO 639-1 code (e.g. en, pt, es, fr). All routing metadata will be generated in this language.</span>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.4rem;">
+            <input id="solLangInput" type="text" maxlength="5" placeholder="e.g. en" style="width:80px;margin:0;font-size:0.9rem;padding:0.35rem 0.5rem;">
+            <button type="button" class="btn-primary" style="padding:0.35rem 0.75rem;font-size:0.85rem;" onclick="saveSolLanguage()">Save</button>
+            <button type="button" class="btn-secondary" style="padding:0.35rem 0.6rem;font-size:0.85rem;" onclick="hideLangEditor()">Cancel</button>
+          </div>
+        </div>
 
         <!-- Shown when a solution IS selected: pick which collection within it -->
         <div id="collectionSection" style="display:none;margin-top:0.75rem;">
@@ -827,6 +1165,61 @@ _INDEX_HTML = """
         <div id="qaResult" class="log"></div>
       </div>
     </div>
+
+    <div id="panel-shopify" class="panel hidden">
+      <!-- Header -->
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem">
+        <div>
+          <h2 style="margin:0">Shopify Stores</h2>
+          <span class="status">Configs stored locally in <code>.shopify_stores.json</code> (not committed to git)</span>
+        </div>
+        <button class="btn-primary" onclick="showAddStoreForm()">+ Add Store</button>
+      </div>
+
+      <!-- Add/Edit form (hidden by default) -->
+      <div class="card hidden" id="shopify-form-card">
+        <h2 id="shopify-form-title">Add Store</h2>
+        <label>Display name</label>
+        <input id="shopify-form-display-name" type="text" placeholder="My Shopify Store">
+        <label>Shop URL</label>
+        <input id="shopify-form-url" type="text" placeholder="https://mystore.myshopify.com">
+        <label title="Admin API access token (shpat_...). Leave blank to use the public /products.json API — no token required. Token is stored only in .shopify_stores.json on this machine and is never committed to git.">
+          Access token <span class="status">(optional — enables Admin API: pages, articles, metafields)</span>
+        </label>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem">
+          <input id="shopify-form-token" type="password" placeholder="shpat_... (leave blank for public /products.json API)" style="margin:0;flex:1">
+          <button type="button" class="btn-secondary" style="white-space:nowrap;margin:0"
+            onclick="const f=document.getElementById('shopify-form-token');f.type=f.type==='password'?'text':'password'">👁</button>
+        </div>
+        <label title="Select which Shopify resource types to include when fetching. Requires Admin API token for pages and articles.">Include</label>
+        <div style="display:flex;gap:1.25rem;margin-bottom:0.75rem">
+          <label style="font-weight:400;display:flex;align-items:center;gap:0.35rem">
+            <input type="checkbox" id="shopify-include-products" checked> Products
+          </label>
+          <label style="font-weight:400;display:flex;align-items:center;gap:0.35rem">
+            <input type="checkbox" id="shopify-include-pages" checked> Pages
+          </label>
+          <label style="font-weight:400;display:flex;align-items:center;gap:0.35rem">
+            <input type="checkbox" id="shopify-include-articles" checked> Articles
+          </label>
+        </div>
+        <label style="display:flex;align-items:center;gap:0.5rem;font-weight:400;margin-bottom:0.75rem"
+          title="Fetch metafields per product via an extra API call each. Requires Admin API token. Useful for stores with rich product metadata (ingredients, specs, certifications, etc.). Can be slow on large catalogs.">
+          <input type="checkbox" id="shopify-metafields">
+          Fetch metafields per product <span class="status">(requires Admin API · adds 1 API call per product)</span>
+        </label>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn-primary" onclick="saveStore()">Save</button>
+          <button class="btn-secondary" onclick="cancelStoreForm()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Store list (populated by JS) -->
+      <div id="shopify-store-list">
+        <p class="status">Loading…</p>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -850,6 +1243,11 @@ _INDEX_HTML = """
       _allSolutions = solutions || [];
       const selBuild = document.getElementById('solutionBuild');
       const selChat = document.getElementById('solutionChat');
+      // Add placeholder option to solutionBuild (HTML is now empty to keep flex layout clean)
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '— Select a solution —';
+      selBuild.appendChild(placeholder);
       _allSolutions.forEach(s => {
         const makeOpt = (parent) => {
           const o = document.createElement('option');
@@ -868,19 +1266,73 @@ _INDEX_HTML = """
       const solId = sel.value;
       const noSolRow = document.getElementById('noSolutionRow');
       const collSection = document.getElementById('collectionSection');
+      const langBadge = document.getElementById('solLangBadge');
+      const langEditor = document.getElementById('solLangEditor');
 
       if (!solId) {
         noSolRow.style.display = 'block';
         collSection.style.display = 'none';
+        langBadge.style.display = 'none';
+        langEditor.style.display = 'none';
         renderSubCollectionPicker([]);
         return;
       }
       noSolRow.style.display = 'none';
       collSection.style.display = 'block';
+      hideLangEditor();
+
+      // Update language badge
+      const sol = _allSolutions.find(s => s.id === solId);
+      const lang = sol && sol.language ? sol.language : null;
+      langBadge.style.display = 'inline-block';
+      langBadge.textContent = lang ? `🌐 ${lang}` : '🌐 set language';
+      langBadge.title = lang
+        ? `Base language: ${lang} — click to change`
+        : 'No base language set — click to set';
 
       // Load collections for this solution — renders pills + populates collectionSelect
       await loadSolutionCollections(solId);
       renderRecentFiles();
+    }
+
+    function showLangEditor() {
+      const sel = document.getElementById('solutionBuild');
+      if (!sel.value) return;
+      const sol = _allSolutions.find(s => s.id === sel.value);
+      document.getElementById('solLangInput').value = (sol && sol.language) ? sol.language : '';
+      document.getElementById('solLangEditor').style.display = 'block';
+      document.getElementById('solLangInput').focus();
+    }
+
+    function hideLangEditor() {
+      document.getElementById('solLangEditor').style.display = 'none';
+    }
+
+    async function saveSolLanguage() {
+      const sel = document.getElementById('solutionBuild');
+      const solId = sel.value;
+      if (!solId) return;
+      const lang = document.getElementById('solLangInput').value.trim().toLowerCase();
+      if (!lang) { alert('Please enter a language code (e.g. en, pt, es).'); return; }
+      try {
+        const res = await fetch(`/api/solutions/${encodeURIComponent(solId)}/language`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: lang })
+        });
+        const data = await res.json();
+        // Update local cache
+        const sol = _allSolutions.find(s => s.id === solId);
+        if (sol) sol.language = lang;
+        // Update badge
+        const badge = document.getElementById('solLangBadge');
+        badge.textContent = `🌐 ${lang}`;
+        badge.title = `Base language: ${lang} — click to change`;
+        hideLangEditor();
+        setLog(buildLog, `✅ Base language set to '${lang}' for ${solId}`, false);
+      } catch(e) {
+        alert('Failed to save language: ' + e);
+      }
     }
 
     // _currentCollections: full collection objects from the API, keyed by collection_name
@@ -997,7 +1449,10 @@ _INDEX_HTML = """
         <div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:0.8rem;margin-top:0.6rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
             <span style="font-size:0.82rem;color:#888;">Routing Metadata — <em>${coll.display_name || coll.name}</em></span>
-            <button type="button" id="btnEditRouting" style="font-size:0.78rem;padding:0.15rem 0.5rem;background:#333;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;">Edit</button>
+            <div style="display:flex;gap:0.4rem;">
+              <button type="button" id="btnRegenRouting" title="Re-generate from Qdrant content (uses LLM)" style="font-size:0.78rem;padding:0.15rem 0.5rem;background:#1a3a1a;border:1px solid #3a6a3a;color:#8bc88b;border-radius:4px;cursor:pointer;">↺ Regenerate</button>
+              <button type="button" id="btnEditRouting" style="font-size:0.78rem;padding:0.15rem 0.5rem;background:#333;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;">Edit</button>
+            </div>
           </div>
           ${isEmpty
             ? '<p style="font-size:0.82rem;color:#666;margin:0;">No routing metadata yet. Will be auto-generated after chunking.</p>'
@@ -1021,6 +1476,32 @@ _INDEX_HTML = """
         const area = document.getElementById('routingEditArea');
         area.style.display = area.style.display === 'none' ? 'block' : 'none';
       };
+      document.getElementById('btnRegenRouting').onclick = () => {
+        regenerateRoutingMetadata(solId, coll.id || coll.name, coll.display_name || coll.name);
+      };
+    }
+
+    async function regenerateRoutingMetadata(solId, collId, collName) {
+      const btn = document.getElementById('btnRegenRouting');
+      if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
+      try {
+        const res = await fetch(
+          `/api/solutions/${encodeURIComponent(solId)}/collections/${encodeURIComponent(collId)}/routing/suggest`,
+          { method: 'POST' }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Regenerate failed: ' + (data.detail || 'Unknown error'));
+          return;
+        }
+        setLog(buildLog, `Routing metadata regenerated for "${collName}" (sampled ${data.chunks_sampled} chunks). Review and edit if needed.`, false);
+        // Reload collections to refresh the panel with new data
+        await loadSolutionCollections(solId);
+      } catch(e) {
+        alert('Regenerate error: ' + e.message);
+      } finally {
+        if (btn) { btn.textContent = '↺ Regenerate'; btn.disabled = false; }
+      }
     }
 
     async function saveRoutingMetadata(solId, collId) {
@@ -1757,9 +2238,206 @@ _INDEX_HTML = """
         setLog(qaResult, e.message || String(e), true);
       }
     };
+
+    // ── Shopify Stores tab ────────────────────────────────────────────────────
+
+    let _editingStoreId = null;
+
+    async function loadShopifyStores() {
+      const data = await fetch('/api/shopify/stores').then(r => r.json());
+      renderStoreList(data.stores || []);
+    }
+
+    function renderStoreList(stores) {
+      const el = document.getElementById('shopify-store-list');
+      if (!stores.length) {
+        el.innerHTML = '<p class="status">No stores yet. Click "+ Add Store" to get started.</p>';
+        return;
+      }
+      el.innerHTML = stores.map(renderStoreCard).join('');
+    }
+
+    function renderStoreCard(s) {
+      const mode = s.has_token
+        ? '<span class="badge badge-admin">🟢 Admin API</span>'
+        : '<span class="badge badge-public">⚪ Public</span>';
+      const lastFetched = s.last_fetched
+        ? 'Last fetched: ' + _relativeTime(s.last_fetched)
+        : 'Never fetched';
+      const includes = (s.include || []).join(', ');
+      return `
+        <div class="store-card" id="store-card-${s.id}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <strong>${s.display_name}</strong>&nbsp;${mode}
+              <div class="store-meta">${s.shop_url}</div>
+              <div class="store-meta">Include: ${includes}&nbsp;·&nbsp;${lastFetched}</div>
+            </div>
+            <div style="display:flex;gap:0.4rem;flex-shrink:0">
+              <button class="btn-secondary" onclick="startEditStore('${s.id}')">Edit</button>
+              <button class="btn-secondary" style="color:#c0392b" onclick="deleteStore('${s.id}','${s.display_name.replace(/'/g,"\\'")}')">Delete</button>
+            </div>
+          </div>
+          <div style="margin-top:0.6rem;display:flex;gap:0.5rem">
+            <button class="btn-secondary" onclick="testStore('${s.id}')">Test Connection</button>
+            <button class="btn-primary" onclick="fetchStore('${s.id}')">Fetch Now</button>
+          </div>
+          <div id="store-result-${s.id}"></div>
+        </div>`;
+    }
+
+    function _relativeTime(iso) {
+      const diff = Date.now() - new Date(iso).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 2) return 'just now';
+      if (mins < 60) return mins + 'm ago';
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return hrs + 'h ago';
+      return Math.floor(hrs / 24) + 'd ago';
+    }
+
+    function showAddStoreForm() {
+      _editingStoreId = null;
+      document.getElementById('shopify-form-title').textContent = 'Add Store';
+      document.getElementById('shopify-form-display-name').value = '';
+      document.getElementById('shopify-form-url').value = '';
+      document.getElementById('shopify-form-token').value = '';
+      document.getElementById('shopify-form-token').placeholder = 'shpat_... (leave blank for public /products.json API)';
+      ['products','pages','articles'].forEach(k => {
+        document.getElementById('shopify-include-' + k).checked = true;
+      });
+      document.getElementById('shopify-metafields').checked = false;
+      document.getElementById('shopify-form-card').classList.remove('hidden');
+      document.getElementById('shopify-form-display-name').focus();
+    }
+
+    function startEditStore(storeId) {
+      fetch('/api/shopify/stores').then(r => r.json()).then(data => {
+        const s = data.stores.find(x => x.id === storeId);
+        if (!s) return;
+        _editingStoreId = storeId;
+        document.getElementById('shopify-form-title').textContent = 'Edit Store';
+        document.getElementById('shopify-form-display-name').value = s.display_name;
+        document.getElementById('shopify-form-url').value = s.shop_url;
+        document.getElementById('shopify-form-token').value = '';
+        document.getElementById('shopify-form-token').placeholder = s.has_token
+          ? 'Keep existing token (ends in \u2026' + s.token_hint + ') — or type new token to replace'
+          : 'shpat_... (leave blank for public API)';
+        ['products','pages','articles'].forEach(k => {
+          document.getElementById('shopify-include-' + k).checked = (s.include || []).includes(k);
+        });
+        document.getElementById('shopify-metafields').checked = !!s.metafields;
+        document.getElementById('shopify-form-card').classList.remove('hidden');
+        document.getElementById('shopify-form-card').scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    async function saveStore() {
+      const body = {
+        display_name: document.getElementById('shopify-form-display-name').value.trim(),
+        shop_url: document.getElementById('shopify-form-url').value.trim(),
+        access_token: document.getElementById('shopify-form-token').value,
+        include: ['products','pages','articles'].filter(k => document.getElementById('shopify-include-' + k).checked),
+        metafields: document.getElementById('shopify-metafields').checked,
+      };
+      if (!body.display_name || !body.shop_url) { alert('Display name and Shop URL are required.'); return; }
+      const url = _editingStoreId ? '/api/shopify/stores/' + _editingStoreId : '/api/shopify/stores';
+      const method = _editingStoreId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { alert(data.detail || 'Error saving store'); return; }
+      cancelStoreForm();
+      loadShopifyStores();
+    }
+
+    function cancelStoreForm() {
+      document.getElementById('shopify-form-card').classList.add('hidden');
+      _editingStoreId = null;
+    }
+
+    async function deleteStore(storeId, name) {
+      if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
+      await fetch('/api/shopify/stores/' + storeId, { method: 'DELETE' });
+      loadShopifyStores();
+    }
+
+    async function testStore(storeId) {
+      const el = document.getElementById('store-result-' + storeId);
+      el.innerHTML = '<span class="status">Testing connection…</span>';
+      try {
+        const d = await fetch('/api/shopify/stores/' + storeId + '/test', { method: 'POST' }).then(r => r.json());
+        if (d.ok) {
+          const info = d.mode === 'admin'
+            ? '✅ Connected &nbsp;·&nbsp; ' + d.shop_name + ' &nbsp;·&nbsp; ' + d.products + ' products, ' + d.pages + ' pages'
+            : '✅ Connected (public API) &nbsp;·&nbsp; ' + d.products;
+          el.innerHTML = '<div class="inline-result ok">' + info + '</div>';
+        } else {
+          el.innerHTML = '<div class="inline-result err">❌ ' + d.error + '</div>';
+        }
+      } catch(e) {
+        el.innerHTML = '<div class="inline-result err">❌ ' + e + '</div>';
+      }
+    }
+
+    async function fetchStore(storeId) {
+      const el = document.getElementById('store-result-' + storeId);
+      el.innerHTML = '<div class="log" id="shopify-fetch-log-' + storeId + '" style="max-height:160px;overflow-y:auto;font-size:0.8rem;padding:0.4rem"></div>';
+      const log = document.getElementById('shopify-fetch-log-' + storeId);
+      try {
+        const res = await fetch('/api/shopify/stores/' + storeId + '/fetch', { method: 'POST' });
+        if (!res.ok) { log.textContent = 'Failed to start fetch.'; return; }
+        const sse = new EventSource('/api/progress');
+        sse.onmessage = e => {
+          const msg = e.data;
+          if (msg.startsWith('LOG:')) {
+            log.textContent += msg.slice(4) + '\\n';
+            log.scrollTop = log.scrollHeight;
+          } else if (msg.startsWith('DONE:')) {
+            log.textContent += '✅ ' + msg.slice(5) + '\\n';
+            sse.close();
+            loadShopifyStores();
+          } else if (msg.startsWith('ERROR:')) {
+            log.textContent += '❌ ' + msg.slice(6) + '\\n';
+            sse.close();
+          }
+        };
+        sse.onerror = () => { log.textContent += 'Connection lost.\\n'; sse.close(); };
+      } catch(e) {
+        log.textContent = 'Error: ' + e;
+      }
+    }
+
+    // Auto-load stores when Shopify tab is clicked
+    document.querySelectorAll('.tab').forEach(t => {
+      if (t.dataset.tab === 'shopify') {
+        t.addEventListener('click', () => loadShopifyStores());
+      }
+    });
+
+    async function shutdownServer() {
+      if (!confirm('Stop the jB RAG Builder server?\n\nThe page will become unreachable until you restart it from the terminal.')) return;
+      const btn = document.getElementById('btnShutdown');
+      // Show overlay immediately — server may die before the fetch response arrives
+      document.body.insertAdjacentHTML('afterbegin',
+        '<div id="shutdownOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:9999">' +
+        '<div style="background:#fff;border-radius:12px;padding:2rem 2.5rem;text-align:center;max-width:380px">' +
+        '<div style="font-size:2rem;margin-bottom:0.5rem">⏹</div>' +
+        '<h2 style="margin:0 0 0.5rem">Server stopped</h2>' +
+        '<p style="color:#555;margin:0 0 0.75rem">Run <code>python3 run_app.py</code> in the terminal to restart.</p>' +
+        '<p style="color:#aaa;font-size:0.8rem;margin:0">You can close this tab.</p>' +
+        '</div></div>'
+      );
+      // Fire shutdown — don\'t await, response may never arrive
+      fetch('/api/shutdown', { method: \'POST\' }).catch(() => {});
+    }
+
   </script>
   <footer style="text-align:center;padding:1.2rem 0 0.8rem;font-size:0.78rem;color:#aaa;">
     jabberbrain RAG builder &nbsp;·&nbsp; v__APP_VERSION__
+    &nbsp;&nbsp;
+    <button type="button" id="btnShutdown" onclick="shutdownServer()"
+      style="font-size:0.72rem;padding:0.15rem 0.55rem;background:transparent;border:1px solid #ccc;border-radius:10px;color:#aaa;cursor:pointer;"
+      title="Stop the server (same as Ctrl+C in terminal)">⏹ Stop server</button>
   </footer>
 </body>
 </html>
