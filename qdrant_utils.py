@@ -23,12 +23,12 @@ def get_qdrant_connection():
     return _connection
 
 
-def create_collection(collection_name):
+def create_collection(collection_name, vector_size: int = 1536):
     get_qdrant_connection()
     # to create the collection if it does not exist
     _connection.create_collection(
         collection_name=collection_name,
-        vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
+        vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
     )
 
 def duplicate_collection(collection_name, new_collection_name):

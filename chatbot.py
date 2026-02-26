@@ -32,10 +32,11 @@ def improve_query(query, history):
     print("----------------------------------------\nOld query: ", query, "\nNew query: ", new_query, "\n----------------------------------------\n")
     return new_query
 
-def retrieve_from_vdb(query, collection_names):
+def retrieve_from_vdb(query, collection_names, embedding_model: str = "text-embedding-ada-002"):
     """
     Retrieve relevant chunks from one or more Qdrant collections.
     collection_names: str or list[str]
+    embedding_model: must match the model used when the collection was built.
     When multiple collections are provided, all are queried and results are merged by score (top K overall).
 
     Returns a dict: {"text": str, "sources": list[dict]}
@@ -47,7 +48,7 @@ def retrieve_from_vdb(query, collection_names):
     openai_client = get_openai_client()
     response = openai_client.embeddings.create(
         input=query,
-        model="text-embedding-ada-002"
+        model=embedding_model
     )
     embeddings = response.data[0].embedding
 
@@ -106,13 +107,9 @@ def retrieve_from_vdb(query, collection_names):
     return {"text": "\n".join(text_parts), "sources": sources}
 
 
-def get_retrieved_info(query, history, collection_names):
+def get_retrieved_info(query, history, collection_names, embedding_model: str = "text-embedding-ada-002"):
     new_query = improve_query(query, history)
-    result = retrieve_from_vdb(new_query, collection_names)
-    # Return just the text for backward compat with get_answer (which takes a string)
-    if isinstance(result, dict):
-        return result
-    return result
+    return retrieve_from_vdb(new_query, collection_names, embedding_model=embedding_model)
 
 
 def get_answer(history, retrieved_info, query, company):

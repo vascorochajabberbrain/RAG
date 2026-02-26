@@ -63,14 +63,21 @@ def _run_create_collection(state: WorkflowState) -> str:
     if not state.collection_name:
         return "Error: collection_name is required."
     from QdrantTracker import QdrantTracker
+    from workflow.models import EMBEDDING_DIMS
     tracker = state.tracker or QdrantTracker()
     state.tracker = tracker
     coll_type = "group" if state.grouping_enabled else "scs"
+    vector_size = EMBEDDING_DIMS.get(state.embedding_model, 1536)
     # Delete existing collection silently so we never hit interactive input() prompts
     if tracker._existing_collection_name(state.collection_name):
         tracker._delete_collection(state.collection_name)
+    # Create with correct vector size for the chosen embedding model
+    tracker._create_collection(state.collection_name, vector_size=vector_size)
     state.collection_object = tracker.new(state.collection_name, coll_type)
-    return f"Created and opened collection '{state.collection_name}' (type={coll_type})."
+    return (
+        f"Created and opened collection '{state.collection_name}' "
+        f"(type={coll_type}, model={state.embedding_model}, dims={vector_size})."
+    )
 
 
 def _run_fetch(state: WorkflowState) -> str:
@@ -401,15 +408,17 @@ def _run_push(state: WorkflowState) -> str:
     # When loaded from disk, coll is None. Two cases:
     #   A) Collection already exists in Qdrant → append mode (don't wipe existing points)
     #   B) Collection doesn't exist yet → fresh push (original behaviour)
+    embedding_model = state.embedding_model or "text-embedding-ada-002"
+
     if coll is None and tracker._existing_collection_name(name):
         # Append mode: build a temp SCS_Collection, embed, upsert without deleting.
         from my_collections.SCS_Collection import SCS_Collection
         temp_coll = SCS_Collection(name)
         temp_coll.append_sentences(state.chunks, state.source_label,
                                    scraped_items=state.scraped_items or [])
-        points = temp_coll.points_to_save()  # embeds each chunk + builds PointStructs
+        points = temp_coll.points_to_save(model_id=embedding_model)
         tracker.append_points_to_collection(name, points)
-        return f"Appended {len(points)} chunks to existing '{name}' in Qdrant."
+        return f"Appended {len(points)} chunks to existing '{name}' in Qdrant (model={embedding_model})."
 
     # Fresh push: collection doesn't exist yet — create + save all at once.
     if coll is None:
@@ -418,8 +427,12 @@ def _run_push(state: WorkflowState) -> str:
 
     coll.append_sentences(state.chunks, state.source_label,
                           scraped_items=state.scraped_items or [])
-    tracker.save_collection(name)
-    return f"Appended {len(state.chunks)} chunks and saved '{name}' to Qdrant."
+    # Use save_collection for the first push; it calls points_to_save() internally.
+    # We need to pass model_id through — override the collection's embedding call.
+    # save_collection → _upsert_points(coll.points_to_save()) so patch it here:
+    points = coll.points_to_save(model_id=embedding_model)
+    tracker._upsert_points(name, points)
+    return f"Pushed {len(points)} chunks to '{name}' in Qdrant (model={embedding_model})."
 
 
 def _run_test_qa(state: WorkflowState) -> str:

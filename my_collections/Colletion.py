@@ -89,9 +89,10 @@ class Collection:
         """
         return self.collection_name
     
-    def points_to_save(self):
+    def points_to_save(self, model_id: str = "text-embedding-ada-002"):
         """
-        Save the Collection on Qdrant.
+        Embed all items and return a list of Qdrant PointStructs ready to upsert.
+        model_id: OpenAI embedding model to use (must match the collection's vector size).
         """
         qdrant_points = []
 
@@ -100,7 +101,7 @@ class Collection:
             print(f"Embedding {idx + 1}/{total}…")
             qdrant_points.append(PointStruct(
                 id=get_point_id(),
-                vector=get_embedding(item.to_embed()),
+                vector=get_embedding(item.to_embed(), model_id=model_id),
                 payload=self._add_collection_data_to_payload(item.to_payload(idx))
             ))
 

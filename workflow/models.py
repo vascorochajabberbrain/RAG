@@ -8,6 +8,15 @@ import json
 import os
 
 
+# Mapping of OpenAI embedding model → vector dimension.
+# Used when creating Qdrant collections (VectorParams.size must match).
+EMBEDDING_DIMS: dict = {
+    "text-embedding-ada-002": 1536,
+    "text-embedding-3-small": 1536,
+    "text-embedding-3-large": 3072,
+}
+
+
 class Step(str, Enum):
     CREATE_COLLECTION = "create_collection"
     ADD_SOURCE = "add_source"
@@ -42,6 +51,7 @@ class WorkflowState:
     collection_name: Optional[str] = None
     collection_type: str = "scs"  # scs | group | group_sameSource
     collection_object: Any = None  # SCS_Collection or GroupCollection when open
+    embedding_model: str = "text-embedding-ada-002"  # OpenAI embedding model; locked at collection creation
 
     # Source
     source_type: Optional[str] = None  # pdf | url | txt | csv
@@ -80,6 +90,7 @@ class WorkflowState:
         return {
             "collection_name": self.collection_name,
             "collection_type": self.collection_type,
+            "embedding_model": self.embedding_model,
             "source_type": self.source_type,
             "source_config": self.source_config,
             "raw_text": self.raw_text[:5000] + "..." if self.raw_text and len(self.raw_text) > 5000 else self.raw_text,
@@ -110,6 +121,7 @@ class WorkflowState:
         return {
             "collection_name": self.collection_name,
             "collection_type": self.collection_type,
+            "embedding_model": self.embedding_model,
             "source_type": self.source_type,
             "source_config": self.source_config,
             "raw_text": self.raw_text,
@@ -201,6 +213,7 @@ class WorkflowState:
         return cls(
             collection_name=d.get("collection_name"),
             collection_type=d.get("collection_type", "scs"),
+            embedding_model=d.get("embedding_model", "text-embedding-ada-002"),
             source_type=d.get("source_type"),
             source_config=d.get("source_config"),
             raw_text=d.get("raw_text"),

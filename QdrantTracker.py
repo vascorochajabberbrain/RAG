@@ -122,18 +122,20 @@ class QdrantTracker:
         print(f"QdrantTracker: New collection {collection_name} created and opened.")
         return collection
     
-    def save_collection(self, collection_name):
+    def save_collection(self, collection_name, vector_size: int = 1536, embedding_model: str = "text-embedding-ada-002"):
         """
-        Save the collection to Qdrant.
+        Save the collection to Qdrant. Deletes and recreates the collection, then upserts all points.
+        vector_size: must match the embedding model's output dimensions.
+        embedding_model: OpenAI model used to embed chunks.
         """
 
         print(f"QdrantTracker: Deleting collection {collection_name}...")
         self._delete_collection(collection_name)
         print(f"QdrantTracker: Creating collection {collection_name}...")
-        self._create_collection(collection_name)
+        self._create_collection(collection_name, vector_size=vector_size)
 
         collection = self.get_collection(collection_name)
-        points = collection.points_to_save()
+        points = collection.points_to_save(model_id=embedding_model)
 
         self._upsert_points(collection_name, points)
     
@@ -274,11 +276,11 @@ class QdrantTracker:
     def _delete_collection(self, collection_name):
         self._connection.delete_collection(collection_name)  
 
-    def _create_collection(self, collection_name):
+    def _create_collection(self, collection_name, vector_size: int = 1536):
         # to create the collection if it does not exist
         self._connection.create_collection(
             collection_name=collection_name,
-            vectors_config=models.VectorParams(size=1536, distance=models.Distance.COSINE),
+            vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
         )
 
     def append_points_to_collection(self, collection_name: str, points: list):

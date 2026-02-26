@@ -69,6 +69,7 @@ class QARequest(BaseModel):
     question: str
     company: str = "Assistant"
     solution_id: Optional[str] = None
+    embedding_model: str = "text-embedding-ada-002"  # must match model used at ingestion time
 
 
 @app.get("/")
@@ -299,7 +300,8 @@ def qa(req: QARequest):
     else:
         collection_names = req.collection_name
     history = []
-    retrieved = get_retrieved_info(req.question, history, collection_names)
+    retrieved = get_retrieved_info(req.question, history, collection_names,
+                                   embedding_model=req.embedding_model)
     answer = get_answer(history, retrieved, req.question, req.company)
     # retrieved is now a dict {text, sources}; pass sources through to the UI
     sources = retrieved.get("sources", []) if isinstance(retrieved, dict) else []
@@ -750,6 +752,20 @@ _INDEX_HTML = """
       <div class="card">
         <h2>3. Run pipeline</h2>
         <p class="status">Create collection → Fetch → (Translate &amp; Clean) → Chunk → Push to Qdrant</p>
+        <div style="margin-bottom:0.85rem;">
+          <label title="The OpenAI embedding model used to vectorize text chunks. The vector dimension is fixed at collection creation and cannot be changed afterwards. Default: text-embedding-ada-002 (1536 dims).">
+            Embedding model
+          </label>
+          <select id="embeddingModel"
+            title="text-embedding-ada-002: original model, 1536 dims — safest default, widest compatibility. text-embedding-3-small: newer, cheaper, same 1536 dims — good drop-in upgrade. text-embedding-3-large: highest quality, 3072 dims — NOT compatible with ada-002 or 3-small collections.">
+            <option value="text-embedding-ada-002" selected>text-embedding-ada-002 — default · 1536 dims</option>
+            <option value="text-embedding-3-small">text-embedding-3-small — newer/cheaper · 1536 dims</option>
+            <option value="text-embedding-3-large">text-embedding-3-large — best quality · 3072 dims</option>
+          </select>
+          <p style="font-size:0.78rem;color:#888;margin:0.2rem 0 0 0;">
+            ⚠️ Locked at collection creation — all sources pushed to the same collection must use the same model.
+          </p>
+        </div>
         <button type="button" class="btn-primary" id="runCreate">1. Create collection</button>
         <button type="button" class="btn-primary" id="runFetch">2. Fetch</button>
         <button type="button" class="btn-translate" id="runTranslate">2b. Translate &amp; Clean (PT) 🇵🇹</button>
@@ -796,6 +812,15 @@ _INDEX_HTML = """
           <label>Collection</label>
           <select id="chatCollectionSelect" style="margin-bottom:0.75rem;"></select>
         </div>
+        <label title="Must match the embedding model used when the collection was built. Default: text-embedding-ada-002.">
+          Embedding model
+        </label>
+        <select id="chatEmbeddingModel"
+          title="Select the embedding model that was used to ingest this collection. Using a different model will return incorrect results. text-embedding-ada-002 is the default (1536 dims). text-embedding-3-small is 1536 dims. text-embedding-3-large is 3072 dims.">
+          <option value="text-embedding-ada-002" selected>text-embedding-ada-002 — default · 1536 dims</option>
+          <option value="text-embedding-3-small">text-embedding-3-small — newer/cheaper · 1536 dims</option>
+          <option value="text-embedding-3-large">text-embedding-3-large — best quality · 3072 dims</option>
+        </select>
         <label>Question</label>
         <textarea id="qaQuestion" rows="2" placeholder="Ask something about the content…"></textarea>
         <button type="button" class="btn-primary" id="runQA">Ask</button>
@@ -1397,10 +1422,12 @@ _INDEX_HTML = """
           source_config.shop_url = (document.getElementById('shopUrl') || {}).value?.trim() || '';
         }
       } else if (path) source_config = { path, source_label: path.split('/').pop() };
+      const embeddingModel = (document.getElementById('embeddingModel') || {}).value || 'text-embedding-ada-002';
       return {
         collection_name: getCollectionName(),
         source_type: st,
         source_config,
+        embedding_model: embeddingModel,
         chunking_config: {
           use_proposition_chunking: chunkMode === 'proposition',
           use_hierarchical_chunking: chunkMode === 'hierarchical'
@@ -1693,7 +1720,8 @@ _INDEX_HTML = """
       }
       setLog(qaResult, '…', false);
       try {
-        const body = { collection_name: collection, question, company };
+        const embeddingModel = (document.getElementById('chatEmbeddingModel') || {}).value || 'text-embedding-ada-002';
+        const body = { collection_name: collection, question, company, embedding_model: embeddingModel };
         if (collection === '__all__' && solId) body.solution_id = solId;
         const res = await api('/api/qa', body);
 
