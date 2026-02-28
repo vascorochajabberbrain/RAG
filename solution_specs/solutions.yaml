@@ -33,6 +33,11 @@ solutions:
     collection_name: first_shopify_test_store
     collection_type: scs
     scraper_name: first_shopify_test_store
+    sources:
+    - id: shopify_products
+      type: url
+      label: Shopify products
+      scraper_name: first_shopify_test_store
     routing: {}
 - id: peixefresco
   display_name: Peixe Fresco
@@ -46,6 +51,11 @@ solutions:
     collection_name: peixefresco_products
     collection_type: scs
     scraper_name: peixefresco_products
+    sources:
+    - id: product_sitemap
+      type: url
+      label: Product sitemap (102 pages)
+      scraper_name: peixefresco_products
     routing:
       description: Esta coleção contém uma variedade de produtos de peixe e marisco
         frescos, incluindo opções para preparo e consumo.
@@ -86,6 +96,14 @@ solutions:
     collection_name: peixefresco_recipes
     collection_type: scs
     scraper_name: peixefresco_recipes
+    sources:
+    - id: recipe_sitemap
+      type: url
+      label: Recipe pages (11 pages)
+      scraper_name: peixefresco_recipes
+    - id: recipe_pdf
+      type: pdf
+      label: Caderno de Receitas do Mar (PDF)
     routing:
       description: Esta coleção contém diversas receitas de pratos à base de peixe,
         especialmente focadas na culinária do Algarve e do Alentejo.
@@ -124,6 +142,11 @@ solutions:
     collection_name: peixefresco_pages
     collection_type: scs
     scraper_name: peixefresco_pages
+    sources:
+    - id: page_sitemap
+      type: url
+      label: Static pages (23 pages)
+      scraper_name: peixefresco_pages
     routing:
       description: Esta coleção contém informações sobre a venda de peixe fresco,
         incluindo opções de aquicultura e promoções especiais.

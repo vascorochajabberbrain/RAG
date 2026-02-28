@@ -253,3 +253,4 @@ wiping existing ones — used for Run 2 (PDF) after Run 1 (website scrape).
 - **Elementor sites**: use `custom_js_extraction` in YAML — provide a JS function returning a fields dict.
 - **Filters**: implement in `ingestion/scrapers/filters.py`, register by name, apply in CLEAN step.
 - **LLM models**: GPT-4o-mini for processing steps, GPT-4o for final answers.
+- **Versioning**: bump the `VERSION` file on meaningful changes. Major (`X.0.0`) for breaking/architectural changes. Minor (`0.X.0`) for new features or significant UI changes. Patch (`0.0.X`) for bug fixes, small tweaks, config changes. The version is displayed in the web UI header and exposed via `/api/version`.

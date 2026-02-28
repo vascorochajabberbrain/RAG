@@ -56,6 +56,7 @@ class WorkflowState:
     # Source
     source_type: Optional[str] = None  # pdf | url | txt | csv
     source_config: Optional[dict] = None  # path, url, scraper_name, etc.
+    source_id: Optional[str] = None  # id from solutions.yaml sources list (for per-source state files)
 
     # Fetched / cleaned text
     raw_text: Optional[str] = None
@@ -97,6 +98,7 @@ class WorkflowState:
             "collection_type": self.collection_type,
             "embedding_model": self.embedding_model,
             "source_type": self.source_type,
+            "source_id": self.source_id,
             "source_config": self.source_config,
             "raw_text": self.raw_text[:5000] + "..." if self.raw_text and len(self.raw_text) > 5000 else self.raw_text,
             "cleaned_text": self.cleaned_text[:5000] + "..." if self.cleaned_text and len(self.cleaned_text) > 5000 else self.cleaned_text,
@@ -129,6 +131,7 @@ class WorkflowState:
             "collection_type": self.collection_type,
             "embedding_model": self.embedding_model,
             "source_type": self.source_type,
+            "source_id": self.source_id,
             "source_config": self.source_config,
             "raw_text": self.raw_text,
             "cleaned_text": self.cleaned_text,
@@ -157,18 +160,21 @@ class WorkflowState:
 
     def get_save_path(self) -> Optional[str]:
         """Derive .rag_state.json path from source. File sources use a sibling file;
-        URL/scraper sources use a project-root file named after the collection."""
+        URL/scraper sources use a project-root file named after the collection.
+        When source_id is set, appends it to the filename for per-source state."""
         if self.save_path:
             return self.save_path
         # File-based sources: save next to the source file
         path = (self.source_config or {}).get("path") or (self.source_config or {}).get("pdf_path")
         if path:
             base = os.path.splitext(path)[0]
-            return base + ".rag_state.json"
+            suffix = f"_{self.source_id}" if self.source_id else ""
+            return base + f".rag_state{suffix}.json"
         # URL/scraper sources: save in project root named after collection
         if self.collection_name:
             root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            return os.path.join(root, f".rag_state_{self.collection_name}.json")
+            suffix = f"_{self.source_id}" if self.source_id else ""
+            return os.path.join(root, f".rag_state_{self.collection_name}{suffix}.json")
         return None
 
     def save_to_disk(self) -> Optional[str]:
@@ -222,6 +228,7 @@ class WorkflowState:
             collection_type=d.get("collection_type", "scs"),
             embedding_model=d.get("embedding_model", "text-embedding-ada-002"),
             source_type=d.get("source_type"),
+            source_id=d.get("source_id"),
             source_config=d.get("source_config"),
             raw_text=d.get("raw_text"),
             cleaned_text=d.get("cleaned_text"),
