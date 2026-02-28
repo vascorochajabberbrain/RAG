@@ -1,0 +1,983 @@
+INFO:     Will watch for changes in these directories: ['/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee']
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [72047] using StatReload
+INFO:     Started server process [72057]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:58966 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'run_app_server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [72057]
+INFO:     Started server process [72072]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:59176 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [72072]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1570: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [72747]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [72747]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1570: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [72749]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:59481 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59566 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59566 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59585 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59566 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59566 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59592 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59767 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59767 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59767 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60048 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60273 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60273 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60452 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60452 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60452 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60477 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60452 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     127.0.0.1:60478 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [72749]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1581: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [74109]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62508 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74109]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1581: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [74112]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62521 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62521 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62521 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62521 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74112]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1581: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [74123]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62562 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74123]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1581: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [74127]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62612 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62828 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62828 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74127]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1588: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [74218]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62969 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62969 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62969 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62969 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62969 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62969 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74218]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1604: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [74237]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:63088 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63088 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63088 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63088 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63088 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74237]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1604: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [74257]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:63220 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63220 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63220 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74257]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1604: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [74268]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63985 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64028 - "POST /api/dev/copy-prod-data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64058 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63277 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64262 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64292 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64297 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64299 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64297 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/wizard/load?solution_id=peixe_fresco HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/solutions/peixe_fresco/collections HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64298 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64298 - "POST /api/wizard/save HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64298 - "POST /api/faq/generate-table HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/opt/homebrew/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/lib/python3.13/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/opt/homebrew/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/opt/homebrew/lib/python3.13/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/opt/homebrew/lib/python3.13/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/lib/python3.13/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/opt/homebrew/lib/python3.13/site-packages/fastapi/routing.py", line 315, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/lib/python3.13/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/lib/python3.13/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 2502, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/opt/homebrew/lib/python3.13/site-packages/anyio/_backends/_asyncio.py", line 986, in run
+    result = context.run(func, *args)
+  File "/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py", line 628, in faq_generate_table
+    from llms.openai_utils import openai_chat_completion
+  File "/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/llms/openai_utils.py", line 2, in <module>
+    from dotenv import load_dotenv
+ModuleNotFoundError: No module named 'dotenv'
+INFO:     127.0.0.1:64413 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64413 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64428 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64428 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64428 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64428 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64428 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64428 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64513 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64513 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64765 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "POST /api/dev/copy-prod-data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65025 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:65131 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:65482 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65482 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50598 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50626 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74268]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1604: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [75733]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51064 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [75733]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1604: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [75788]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:51340 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51340 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51405 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51445 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51445 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51445 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51445 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51445 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51445 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51445 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51595 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51596 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51598 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51596 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /api/wizard/load?solution_id=peixe_fresco HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /api/solutions/peixe_fresco/collections HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51597 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51597 - "POST /api/wizard/save HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51597 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51669 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51669 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51669 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51669 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51669 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51669 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51669 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51738 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51738 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51738 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51738 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51738 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51738 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51738 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51738 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51738 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51883 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51883 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52487 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [75788]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1611: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [76684]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [76684]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1611: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [76706]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:53099 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [76706]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1611: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [76714]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:53123 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53123 - "GET /api/version HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'web/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [76714]
+/Users/johanahlund/PROGRAMMING/RAG/.claude/worktrees/bold-chatterjee/web/app.py:1611: SyntaxWarning: invalid escape sequence '\s'
+  _INDEX_HTML = """
+INFO:     Started server process [76724]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53356 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54721 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54781 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/wizard/load?solution_id=peixe_fresco HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/solutions/peixe_fresco/collections HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54782 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "POST /api/wizard/save HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55202 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55202 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55202 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55202 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55202 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55586 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55587 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54782 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/wizard/list-saves HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/wizard/load?solution_id=peixe_fresco HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/solutions/peixe_fresco/collections HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55588 - "GET /api/solutions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "POST /api/wizard/save HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/solutions/peixefresco/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55588 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/state/check-by-collection?collection_name=peixefresco_products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/version HTTP/1.1" 200 OK

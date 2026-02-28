@@ -3,6 +3,9 @@
 __pycache__
 .shopify_stores.json
 
+# DEV mode data (isolated from PROD)
+.dev_data/
+
 # Temp / generated files
 .rag_state_*.json
 .wizard_state_*.json

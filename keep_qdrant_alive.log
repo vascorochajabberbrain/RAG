@@ -103,3 +103,4 @@ qdrant_client.http.exceptions.ResponseHandlingException: [Errno 8] nodename nor 
 [2026-02-22T10:00:03] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
 [2026-02-23T10:00:03] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_group
 [2026-02-24T10:00:03] Qdrant keep-alive OK. Collections: peixefresco, peixefresco_scs, test_connection, peixefresco_group, peixe_fresco
+[2026-02-28T10:00:01] Qdrant keep-alive OK. Collections: peixefresco_scs, peixefresco_products, peixefresco_recipes, peixefresco, peixefresco_pages, test_connection, peixefresco_group, peixe_fresco
