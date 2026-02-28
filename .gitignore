@@ -1,5 +1,17 @@
 
-
 .env
 __pycache__
 .shopify_stores.json
+
+# Temp / generated files
+.rag_state_*.json
+.wizard_state_*.json
+.rag_server.log
+.domain_rank.db
+.domain_rank.db-shm
+.domain_rank.db-wal
+keep_qdrant_alive.log
+keep_qdrant_cron.log
+
+# Claude Code worktrees
+.claude/worktrees/

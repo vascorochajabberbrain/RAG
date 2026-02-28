@@ -82,6 +82,11 @@ class WorkflowState:
     # Collection-level metadata (generated after chunking, used by HIRS for RAG routing)
     collection_metadata: Optional[dict] = None  # topics, keywords, description, language, doc_type
 
+    # Per-run relevance report (set after FETCH relevance check; None if check was skipped)
+    relevance_report: Optional[dict] = None
+    # Shape: {relevant_count, mismatch_count, irrelevant_count,
+    #         mismatch_urls: [str], irrelevant_urls: [str]}
+
     # Tracker reference (set by runner; not serialized)
     tracker: Any = None
 
@@ -114,6 +119,7 @@ class WorkflowState:
             "completed_steps": self.completed_steps,
             "save_path": self.save_path,
             "collection_metadata": self.collection_metadata,
+            "relevance_report": self.relevance_report,
         }
 
     def to_full_dict(self) -> dict:
@@ -146,6 +152,7 @@ class WorkflowState:
             "group_collection_name": self.group_collection_name,
             "completed_steps": self.completed_steps,
             "collection_metadata": self.collection_metadata,
+            "relevance_report": self.relevance_report,
         }
 
     def get_save_path(self) -> Optional[str]:
@@ -227,6 +234,7 @@ class WorkflowState:
             group_collection_name=d.get("group_collection_name"),
             completed_steps=d.get("completed_steps", []),
             collection_metadata=d.get("collection_metadata"),
+            relevance_report=d.get("relevance_report"),
         )
 
     def get_text_for_chunking(self) -> str:

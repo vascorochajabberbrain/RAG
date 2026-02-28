@@ -47,36 +47,38 @@ solutions:
     collection_type: scs
     scraper_name: peixefresco_products
     routing:
-      description: This collection contains a variety of seafood and fish products
-        available for purchase, including detailed descriptions and prices.
+      description: Esta coleção contém uma variedade de produtos de peixe e marisco
+        frescos, incluindo opções para preparo e consumo.
       keywords:
-      - peixefresco
-      - fresh fish products
-      - seafood prices
+      - peixe fresco
+      - marisco
       - cavala
+      - folhado de bacalhau
       - sapateira
-      - salmão fumado
       - dourada
-      - carapau
-      - frozen appetizers
+      - laranja
+      - lulas
+      - salmao
+      - amêijoa
+      - garoupa
+      - sal
       - choco
-      - marine delicacies
-      - prepared seafood
-      - bio salmon
+      - tiras de choco
       - flor de sal
-      - Portuguese seafood
+      - cavala fumada
+      - abrotea
       typical_questions:
-      - What types of fresh fish are available?
-      - How much does the sapateira cost?
-      - Can you tell me about the preparation methods for cavala?
-      - What are the best seafood products for cooking?
-      - Is there bio salmon available for purchase?
+      - Quais são os produtos de marisco disponíveis?
+      - Como preparar a cavala?
+      - Quais são os preços dos peixes frescos?
+      - O que é incluído no folhado de bacalhau?
+      - Onde posso encontrar lulas a venda?
       not_covered:
-      - meat products
-      - vegetarian options
-      - dairy
-      - snack foods
-      - beverages
+      - receitas de cozinha
+      - informações nutricionais
+      - história dos peixes
+      - técnicas de pesca
+      - ações de sustentabilidade
       language: pt
       doc_type: product_catalog
   - id: peixefresco_recipes
@@ -123,34 +125,46 @@ solutions:
     collection_type: scs
     scraper_name: peixefresco_pages
     routing:
-      description: Esta coleção contém informações sobre produtos de peixe e marisco,
-        com ênfase na sustentabilidade e promoções.
+      description: Esta coleção contém informações sobre a venda de peixe fresco,
+        incluindo opções de aquicultura e promoções especiais.
       keywords:
-      - peixe de pesca sustentável
+      - peixe do mar
+      - postas de peixe
       - filetes
-      - postas
       - bivalves
-      - marisco cozido
       - aquicultura BIO
-      - entregas grátis
-      - desconto na primeira compra
-      - fumaça de peixe
-      - sal
+      - marisco cozido
+      - refeições
       - salgados
-      - refeições com peixe
-      - produtos do mar
-      - especialidades do mar
+      - fumeiro
+      - preparado com água do mar
+      - desconto primeira compra
+      - entregas grátis
+      - sustentabilidade
+      - avaliações 5 estrelas
       typical_questions:
       - Quais tipos de peixe estão disponíveis?
+      - Como funciona a entrega gratuita?
       - O que é aquicultura BIO?
-      - Como são preparados os produtos do mar?
-      - Quais são os benefícios da pesca sustentável?
-      - Que tipos de promoção estão atualmente disponíveis?
+      - Quais são os descontos para a primeira compra?
+      - O peixe é sustentável?
       not_covered:
-      - receitas vegetarianas
-      - produtos de carne
-      - bebidas alcoólicas
-      - snacks não relacionados ao mar
-      - alimentos congelados que não sejam peixe
+      - Receitas de peixe
+      - História da aquicultura
+      - Informações sobre outros tipos de alimentos
+      - Técnicas de pesca
+      - Informações sobre restaurantes
       language: pt
       doc_type: product_catalog
+settings:
+  doc_types:
+  - product_catalog
+  - recipe_book
+  - faq
+  - manual
+  - legal
+  - general
+  llm_chat_model: gpt-4o
+  llm_processing_model: gpt-4o-mini
+  embedding_model: text-embedding-ada-002
+  qdrant_url: https://94e2704d-31c5-4e24-b42a-e28f2554b078.eu-central-1-0.aws.cloud.qdrant.io

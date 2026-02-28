@@ -108,11 +108,61 @@ def _run_fetch(state: WorkflowState) -> str:
         scraper_name = config.get("scraper_name") or config.get("scraper")
         if not scraper_name:
             return "Error: source_config must contain 'scraper_name' or 'scraper' for url."
-        raw_text, scraped_items = run_scraper(scraper_name, config)
+        inline_cfg = config.get("scraper_config")  # inline config from solutions.yaml
+        raw_text, scraped_items = run_scraper(scraper_name, config, inline_config=inline_cfg)
         state.raw_text = raw_text
         state.scraped_items = scraped_items
         state.source_label = config.get("source_label") or scraper_name
-        items_info = f", {len(scraped_items)} pages with URL metadata" if scraped_items else ""
+
+        # ── Relevance check (runs if collection has routing metadata in solutions.yaml) ──
+        routing = _get_collection_routing(state)
+        if routing and scraped_items:
+            # Reuse the SSE progress queue from the web app if running in that context
+            try:
+                from web.app import _progress_queue as _pq
+            except Exception:
+                _pq = None
+
+            def _log(msg: str) -> None:
+                # When _pq is available, put directly (avoids double-logging via _QueueWriter)
+                # Otherwise, fall through to print() which _QueueWriter intercepts
+                if _pq:
+                    _pq.put(f"LOG:{msg}")
+                else:
+                    print(f"[relevance] {msg}")
+
+            _log(f"🔍 Running relevance check on {len(scraped_items)} pages…")
+
+            from workflow.relevance import filter_scraped_items
+            relevant, mismatch, irrelevant = filter_scraped_items(
+                scraped_items, routing, progress_cb=_log
+            )
+
+            if irrelevant:
+                _push_to_not_relevant(state, irrelevant, _log)
+
+            state.relevance_report = {
+                "relevant_count":   len(relevant),
+                "mismatch_count":   len(mismatch),
+                "irrelevant_count": len(irrelevant),
+                "mismatch_urls":    [it["url"] for it in mismatch],
+                "irrelevant_urls":  [it["url"] for it in irrelevant],
+            }
+            # Flagged (mismatch) pages still go into the intended collection
+            state.scraped_items = relevant + mismatch
+            # Rebuild raw_text to match filtered items
+            state.raw_text = "\n\n".join(it["text"] for it in state.scraped_items)
+
+            summary = (
+                f"✅ {len(relevant)} relevant · "
+                f"⚠️ {len(mismatch)} flagged · "
+                f"❌ {len(irrelevant)} irrelevant (→ 'not_relevant')"
+            )
+            _log(summary)
+            items_info = f", {len(state.scraped_items)} pages after relevance check"
+        else:
+            items_info = f", {len(scraped_items)} pages with URL metadata" if scraped_items else ""
+
         return f"Fetched URL (scraper={scraper_name}): {len(state.raw_text)} characters{items_info}."
 
     if stype == "csv":
@@ -433,6 +483,68 @@ def _run_push(state: WorkflowState) -> str:
     points = coll.points_to_save(model_id=embedding_model)
     tracker._upsert_points(name, points)
     return f"Pushed {len(points)} chunks to '{name}' in Qdrant (model={embedding_model})."
+
+
+def _get_collection_routing(state: WorkflowState) -> dict | None:
+    """
+    Look up the routing block for the current collection in solutions.yaml.
+    Returns the routing dict if it has a description or keywords, otherwise None.
+    """
+    collection_name = state.collection_name
+    if not collection_name:
+        return None
+    try:
+        from solution_specs.loader import get_all_solutions
+        for sol in get_all_solutions():
+            for coll in sol.get("collections", []):
+                if (
+                    coll.get("collection_name") == collection_name
+                    or coll.get("id") == collection_name
+                ):
+                    routing = coll.get("routing") or {}
+                    if routing.get("description") or routing.get("keywords"):
+                        return routing
+    except Exception as e:
+        print(f"[runner] _get_collection_routing failed (non-fatal): {e}")
+    return None
+
+
+def _push_to_not_relevant(
+    state: WorkflowState,
+    items: list[dict],
+    log_fn,
+) -> None:
+    """
+    Push irrelevant pages to a dedicated 'not_relevant' Qdrant collection.
+    Creates the collection if it doesn't exist. Non-fatal — errors are logged.
+    """
+    try:
+        from QdrantTracker import QdrantTracker
+        from my_collections.SCS_Collection import SCS_Collection
+        from workflow.models import EMBEDDING_DIMS
+
+        tracker = state.tracker or QdrantTracker()
+        coll_name = "not_relevant"
+        embedding_model = state.embedding_model or "text-embedding-ada-002"
+        vector_size = EMBEDDING_DIMS.get(embedding_model, 1536)
+
+        if not tracker._existing_collection_name(coll_name):
+            tracker._create_collection(coll_name, vector_size=vector_size)
+            log_fn(f"  Created '{coll_name}' Qdrant collection.")
+
+        # Tag source so items are traceable back to their original collection
+        source_label = f"not_relevant:{state.collection_name or 'unknown'}"
+        temp_coll = SCS_Collection(coll_name)
+        temp_coll.append_sentences(
+            [it["text"] for it in items],
+            source_label,
+            scraped_items=items,
+        )
+        points = temp_coll.points_to_save(model_id=embedding_model)
+        tracker.append_points_to_collection(coll_name, points)
+        log_fn(f"  → Pushed {len(points)} irrelevant page(s) to '{coll_name}'.")
+    except Exception as e:
+        log_fn(f"  ⚠ Could not push to 'not_relevant' collection: {e}")
 
 
 def _run_test_qa(state: WorkflowState) -> str:

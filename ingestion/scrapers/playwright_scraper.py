@@ -40,8 +40,14 @@ def run_playwright_scraper(config: dict) -> tuple:
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
-        page = browser.new_page()
+        context = browser.new_context()
+        page = context.new_page()
         try:
+            # Perform login before scraping if credentials are provided
+            login_cfg = config.get("login_config")
+            if login_cfg and login_cfg.get("username") and login_cfg.get("password"):
+                _perform_login(page, login_cfg)
+
             if mode == "sitemap":
                 result = _sitemap_scrape(page, config)
             elif mode == "single_page":
@@ -54,6 +60,36 @@ def run_playwright_scraper(config: dict) -> tuple:
             browser.close()
 
     return result
+
+
+def _perform_login(page, login_config: dict) -> bool:
+    """
+    Navigate to login URL and fill credentials before scraping gated content.
+    Selectors are optional — falls back to common patterns if not provided.
+    Returns True on success, False on failure (scraping continues either way).
+    """
+    login_url = login_config.get("url") or ""
+    u_sel     = (login_config.get("username_selector")
+                 or "input[type=email], input[name*=user], input[name*=email], input[name*=login]")
+    p_sel     = login_config.get("password_selector") or "input[type=password]"
+    sub_sel   = login_config.get("submit_selector") or "button[type=submit]"
+    username  = login_config.get("username", "")
+    password  = login_config.get("password", "")
+
+    if not username or not password:
+        return False
+    try:
+        if login_url:
+            page.goto(login_url, wait_until="networkidle", timeout=30000)
+        page.locator(u_sel).first.fill(username)
+        page.locator(p_sel).first.fill(password)
+        page.locator(sub_sel).first.click()
+        page.wait_for_load_state("networkidle", timeout=15000)
+        print(f"[playwright_scraper] Login completed for {login_url or 'current page'}")
+        return True
+    except Exception as e:
+        print(f"[playwright_scraper] Login failed (continuing anyway): {e}")
+        return False
 
 
 # ── Scrape modes ──────────────────────────────────────────────────────────────

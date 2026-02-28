@@ -442,3 +442,30 @@ class QdrantTracker:
                 collection_name=collection_name,
                 points_selector=PointIdsList(points=ids_to_delete),
             )
+
+    def scroll_all(self, collection_name: str, limit: int = 200) -> list:
+        """
+        Return all point payloads from a collection (no query/filter).
+        Used for FAQ table generation — retrieves all stored chunks.
+        Returns a flat list of payload dicts (unwrapped from nested 'point' key if present).
+        """
+        if not self._existing_collection_name(collection_name):
+            return []
+        all_payloads = []
+        offset = None
+        while True:
+            results, next_offset = self._connection.scroll(
+                collection_name=collection_name,
+                limit=min(limit, 100),
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for r in results:
+                p = r.payload or {}
+                # Unwrap nested payload structure used by SCS_Collection
+                all_payloads.append(p.get("point", p))
+            if next_offset is None or len(all_payloads) >= limit:
+                break
+            offset = next_offset
+        return all_payloads[:limit]
