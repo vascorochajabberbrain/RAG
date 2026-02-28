@@ -5788,7 +5788,8 @@ _INDEX_HTML = """
           const badge = document.createElement('span');
           if (pts > 0) {
             badge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.45rem;border-radius:10px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;';
-            badge.textContent = '✅ Live — ' + pts + ' chunks';
+            const nSrc = (c.sitemapIds ? c.sitemapIds.size || 0 : 0) + (c.fileSources ? c.fileSources.length : 0);
+            badge.textContent = '✅ Live — ' + pts + ' chunks' + (nSrc > 1 ? ' · ' + nSrc + ' sources' : '');
           } else {
             badge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.45rem;border-radius:10px;background:#e3f0fd;color:#1a5276;border:1px solid #aed6f1;';
             badge.textContent = '📥 Fetched (0 chunks)';
@@ -6230,6 +6231,11 @@ _INDEX_HTML = """
       if (saveBtn) saveBtn.style.display = '';
       document.getElementById('wizardResults').style.display = 'flex';
       document.getElementById('wizardSearch').value = '';
+      // Activate wizard chat (session has analysis data)
+      const chatHint = document.getElementById('wizardChatHint');
+      if (chatHint) chatHint.style.display = 'none';
+      const chatSec = document.getElementById('wizardChatSection');
+      if (chatSec) chatSec.style.display = '';
       _wizardRenderAll();
       // Load confirmed collection statuses from the API
       _wizardLoadConfirmedColls(_wizardCurrentSolId());
