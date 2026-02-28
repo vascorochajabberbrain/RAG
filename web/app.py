@@ -17,6 +17,7 @@ def _read_version() -> str:
         return "dev"
 
 APP_VERSION = _read_version()
+IS_DEV_MODE = os.environ.get("RAG_DEV_MODE", "") == "1"
 
 # In-memory state for single-user demo (one workflow at a time)
 _current_state: Optional[Any] = None
@@ -81,6 +82,7 @@ class QARequest(BaseModel):
 @app.get("/")
 def root():
     html = _INDEX_HTML.replace("__APP_VERSION__", APP_VERSION)
+    html = html.replace("__DEV_MODE__", "1" if IS_DEV_MODE else "0")
     return HTMLResponse(html)
 
 
@@ -179,18 +181,76 @@ def save_settings(req: SettingsRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/dev/copy-prod-data")
+def copy_prod_data():
+    """Copy PROD state files into .dev_data/ so DEV has a fresh snapshot."""
+    if not IS_DEV_MODE:
+        raise HTTPException(status_code=403, detail="Only available in DEV mode")
+    import glob as _glob, shutil
+    patterns = [".wizard_state_*.json", ".shopify_stores.json", ".rag_state.json"]
+    copied = []
+    for pat in patterns:
+        for src in _glob.glob(os.path.join(_REPO_ROOT, pat)):
+            dst = os.path.join(_DATA_ROOT, os.path.basename(src))
+            shutil.copy2(src, dst)
+            copied.append(os.path.basename(src))
+    return {"copied": copied, "dest": _DATA_ROOT}
+
+
 @app.get("/api/solutions/{solution_id}/collections")
 def solution_collections(solution_id: str):
     """Return all Qdrant collections registered under a solution."""
     try:
         from solution_specs import get_solution, get_collections
+        from solution_specs.loader import _ensure_sources
         sol = get_solution(solution_id)
         if not sol:
             raise HTTPException(status_code=404, detail=f"Solution '{solution_id}' not found")
-        tracker = get_state().tracker
-        all_qdrant = tracker.all_collections()
-        # collections is always a list of dicts in the new schema
         coll_entries = get_collections(solution_id)
+
+        # Try to get Qdrant status; gracefully degrade if unavailable
+        all_qdrant = set()
+        tracker = None
+        try:
+            tracker = get_state().tracker
+            all_qdrant = set(tracker.all_collections())
+        except Exception:
+            pass  # qdrant_client not available — return YAML data without Qdrant status
+
+        import json as _json
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        def _source_status(cname: str, source_id: str) -> dict:
+            """Check state file for a source and return its pipeline status."""
+            # Try source-scoped file first, then collection-level fallback
+            candidates = [
+                os.path.join(root, f".rag_state_{cname}_{source_id}.json"),
+                os.path.join(root, f".rag_state_{cname}.json"),
+            ]
+            for path in candidates:
+                if os.path.exists(path) and os.path.getsize(path) > 0:
+                    try:
+                        with open(path, "r", encoding="utf-8") as f:
+                            d = _json.load(f)
+                        # Only use collection-level file if its source_id matches (or has none)
+                        file_source_id = d.get("source_id")
+                        if file_source_id and file_source_id != source_id:
+                            continue
+                        steps = d.get("completed_steps", [])
+                        chunks = len(d.get("chunks", []))
+                        items = len(d.get("scraped_items", []))
+                        if "push_to_qdrant" in steps:
+                            return {"status": "pushed", "chunks": chunks, "items": items}
+                        elif "chunk" in steps:
+                            return {"status": "chunked", "chunks": chunks, "items": items}
+                        elif "fetch" in steps:
+                            return {"status": "fetched", "chunks": 0, "items": items}
+                        else:
+                            return {"status": "started", "chunks": 0, "items": 0}
+                    except Exception:
+                        continue
+            return {"status": "not_started", "chunks": 0, "items": 0}
+
         result = []
         for c in coll_entries:
             if not c.get("collection_name"):
@@ -198,18 +258,23 @@ def solution_collections(solution_id: str):
             cname = c["collection_name"]
             exists = cname in all_qdrant
             points_count = 0
-            if exists:
+            if exists and tracker:
                 try:
                     info = tracker._connection.get_collection(cname)
                     points_count = info.points_count or 0
                 except Exception:
                     points_count = 0
+            sources = _ensure_sources(c)
+            # Add per-source pipeline status
+            for src in sources:
+                src["pipeline_status"] = _source_status(cname, src.get("id", "default"))
             result.append({
                 "name": cname,
                 "id": c.get("id", cname),
                 "display_name": c.get("display_name", cname),
                 "scraper_name": c.get("scraper_name", ""),
                 "scraper_config": c.get("scraper_config"),
+                "sources": sources,
                 "routing": c.get("routing", {}),
                 "exists": exists,
                 "points_count": points_count,
@@ -399,8 +464,76 @@ def suggest_collection_routing(solution_id: str, collection_id: str):
     return {"routing": routing, "chunks_sampled": len(chunks)}
 
 
+class AddSourceRequest(BaseModel):
+    source_type: str  # url | pdf | txt | csv
+    label: str
+    scraper_name: Optional[str] = None
+    file_path: Optional[str] = None  # for pdf | txt | csv sources
+
+@app.post("/api/solutions/{solution_id}/collections/{collection_name}/sources")
+def add_source(solution_id: str, collection_name: str, req: AddSourceRequest):
+    """Add a new source to a collection."""
+    from solution_specs.loader import get_sources, save_collection_sources, _ensure_sources, get_collections
+    coll = next((c for c in get_collections(solution_id) if c.get("collection_name") == collection_name), None)
+    if not coll:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+    sources = _ensure_sources(coll)
+    # Generate a unique id
+    import re
+    base_id = re.sub(r'[^a-z0-9]+', '_', req.label.lower()).strip('_') or 'source'
+    existing_ids = {s.get("id") for s in sources}
+    src_id = base_id
+    n = 2
+    while src_id in existing_ids:
+        src_id = f"{base_id}_{n}"
+        n += 1
+    new_src = {"id": src_id, "type": req.source_type, "label": req.label}
+    if req.scraper_name:
+        new_src["scraper_name"] = req.scraper_name
+    if req.file_path:
+        new_src["file_path"] = req.file_path
+    sources.append(new_src)
+    save_collection_sources(solution_id, collection_name, sources)
+    return {"source": new_src, "sources": sources}
+
+class UpdateSourceRequest(BaseModel):
+    file_path: Optional[str] = None
+
+@app.patch("/api/solutions/{solution_id}/collections/{collection_name}/sources/{source_id}")
+def update_source(solution_id: str, collection_name: str, source_id: str, req: UpdateSourceRequest):
+    """Update a source's fields (e.g. file_path after first browse)."""
+    from solution_specs.loader import save_collection_sources, _ensure_sources, get_collections
+    coll = next((c for c in get_collections(solution_id) if c.get("collection_name") == collection_name), None)
+    if not coll:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+    sources = _ensure_sources(coll)
+    src = next((s for s in sources if s.get("id") == source_id), None)
+    if not src:
+        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
+    if req.file_path is not None:
+        src["file_path"] = req.file_path
+    save_collection_sources(solution_id, collection_name, sources)
+    return {"source": src, "sources": sources}
+
+@app.delete("/api/solutions/{solution_id}/collections/{collection_name}/sources/{source_id}")
+def remove_source(solution_id: str, collection_name: str, source_id: str):
+    """Remove a source from a collection."""
+    from solution_specs.loader import save_collection_sources, _ensure_sources, get_collections
+    coll = next((c for c in get_collections(solution_id) if c.get("collection_name") == collection_name), None)
+    if not coll:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+    sources = _ensure_sources(coll)
+    new_sources = [s for s in sources if s.get("id") != source_id]
+    if len(new_sources) == len(sources):
+        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
+    save_collection_sources(solution_id, collection_name, new_sources)
+    return {"sources": new_sources}
+
+
 @app.post("/api/workflow/step")
 def run_workflow_step(req: StepRequest):
+    if IS_DEV_MODE and req.step == "push_to_qdrant":
+        raise HTTPException(status_code=403, detail="Push to Qdrant is disabled in DEV mode. Merge to main and push from the production server.")
     from workflow.models import WorkflowState, Step, ChunkingConfig
     from workflow.runner import run_step
     try:
@@ -421,6 +554,10 @@ def run_workflow_step(req: StepRequest):
                 hierarchical_child_overlap=cfg.get("hierarchical_child_overlap", 50),
             )
         if req.state_update:
+            # Clear save_path when source_id changes so state file gets scoped correctly
+            new_source_id = req.state_update.get("source_id")
+            if new_source_id and new_source_id != state.source_id:
+                state.save_path = None
             for k, v in req.state_update.items():
                 if k == "source_config" and isinstance(v, dict):
                     state.source_config = v
@@ -547,25 +684,31 @@ def state_load(req: StateLoadRequest):
 
 
 @app.get("/api/state/check-by-collection")
-def state_check_by_collection(collection_name: str):
-    """Check if a .rag_state_{collection_name}.json exists in project root."""
+def state_check_by_collection(collection_name: str, source_id: Optional[str] = None):
+    """Check if a .rag_state_{collection_name}[_{source_id}].json exists in project root.
+    When source_id is given, checks source-scoped file first, falls back to collection-level."""
     import os, json
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    save_path = os.path.join(root, f".rag_state_{collection_name}.json")
-    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-        try:
-            with open(save_path, "r", encoding="utf-8") as f:
-                d = json.load(f)
-            return {
-                "found": True,
-                "save_path": save_path,
-                "completed_steps": d.get("completed_steps", []),
-                "collection_name": d.get("collection_name"),
-                "chunks_count": len(d.get("chunks", [])),
-                "scraped_items_count": len(d.get("scraped_items", [])),
-            }
-        except Exception as e:
-            return {"found": False, "error": str(e)}
+    candidates = []
+    if source_id:
+        candidates.append(os.path.join(root, f".rag_state_{collection_name}_{source_id}.json"))
+    candidates.append(os.path.join(root, f".rag_state_{collection_name}.json"))
+    for save_path in candidates:
+        if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+            try:
+                with open(save_path, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                return {
+                    "found": True,
+                    "save_path": save_path,
+                    "completed_steps": d.get("completed_steps", []),
+                    "collection_name": d.get("collection_name"),
+                    "source_id": d.get("source_id"),
+                    "chunks_count": len(d.get("chunks", [])),
+                    "scraped_items_count": len(d.get("scraped_items", [])),
+                }
+            except Exception as e:
+                return {"found": False, "error": str(e)}
     return {"found": False}
 
 
@@ -581,6 +724,10 @@ def _apply_state_update(state, state_update: dict):
     from workflow.models import ChunkingConfig
     if not state_update:
         return
+    # Clear save_path when source_id changes so state file gets scoped correctly
+    new_source_id = state_update.get("source_id")
+    if new_source_id and new_source_id != state.source_id:
+        state.save_path = None
     for k, v in state_update.items():
         if k == "source_config" and isinstance(v, dict):
             state.source_config = v
@@ -706,6 +853,8 @@ def run_fetch_streaming(req: StepRequest):
 @app.post("/api/workflow/push")
 def run_push_streaming(req: StepRequest):
     """Run PUSH in a background thread, streaming stdout lines via SSE progress queue."""
+    if IS_DEV_MODE:
+        raise HTTPException(status_code=403, detail="Push to Qdrant is disabled in DEV mode. Merge to main and push from the production server.")
     from workflow.models import Step
     from workflow.runner import run_step
     import io, sys
@@ -855,9 +1004,27 @@ def sync_collection_api(req: SyncRequest):
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Resolve the main repo root (not a worktree) for state/data files.
+import subprocess as _sp
+try:
+    _REPO_ROOT = _sp.check_output(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=_PROJECT_ROOT, text=True
+    ).strip().removesuffix("/.git")
+except Exception:
+    _REPO_ROOT = _PROJECT_ROOT
+
+# DEV mode: isolate state files in .dev_data/ so PROD data is never touched.
+# PROD mode: state files live in the repo root as before.
+if IS_DEV_MODE:
+    _DATA_ROOT = os.path.join(_REPO_ROOT, ".dev_data")
+    os.makedirs(_DATA_ROOT, exist_ok=True)
+else:
+    _DATA_ROOT = _REPO_ROOT
+
 
 def _stores_path() -> str:
-    return os.path.join(_PROJECT_ROOT, ".shopify_stores.json")
+    return os.path.join(_DATA_ROOT, ".shopify_stores.json")
 
 
 def _load_stores() -> dict:
@@ -1304,7 +1471,7 @@ def wizard_save(req: WizardSaveRequest):
     sid = req.solution_id.strip().lower().replace(" ", "_")
     if not sid:
         raise HTTPException(status_code=400, detail="solution_id required")
-    path = os.path.join(_PROJECT_ROOT, f".wizard_state_{sid}.json")
+    path = os.path.join(_DATA_ROOT, f".wizard_state_{sid}.json")
     try:
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(req.state, f, ensure_ascii=False, indent=2)
@@ -1318,7 +1485,7 @@ def wizard_load(solution_id: str):
     """Load a previously saved wizard state."""
     import json as _json
     sid = solution_id.strip().lower().replace(" ", "_")
-    path = os.path.join(_PROJECT_ROOT, f".wizard_state_{sid}.json")
+    path = os.path.join(_DATA_ROOT, f".wizard_state_{sid}.json")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"No saved wizard state for '{sid}'")
     try:
@@ -1333,7 +1500,7 @@ def wizard_load(solution_id: str):
 def wizard_list_saves():
     """List all saved wizard sessions (files matching .wizard_state_*.json in project root)."""
     import glob as _glob
-    pattern = os.path.join(_PROJECT_ROOT, ".wizard_state_*.json")
+    pattern = os.path.join(_DATA_ROOT, ".wizard_state_*.json")
     saves = []
     for p in sorted(_glob.glob(pattern)):
         sid = os.path.basename(p)[len(".wizard_state_"):-len(".json")]
@@ -1360,7 +1527,7 @@ def wizard_diff(req: WizardDiffRequest):
     _clear_progress_queue()
 
     sid = req.solution_id.strip().lower().replace(" ", "_")
-    path = os.path.join(_PROJECT_ROOT, f".wizard_state_{sid}.json")
+    path = os.path.join(_DATA_ROOT, f".wizard_state_{sid}.json")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"No saved session for '{sid}'")
 
@@ -1572,9 +1739,11 @@ _INDEX_HTML = """
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>jB RAG Builder</title>
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon_32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon_16.png">
+  <script>if("__DEV_MODE__"==="1"){document.title="jB RAG Builder [DEV]"}</script>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon_32.png" id="favicon32">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon_16.png" id="favicon16">
   <link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon_192.png">
+  <script>if("__DEV_MODE__"==="1"){document.getElementById("favicon32").href="/assets/favicon_dev.png";document.getElementById("favicon16").href="/assets/favicon_dev.png"}</script>
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 1.5rem; background: #f8f9fa; color: #1a1a1a; }
@@ -1607,10 +1776,16 @@ _INDEX_HTML = """
     .status { font-size: 0.85rem; color: #666; margin-top: 0.5rem; }
     .row { display: flex; gap: 1rem; flex-wrap: wrap; }
     .row > * { flex: 1 1 200px; }
-    .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; }
+    .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
     .tab { padding: 0.5rem 1rem; border-radius: 6px; background: #e9ecef; border: none; cursor: pointer; font-size: 0.9rem; }
     .tab.active { background: #0066cc; color: #fff; }
     .tab:hover:not(.active) { background: #dee2e6; }
+    .global-sol-wrap { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.5rem 0; }
+    .global-sol-wrap label { color: #555; font-weight: 500; white-space: nowrap; margin: 0; }
+    .global-sol-wrap select { margin: 0; padding: 0.35rem 0.5rem; font-size: 0.85rem; max-width: 200px; }
+    .global-sol-wrap input[type="text"] { margin: 0; padding: 0.35rem 0.5rem; font-size: 0.85rem; min-width: 140px; }
+    .global-sol-wrap .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; border: none; border-radius: 5px; cursor: pointer; }
+    .global-sol-lang { font-size: 0.78rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 12px; background: #e8f0fe; color: #1a56a0; white-space: nowrap; cursor: pointer; border: 1px solid #b8d0f8; }
     .hidden { display: none; }
     /* ── Shopify Stores tab ── */
     .store-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; background: #fff; }
@@ -1717,9 +1892,23 @@ _INDEX_HTML = """
   <div class="container">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.1rem">
       <h1 style="margin:0">RAG – Build &amp; Chat</h1>
+      <script>if("__DEV_MODE__"==="1")document.currentScript.previousElementSibling.insertAdjacentHTML('beforeend',' <span style="font-size:0.55em;padding:0.15rem 0.5rem;border-radius:4px;background:#ff6b00;color:#fff;vertical-align:middle;letter-spacing:0.05em;">DEV</span>')</script>
       <span id="serverStatusBadge" style="font-size:0.8rem;font-weight:600;padding:0.2rem 0.65rem;border-radius:12px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;" title="Server status">&#9679; Online</span>
     </div>
-    <p class="subtitle">Build a RAG pipeline or chat with an existing solution. No terminal needed.</p>
+    <div class="global-sol-wrap" style="margin:0.3rem 0 0.8rem 0;">
+      <label>Solution:</label>
+      <select id="globalSolution" onchange="onGlobalSolutionChange()">
+        <option value="">— Select a solution —</option>
+      </select>
+      <span id="globalSolLang" class="global-sol-lang" style="display:none;" title="Click to change base language" onclick="showLangEditor()"></span>
+      <div style="position:relative;display:inline-block;">
+        <button type="button" id="btnWizardLoad" class="btn-sm" onclick="_wizardShowLoadDropdown(this)" title="Load a previously saved wizard session" style="background:#f0f4fa;color:#555;border:1px solid #c8d8f0;font-size:0.78rem;cursor:pointer;">📂 Load session</button>
+        <div id="wizardLoadDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #c8d8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:220px;padding:0.4rem 0;margin-top:2px;"></div>
+      </div>
+      <input id="globalSolNewName" type="text" placeholder="New solution name…" style="display:none;">
+      <button id="globalSolNewBtn" class="btn-sm" style="display:none;background:#0066cc;color:#fff;" onclick="_globalCreateNewSolution()">Create</button>
+      <button id="globalSolNewCancel" class="btn-sm" style="display:none;background:#e9ecef;color:#333;" onclick="_globalCancelNewSolution()">Cancel</button>
+    </div>
 
     <div class="tabs">
       <button type="button" class="tab active" data-tab="wizard">🔍 Analyse Site</button>
@@ -1732,14 +1921,8 @@ _INDEX_HTML = """
 
     <div id="panel-build" class="panel hidden">
       <div class="card">
-        <h2>1. Solution &amp; Collection</h2>
+        <h2>1. Collection</h2>
 
-        <!-- Step 1: pick a solution -->
-        <label>Solution</label>
-        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem;">
-          <select id="solutionBuild" onchange="onSolutionChange()" style="margin-bottom:0;flex:1;"></select>
-          <span id="solLangBadge" style="display:none;font-size:0.8rem;font-weight:600;padding:0.2rem 0.55rem;border-radius:12px;background:#e8f0fe;color:#1a56a0;white-space:nowrap;cursor:pointer;border:1px solid #b8d0f8;" title="Click to change base language" onclick="showLangEditor()"></span>
-        </div>
         <!-- Inline language editor (hidden by default) -->
         <div id="solLangEditor" style="display:none;background:#f8faff;border:1px solid #c0d4f0;border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.5rem;font-size:0.875rem;">
           <strong style="font-size:0.8rem;color:#444;">Base language</strong>
@@ -1797,14 +1980,40 @@ _INDEX_HTML = """
         <!-- Routing metadata panel: shown when a specific sub-collection is selected -->
         <div id="routingMetadataPanel" style="display:none;"></div>
 
-        <!-- Shown when NO solution is selected: type collection name directly -->
-        <div id="noSolutionRow" style="margin-top:0.75rem;display:block;">
-          <label>Collection name <span style="font-weight:400;color:#888;font-size:0.85rem;">— or select a solution above</span></label>
-          <input type="text" id="collectionNameDirect" placeholder="e.g. my_rag">
+        <!-- Shown when NO solution is selected -->
+        <div id="noSolutionRow" style="margin-top:0.5rem;">
+          <p class="status" style="margin:0;color:#888;">Select a solution from the top bar to see its collections.</p>
         </div>
       </div>
-      <div class="card">
-        <h2>2. Source</h2>
+      <!-- 2. Sources list -->
+      <div class="card" id="sourcesCard">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <h2 style="margin:0;">2. Sources</h2>
+          <button type="button" class="btn-secondary" id="btnAddSource" onclick="showAddSourceForm()" style="font-size:0.82rem;padding:0.25rem 0.65rem;">+ Add source</button>
+        </div>
+        <p style="font-size:0.82rem;color:#888;margin:0 0 0.5rem;">Each source is fetched and chunked independently, then pushed to the same Qdrant collection.</p>
+        <div id="sourcesList"></div>
+        <!-- Inline add-source form (hidden by default) -->
+        <div id="addSourceForm" style="display:none;margin-top:0.75rem;padding:0.75rem;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;">
+          <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.5rem;">New source</div>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <select id="newSourceType" style="padding:0.3rem 0.5rem;font-size:0.85rem;border-radius:5px;border:1px solid #ccc;">
+              <option value="url">Website (URL)</option>
+              <option value="pdf">PDF file</option>
+              <option value="txt">Text file</option>
+              <option value="csv">CSV file</option>
+            </select>
+            <input type="text" id="newSourceLabel" placeholder="Label (e.g. Product sitemap)" style="flex:1;min-width:180px;padding:0.3rem 0.5rem;font-size:0.85rem;border-radius:5px;border:1px solid #ccc;">
+            <input type="text" id="newSourceScraper" placeholder="Scraper name (for URL)" style="min-width:150px;padding:0.3rem 0.5rem;font-size:0.85rem;border-radius:5px;border:1px solid #ccc;">
+            <button type="button" class="btn-primary" onclick="addSource()" style="font-size:0.82rem;padding:0.3rem 0.7rem;">Add</button>
+            <button type="button" class="btn-secondary" onclick="hideAddSourceForm()" style="font-size:0.82rem;padding:0.3rem 0.5rem;">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Source config (shown when a source is selected) -->
+      <div class="card" id="sourceConfigCard" style="display:none;">
+        <h2>3. Source config <span id="sourceConfigLabel" style="font-weight:400;color:#888;font-size:0.85rem;"></span></h2>
         <label>Source type</label>
         <select id="sourceType" onchange="onSourceTypeChange()">
           <option value="pdf">PDF file</option>
@@ -1875,8 +2084,10 @@ _INDEX_HTML = """
           </div>
         </div>
       </div>
-      <div class="card">
-        <h2>3. Run pipeline</h2>
+
+      <!-- 4. Run pipeline (shown when a source is selected) -->
+      <div class="card" id="pipelineCard" style="display:none;">
+        <h2>4. Run pipeline</h2>
         <p class="status">Create collection → Fetch → (Translate &amp; Clean) → Chunk → Push to Qdrant</p>
         <div style="margin-bottom:0.85rem;">
           <label title="The OpenAI embedding model used to vectorize text chunks. The vector dimension is fixed at collection creation and cannot be changed afterwards. Default: text-embedding-ada-002 (1536 dims).">
@@ -1930,10 +2141,9 @@ _INDEX_HTML = """
     <div id="panel-chat" class="panel hidden">
       <div class="card">
         <h2>Chat with a solution</h2>
-        <label>Solution</label>
-        <select id="solutionChat" onchange="onChatSolutionChange()">
-          <option value="">— Pick a solution —</option>
-        </select>
+        <div id="chatNoSolutionMsg" style="margin-bottom:0.6rem;">
+          <p class="status" style="margin:0;color:#888;">Select a solution from the top bar to start chatting.</p>
+        </div>
         <div id="chatCollectionRow" style="display:none;margin-top:0.6rem;">
           <label>Collection</label>
           <select id="chatCollectionSelect" style="margin-bottom:0.75rem;"></select>
@@ -2036,9 +2246,12 @@ _INDEX_HTML = """
           <div style="margin-top:0.3rem;color:#999;font-size:0.76rem;">Login URL (if different from site URL):</div>
           <input id="wizardLoginUrl" type="text" placeholder="https://example.com/login" style="width:100%;box-sizing:border-box;margin-top:0.2rem;padding:0.25rem 0.45rem;border:1px solid #ddd;border-radius:5px;font-size:0.78rem;">
         </div>
-        <label style="margin-top:0.5rem;">Solution name <span style="font-weight:400;color:#888;">(pick existing or type a new name)</span></label>
-        <input id="wizardSolName" type="text" list="wizardSolNameList" placeholder="e.g. Acme Corp" autocomplete="off" oninput="_wizardOnSolNameInput(this.value)">
+        <!-- Hidden: synced from global solution selector -->
+        <input id="wizardSolName" type="hidden">
         <datalist id="wizardSolNameList"></datalist>
+        <div id="wizardNoSolutionMsg" style="margin-top:0.5rem;margin-bottom:0.5rem;display:none;">
+          <p class="status" style="margin:0;color:#d47200;">Select a solution from the top bar (or create a new one) before analysing.</p>
+        </div>
         <label>Language</label>
         <select id="wizardLang" style="margin-bottom:0.75rem;">
           <option value="en">English (en)</option>
@@ -2069,15 +2282,11 @@ _INDEX_HTML = """
         <div id="wizardModeBar" style="display:none;align-items:center;gap:0.5rem;margin-bottom:0.5rem;background:#f0f6ff;border:1px solid #c8d8f0;border-radius:6px;padding:0.4rem 0.7rem;font-size:0.88rem;">
           <span id="wizardModeLabel" style="flex:1;font-weight:500;"></span>
           <button type="button" class="btn-wizard-add" onclick="runWizardAnalyse()" style="font-size:0.78rem;padding:0.2rem 0.5rem;">Change</button>
-          <button type="button" class="btn-wizard" onclick="_wizardLaunch()" style="padding:0.35rem 0.9rem;">🚀 Launch</button>
+          <button type="button" class="btn-wizard" onclick="_wizardLaunch()" style="padding:0.35rem 0.9rem;">🚀 Launch Analyse Site</button>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn-wizard" onclick="runWizardAnalyse()">🔍 Analyse Site</button>
+          <button type="button" class="btn-wizard" onclick="runWizardAnalyse()">🔍 Select Analyse Mode</button>
           <button type="button" id="btnWizardSave" class="btn-wizard-add" onclick="wizardSaveSession()" style="display:none;" title="Save current wizard session to disk">💾 Save session</button>
-          <div style="position:relative;display:inline-block;">
-            <button type="button" id="btnWizardLoad" class="btn-wizard-add" onclick="_wizardShowLoadDropdown(this)" title="Load a previously saved wizard session">📂 Load session</button>
-            <div id="wizardLoadDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #c8d8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:220px;padding:0.4rem 0;margin-top:2px;"></div>
-          </div>
         </div>
         <div id="wizardLog" class="log hidden" style="margin-top:0.75rem;max-height:8rem;"></div>
       </div>
@@ -2272,6 +2481,20 @@ _INDEX_HTML = """
         </div>
 
       </div>
+
+      <!-- DEV-only section (hidden in PROD) -->
+      <div id="devDataSection" style="display:none;margin-top:1.5rem;padding-top:1rem;border-top:1px dashed #e0e0e0;">
+        <h3 style="margin:0 0 0.5rem 0;font-size:0.95rem;">🔧 DEV Data</h3>
+        <p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem 0;">
+          DEV mode uses isolated state files. Copy production data to start with a fresh snapshot.
+        </p>
+        <div style="display:flex;align-items:center;gap:1rem;">
+          <button type="button" class="btn-wizard-add" onclick="_copyProdData()" style="padding:0.4rem 1rem;">📋 Copy PROD data to DEV</button>
+          <span id="devCopyStatus" style="font-size:0.82rem;color:#555;"></span>
+        </div>
+      </div>
+      <script>if("__DEV_MODE__"==="1")document.getElementById("devDataSection").style.display="";</script>
+
     </div>
     <!-- ── end Settings panel ── -->
 
@@ -2302,71 +2525,234 @@ _INDEX_HTML = """
       } catch(_) {}
     })();
 
-    // Load solutions into dropdowns
+    // ── Global solution selector ─────────────────────────────────────────────
     let _allSolutions = [];
+    let _currentSolutionId = null;
+    let _pendingNewSolutionName = null;  // for "+ Create new solution" flow
+
+    function _populateGlobalSolutionDropdown(selectId) {
+      const sel = document.getElementById('globalSolution');
+      sel.innerHTML = '';
+      // Placeholder
+      const ph = document.createElement('option');
+      ph.value = ''; ph.textContent = '— Select a solution —';
+      sel.appendChild(ph);
+      // Solutions
+      _allSolutions.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id;
+        o.textContent = s.display_name || s.id;
+        o.dataset.company = s.company_name || '';
+        sel.appendChild(o);
+      });
+      // Create new option
+      const newOpt = document.createElement('option');
+      newOpt.value = '__new__';
+      newOpt.textContent = '+ Create new solution…';
+      sel.appendChild(newOpt);
+      // Auto-select if requested
+      if (selectId) {
+        sel.value = selectId;
+        onGlobalSolutionChange();
+      }
+    }
+
     (async () => {
       const { solutions } = await api('/api/solutions');
       _allSolutions = solutions || [];
-      const selBuild = document.getElementById('solutionBuild');
-      const selChat = document.getElementById('solutionChat');
-      // Add placeholder option to solutionBuild (HTML is now empty to keep flex layout clean)
-      const placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = '— Select a solution —';
-      selBuild.appendChild(placeholder);
-      _allSolutions.forEach(s => {
-        const makeOpt = (parent) => {
-          const o = document.createElement('option');
-          o.value = s.id;
-          o.textContent = s.display_name || s.id;
-          o.dataset.company = s.company_name || '';
-          parent.appendChild(o);
-        };
-        makeOpt(selBuild);
-        makeOpt(selChat);
-      });
-      // Wizard is the default tab — populate its solution datalist now that solutions are loaded
+      _populateGlobalSolutionDropdown();
       _wizardPopulateSolNameList();
     })();
 
-    async function onSolutionChange() {
-      const sel = document.getElementById('solutionBuild');
-      const solId = sel.value;
-      const noSolRow = document.getElementById('noSolutionRow');
-      const collSection = document.getElementById('collectionSection');
-      const langBadge = document.getElementById('solLangBadge');
-      const langEditor = document.getElementById('solLangEditor');
+    function _getActiveTab() {
+      const active = document.querySelector('.tab.active');
+      return active ? active.dataset.tab : null;
+    }
 
-      if (!solId) {
-        noSolRow.style.display = 'block';
-        collSection.style.display = 'none';
-        langBadge.style.display = 'none';
-        langEditor.style.display = 'none';
-        renderSubCollectionPicker([]);
+    function _getSolutionDisplayName(solId) {
+      const sol = _allSolutions.find(s => s.id === solId);
+      return sol ? (sol.display_name || sol.id) : solId;
+    }
+
+    async function onGlobalSolutionChange() {
+      const sel = document.getElementById('globalSolution');
+      const val = sel.value;
+
+      // Handle "+ Create new solution" option
+      if (val === '__new__') {
+        document.getElementById('globalSolNewName').style.display = '';
+        document.getElementById('globalSolNewBtn').style.display = '';
+        document.getElementById('globalSolNewCancel').style.display = '';
+        document.getElementById('globalSolLang').style.display = 'none';
+        document.getElementById('globalSolNewName').focus();
+        _currentSolutionId = null;
+        _pendingNewSolutionName = null;
+        _applyGlobalSolution();
         return;
       }
-      noSolRow.style.display = 'none';
-      collSection.style.display = 'block';
-      hideLangEditor();
+
+      // Hide new-solution inputs
+      document.getElementById('globalSolNewName').style.display = 'none';
+      document.getElementById('globalSolNewBtn').style.display = 'none';
+      document.getElementById('globalSolNewCancel').style.display = 'none';
+      _pendingNewSolutionName = null;
+
+      _currentSolutionId = val || null;
 
       // Update language badge
-      const sol = _allSolutions.find(s => s.id === solId);
-      const lang = sol && sol.language ? sol.language : null;
-      langBadge.style.display = 'inline-block';
-      langBadge.textContent = lang ? `🌐 ${lang}` : '🌐 set language';
-      langBadge.title = lang
-        ? `Base language: ${lang} — click to change`
-        : 'No base language set — click to set';
+      const langBadge = document.getElementById('globalSolLang');
+      if (_currentSolutionId) {
+        const sol = _allSolutions.find(s => s.id === _currentSolutionId);
+        const lang = sol && sol.language ? sol.language : null;
+        langBadge.style.display = 'inline-block';
+        langBadge.textContent = lang ? `🌐 ${lang}` : '🌐 set language';
+        langBadge.title = lang
+          ? `Base language: ${lang} — click to change`
+          : 'No base language set — click to set';
+      } else {
+        langBadge.style.display = 'none';
+      }
 
-      // Load collections for this solution — renders pills + populates collectionSelect
-      await loadSolutionCollections(solId);
-      renderRecentFiles();
+      await _applyGlobalSolution();
+    }
+
+    async function _applyGlobalSolution() {
+      const solId = _currentSolutionId;
+      const activeTab = _getActiveTab();
+
+      // ── Build tab ──
+      const noSolRow = document.getElementById('noSolutionRow');
+      const collSection = document.getElementById('collectionSection');
+      const langEditor = document.getElementById('solLangEditor');
+      if (!solId) {
+        if (noSolRow) noSolRow.style.display = 'block';
+        if (collSection) collSection.style.display = 'none';
+        if (langEditor) langEditor.style.display = 'none';
+        renderSubCollectionPicker([]);
+      } else {
+        if (noSolRow) noSolRow.style.display = 'none';
+        if (collSection) collSection.style.display = 'block';
+        hideLangEditor();
+        if (activeTab === 'build') {
+          await loadSolutionCollections(solId);
+          renderRecentFiles();
+        }
+      }
+
+      // ── Chat tab ──
+      const chatNoSol = document.getElementById('chatNoSolutionMsg');
+      const chatCollRow = document.getElementById('chatCollectionRow');
+      const chatCollSel = document.getElementById('chatCollectionSelect');
+      if (!solId) {
+        if (chatNoSol) chatNoSol.style.display = 'block';
+        if (chatCollRow) chatCollRow.style.display = 'none';
+        if (chatCollSel) chatCollSel.innerHTML = '';
+      } else {
+        if (chatNoSol) chatNoSol.style.display = 'none';
+        if (activeTab === 'chat') await _loadChatCollections(solId);
+      }
+
+      // ── Wizard tab: sync hidden wizardSolName input ──
+      const wizSolName = document.getElementById('wizardSolName');
+      const wizNoSolMsg = document.getElementById('wizardNoSolutionMsg');
+      if (solId) {
+        if (wizSolName) wizSolName.value = _getSolutionDisplayName(solId);
+        if (wizNoSolMsg) wizNoSolMsg.style.display = 'none';
+      } else if (_pendingNewSolutionName) {
+        if (wizSolName) wizSolName.value = _pendingNewSolutionName;
+        if (wizNoSolMsg) wizNoSolMsg.style.display = 'none';
+      } else {
+        if (wizSolName) wizSolName.value = '';
+        if (wizNoSolMsg) wizNoSolMsg.style.display = 'block';
+      }
+    }
+
+    // Extracted chat collection loading for reuse
+    async function _loadChatCollections(solId) {
+      const collRow = document.getElementById('chatCollectionRow');
+      const collSel = document.getElementById('chatCollectionSelect');
+      const chatNoSol = document.getElementById('chatNoSolutionMsg');
+      if (!solId) {
+        if (collRow) collRow.style.display = 'none';
+        if (collSel) collSel.innerHTML = '';
+        return;
+      }
+      if (chatNoSol) chatNoSol.style.display = 'none';
+      if (collRow) collRow.style.display = 'block';
+      collSel.innerHTML = '<option value="">Loading…</option>';
+      try {
+        const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections').then(r => r.json());
+        collSel.innerHTML = '';
+        const existing = (res.collections || []).filter(c => c.exists);
+        if (existing.length > 1) {
+          const allOpt = document.createElement('option');
+          allOpt.value = '__all__';
+          allOpt.textContent = '⚡ All collections (recommended)';
+          collSel.appendChild(allOpt);
+        }
+        existing.forEach(c => {
+          const o = document.createElement('option');
+          o.value = c.name;
+          o.textContent = c.display_name || c.name;
+          collSel.appendChild(o);
+        });
+        if (!existing.length) {
+          collSel.innerHTML = '<option value="">No collections found in Qdrant yet</option>';
+        }
+      } catch(e) {
+        collSel.innerHTML = '<option value="">Error loading collections</option>';
+      }
+    }
+
+    // Backward compat: onSolutionChange still called by some internal functions
+    async function onSolutionChange() {
+      await _applyGlobalSolution();
+      if (_currentSolutionId) {
+        await loadSolutionCollections(_currentSolutionId);
+        renderRecentFiles();
+      }
+    }
+
+    // ── New solution creation from global dropdown ────────────────────────────
+    function _globalCreateNewSolution() {
+      const nameInput = document.getElementById('globalSolNewName');
+      const name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      _pendingNewSolutionName = name;
+      // Set the hidden wizardSolName so wizard functions can pick it up
+      const wizSolName = document.getElementById('wizardSolName');
+      if (wizSolName) wizSolName.value = name;
+      // Reset dropdown to placeholder (the new solution doesn't exist yet)
+      document.getElementById('globalSolution').value = '';
+      // Hide create inputs, show a pending badge instead
+      nameInput.style.display = 'none';
+      document.getElementById('globalSolNewBtn').style.display = 'none';
+      document.getElementById('globalSolNewCancel').style.display = 'none';
+      const badge = document.getElementById('globalSolLang');
+      badge.style.display = 'inline-block';
+      badge.textContent = '🆕 ' + name;
+      badge.title = 'New solution (will be created when you confirm in Analyse Site)';
+      // Update wizard no-solution message
+      const wizNoSolMsg = document.getElementById('wizardNoSolutionMsg');
+      if (wizNoSolMsg) wizNoSolMsg.style.display = 'none';
+      _currentSolutionId = null;
+      _applyGlobalSolution();
+    }
+
+    function _globalCancelNewSolution() {
+      _pendingNewSolutionName = null;
+      document.getElementById('globalSolNewName').style.display = 'none';
+      document.getElementById('globalSolNewBtn').style.display = 'none';
+      document.getElementById('globalSolNewCancel').style.display = 'none';
+      document.getElementById('globalSolution').value = '';
+      document.getElementById('globalSolLang').style.display = 'none';
+      _currentSolutionId = null;
+      _applyGlobalSolution();
     }
 
     function showLangEditor() {
-      const sel = document.getElementById('solutionBuild');
-      if (!sel.value) return;
-      const sol = _allSolutions.find(s => s.id === sel.value);
+      if (!_currentSolutionId) return;
+      const sol = _allSolutions.find(s => s.id === _currentSolutionId);
       document.getElementById('solLangInput').value = (sol && sol.language) ? sol.language : 'en';
       document.getElementById('solLangEditor').style.display = 'block';
     }
@@ -2376,8 +2762,7 @@ _INDEX_HTML = """
     }
 
     async function saveSolLanguage() {
-      const sel = document.getElementById('solutionBuild');
-      const solId = sel.value;
+      const solId = _currentSolutionId;
       if (!solId) return;
       const lang = document.getElementById('solLangInput').value;
       try {
@@ -2390,8 +2775,8 @@ _INDEX_HTML = """
         // Update local cache
         const sol = _allSolutions.find(s => s.id === solId);
         if (sol) sol.language = lang;
-        // Update badge
-        const badge = document.getElementById('solLangBadge');
+        // Update global badge
+        const badge = document.getElementById('globalSolLang');
         badge.textContent = `🌐 ${lang}`;
         badge.title = `Base language: ${lang} — click to change`;
         hideLangEditor();
@@ -2403,12 +2788,15 @@ _INDEX_HTML = """
 
     // _currentCollections: full collection objects from the API, keyed by collection_name
     let _currentCollections = {};
+    let _selectedSourceId = null; // currently selected source within the active collection
 
     async function loadSolutionCollections(solId) {
       const collSelect = document.getElementById('collectionSelect');
       collSelect.innerHTML = '<option value="">Loading…</option>';
       try {
-        const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections').then(r => r.json());
+        const resp = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections');
+        if (!resp.ok) throw new Error('API returned ' + resp.status);
+        const res = await resp.json();
         _currentCollections = {};
         res.collections.forEach(c => { _currentCollections[c.name] = c; });
 
@@ -2455,17 +2843,13 @@ _INDEX_HTML = """
         return;
       }
       if (collections.length === 1) {
-        // Single collection — auto-set scraper if available, no pills needed, but still show routing panel
+        // Single collection — no pills needed, but still show routing panel
         const c = collections[0];
-        if (c.scraper_name) {
-          document.getElementById('sourceType').value = 'url';
-          document.getElementById('scraperName').value = c.scraper_name;
-          onSourceTypeChange();
-          checkUrlSavedState(c.name);
-          // Store inline scraper_config for use in fetch (when no named YAML file exists)
-          if (c.scraper_config) window._activeScraperConfig = c.scraper_config;
-          else window._activeScraperConfig = null;
-        }
+        if (c.scraper_config) window._activeScraperConfig = c.scraper_config;
+        else window._activeScraperConfig = null;
+        // Auto-select first source if available
+        const sources = c.sources || [];
+        if (sources.length === 1) selectSource(sources[0].id);
         renderRoutingMetadataPanel(c, solId);
         return;
       }
@@ -2482,17 +2866,13 @@ _INDEX_HTML = """
           b.style.background = '#222'; b.style.color = '#ccc'; b.style.borderColor = '#555';
         });
         btn.style.background = '#2a5caa'; btn.style.color = '#fff'; btn.style.borderColor = '#2a5caa';
-        if (c.scraper_name) {
-          document.getElementById('sourceType').value = 'url';
-          document.getElementById('scraperName').value = c.scraper_name;
-          onSourceTypeChange();
-          // Store inline scraper_config for use in fetch (when no named YAML file exists)
-          if (c.scraper_config) window._activeScraperConfig = c.scraper_config;
-          else window._activeScraperConfig = null;
-        }
+        if (c.scraper_config) window._activeScraperConfig = c.scraper_config;
+        else window._activeScraperConfig = null;
         const collSelect = document.getElementById('collectionSelect');
         if (collSelect) { collSelect.value = c.name; onCollectionSelect(); }
-        if (c.scraper_name) checkUrlSavedState(c.name);
+        // Auto-select first source if only one
+        const sources = c.sources || [];
+        if (sources.length === 1) selectSource(sources[0].id);
         renderRoutingMetadataPanel(c, solId);
       }
 
@@ -2618,25 +2998,243 @@ _INDEX_HTML = """
       const newRow = document.getElementById('newCollectionRow');
       const info = document.getElementById('existingCollectionInfo');
       const delBtn = document.getElementById('btnDeleteCollection');
+      _selectedSourceId = null;
       if (val === '__new__') {
         newRow.style.display = 'block';
         info.style.display = 'none';
         delBtn.style.display = 'none';
+        renderSourcesList([]);
       } else {
         newRow.style.display = 'none';
         info.style.display = 'block';
         const opt = document.getElementById('collectionSelect').options[document.getElementById('collectionSelect').selectedIndex];
         const exists = opt.dataset.exists === '1';
-        info.textContent = exists ? '✓ Collection exists in Qdrant' : '⚠ Not yet pushed to Qdrant';
+        const coll = _currentCollections[val];
+        const sources = (coll && coll.sources) || [];
+        // Build aggregate status from sources
+        info.innerHTML = '';
+        if (exists) {
+          const base = document.createElement('span');
+          base.textContent = '✓ In Qdrant';
+          base.style.cssText = 'color:#2e7d32;font-weight:500;';
+          if (coll && coll.points_count) base.textContent += ' · ' + coll.points_count + ' points';
+          info.appendChild(base);
+        } else {
+          const base = document.createElement('span');
+          base.textContent = '⚠ Not yet pushed to Qdrant';
+          base.style.cssText = 'color:#e65100;';
+          info.appendChild(base);
+        }
+        // Aggregate source status ovals
+        if (sources.length > 0) {
+          const groups = {};
+          sources.forEach(s => {
+            const st = (s.pipeline_status || {}).status || 'not_started';
+            if (!groups[st]) groups[st] = { count: 0, chunks: 0 };
+            groups[st].count++;
+            groups[st].chunks += (s.pipeline_status || {}).chunks || 0;
+          });
+          const order = ['pushed', 'chunked', 'fetched', 'started', 'not_started'];
+          order.forEach(st => {
+            if (!groups[st] || st === 'not_started') return;
+            const g = groups[st];
+            const s = _statusStyles[st];
+            const oval = document.createElement('span');
+            oval.style.cssText = 'font-size:0.72rem;padding:0.12rem 0.5rem;border-radius:10px;background:' + s.bg + ';color:' + s.color + ';margin-left:0.4rem;font-weight:500;';
+            let text = s.label;
+            if (g.chunks) text += ' · ' + g.chunks + ' chunks';
+            if (sources.length > 1) text += ' (' + g.count + ')';
+            oval.textContent = text;
+            info.appendChild(oval);
+          });
+        }
         delBtn.style.display = exists ? 'block' : 'none';
-        // Check for URL-source saved state when collection changes
-        const st = document.getElementById('sourceType').value;
-        if (st === 'url') checkUrlSavedState(val);
+        renderSourcesList(sources);
+      }
+      // Hide source config and pipeline until a source is selected
+      document.getElementById('sourceConfigCard').style.display = 'none';
+      document.getElementById('pipelineCard').style.display = 'none';
+    }
+
+    // ── Sources list rendering & management ──
+    const _sourceTypeIcons = { url: '🌐', pdf: '📄', txt: '📝', csv: '📊' };
+    const _statusStyles = {
+      pushed:      { bg: '#e8f5e9', color: '#2e7d32', label: 'Pushed' },
+      chunked:     { bg: '#fff3e0', color: '#e65100', label: 'Chunked' },
+      fetched:     { bg: '#fff9c4', color: '#f57f17', label: 'Fetched' },
+      started:     { bg: '#f3e5f5', color: '#7b1fa2', label: 'Started' },
+      not_started: { bg: '#f5f5f5', color: '#999',    label: '' },
+    };
+
+    function _statusBadge(ps) {
+      if (!ps || ps.status === 'not_started') return null;
+      const s = _statusStyles[ps.status] || _statusStyles.not_started;
+      const chunks = ps.chunks ? ' · ' + ps.chunks + ' chunks' : '';
+      const items = (ps.status === 'fetched' && ps.items) ? ' · ' + ps.items + ' items' : '';
+      const el = document.createElement('span');
+      el.style.cssText = 'font-size:0.7rem;padding:0.1rem 0.45rem;border-radius:10px;background:' + s.bg + ';color:' + s.color + ';flex-shrink:0;font-weight:500;';
+      el.textContent = s.label + chunks + items;
+      return el;
+    }
+
+    function renderSourcesList(sources) {
+      const container = document.getElementById('sourcesList');
+      container.innerHTML = '';
+      if (!sources || !sources.length) {
+        container.innerHTML = '<p style="font-size:0.83rem;color:#aaa;font-style:italic;margin:0;">No sources yet. Click "+ Add source" to get started.</p>';
+        return;
+      }
+      sources.forEach(src => {
+        const row = document.createElement('div');
+        const isSelected = _selectedSourceId === src.id;
+        row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.65rem;border:1px solid ' +
+          (isSelected ? '#1a5276' : '#e0e0e0') + ';border-radius:8px;margin-bottom:0.35rem;cursor:pointer;background:' +
+          (isSelected ? '#e8f4fd' : '#fff') + ';transition:all 0.15s;';
+        row.onmouseenter = () => { if (!isSelected) row.style.background = '#f5f8fa'; };
+        row.onmouseleave = () => { if (!isSelected) row.style.background = '#fff'; };
+        row.onclick = () => selectSource(src.id);
+
+        const icon = document.createElement('span');
+        icon.style.cssText = 'font-size:1.1rem;flex-shrink:0;';
+        icon.textContent = _sourceTypeIcons[src.type] || '📁';
+        row.appendChild(icon);
+
+        const labelEl = document.createElement('span');
+        labelEl.style.cssText = 'flex:1;font-size:0.88rem;font-weight:' + (isSelected ? '600' : '400') + ';';
+        labelEl.textContent = src.label || src.id;
+        row.appendChild(labelEl);
+
+        // Pipeline status badge
+        const badge = _statusBadge(src.pipeline_status);
+        if (badge) row.appendChild(badge);
+
+        const typeBadge = document.createElement('span');
+        typeBadge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.4rem;border-radius:10px;background:#f0f0f0;color:#666;flex-shrink:0;';
+        typeBadge.textContent = src.type;
+        row.appendChild(typeBadge);
+
+        if (src.scraper_name) {
+          const scraperBadge = document.createElement('span');
+          scraperBadge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.4rem;border-radius:10px;background:#e3f0fd;color:#1a5276;flex-shrink:0;';
+          scraperBadge.textContent = src.scraper_name;
+          row.appendChild(scraperBadge);
+        }
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.style.cssText = 'font-size:0.75rem;padding:0.1rem 0.35rem;background:none;border:1px solid #ddd;border-radius:4px;color:#c0392b;cursor:pointer;flex-shrink:0;';
+        delBtn.textContent = '✕';
+        delBtn.title = 'Remove source';
+        delBtn.onclick = (e) => { e.stopPropagation(); removeSource(src.id); };
+        row.appendChild(delBtn);
+
+        container.appendChild(row);
+      });
+    }
+
+    function selectSource(sourceId) {
+      const collName = document.getElementById('collectionSelect').value;
+      if (!collName || collName === '__new__') return;
+      const coll = _currentCollections[collName];
+      const sources = (coll && coll.sources) || [];
+      const src = sources.find(s => s.id === sourceId);
+      if (!src) return;
+
+      _selectedSourceId = sourceId;
+      renderSourcesList(sources); // re-render to highlight
+
+      // Reset pipeline state when switching sources
+      _clearDone();
+      setLog(buildLog, '', false);
+
+      // Populate source config
+      const configCard = document.getElementById('sourceConfigCard');
+      const pipelineCard = document.getElementById('pipelineCard');
+      configCard.style.display = 'block';
+      pipelineCard.style.display = 'block';
+
+      // Set the label
+      document.getElementById('sourceConfigLabel').textContent = '— ' + (src.label || src.id);
+
+      // Set source type
+      const srcType = document.getElementById('sourceType');
+      srcType.value = src.type;
+      onSourceTypeChange();
+
+      // Set type-specific fields
+      if (src.type === 'url') {
+        document.getElementById('scraperName').value = src.scraper_name || '';
+        // Check for saved state
+        checkUrlSavedState(collName, sourceId);
+      } else {
+        // Auto-fill file path if stored in source definition
+        if (src.file_path) {
+          setSelectedPath(src.file_path);
+        } else {
+          document.getElementById('sourcePath').value = '';
+          document.getElementById('sourcePathDisplay').textContent = 'Click to select a file…';
+          document.getElementById('sourcePathFull').style.display = 'none';
+        }
       }
     }
 
+    function showAddSourceForm() {
+      document.getElementById('addSourceForm').style.display = 'block';
+      document.getElementById('newSourceLabel').value = '';
+      document.getElementById('newSourceScraper').value = '';
+      document.getElementById('newSourceLabel').focus();
+    }
+
+    function hideAddSourceForm() {
+      document.getElementById('addSourceForm').style.display = 'none';
+    }
+
+    async function addSource() {
+      const solId = _currentSolutionId;
+      const collName = document.getElementById('collectionSelect').value;
+      if (!solId || !collName || collName === '__new__') return;
+      const sourceType = document.getElementById('newSourceType').value;
+      const label = document.getElementById('newSourceLabel').value.trim();
+      if (!label) { alert('Please enter a label for the source.'); return; }
+      const scraperName = document.getElementById('newSourceScraper').value.trim() || null;
+      try {
+        const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections/' + encodeURIComponent(collName) + '/sources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source_type: sourceType, label, scraper_name: scraperName })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Failed to add source'); return; }
+        // Update cached collection
+        if (_currentCollections[collName]) _currentCollections[collName].sources = data.sources;
+        renderSourcesList(data.sources);
+        hideAddSourceForm();
+      } catch(e) { alert('Error adding source: ' + e.message); }
+    }
+
+    async function removeSource(sourceId) {
+      const solId = _currentSolutionId;
+      const collName = document.getElementById('collectionSelect').value;
+      if (!solId || !collName) return;
+      if (!confirm('Remove this source from the collection?')) return;
+      try {
+        const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections/' + encodeURIComponent(collName) + '/sources/' + encodeURIComponent(sourceId), {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Failed to remove source'); return; }
+        if (_currentCollections[collName]) _currentCollections[collName].sources = data.sources;
+        if (_selectedSourceId === sourceId) {
+          _selectedSourceId = null;
+          document.getElementById('sourceConfigCard').style.display = 'none';
+          document.getElementById('pipelineCard').style.display = 'none';
+        }
+        renderSourcesList(data.sources);
+      } catch(e) { alert('Error removing source: ' + e.message); }
+    }
+
     async function deleteCollection() {
-      const solId = document.getElementById('solutionBuild').value;
+      const solId = _currentSolutionId;
       const name = document.getElementById('collectionSelect').value;
       if (!name || name === '__new__') return;
       if (!confirm(`Delete collection "${name}" from Qdrant and this solution?\n\nThis cannot be undone.`)) return;
@@ -2654,7 +3252,7 @@ _INDEX_HTML = """
     }
 
     async function registerCollection() {
-      const solId = document.getElementById('solutionBuild').value;
+      const solId = _currentSolutionId;
       const name = document.getElementById('collectionName').value.trim();
       if (!solId || !name) return;
       try {
@@ -2673,13 +3271,12 @@ _INDEX_HTML = """
     }
 
     function getCollectionName() {
-      const solId = document.getElementById('solutionBuild').value;
-      if (solId) {
+      if (_currentSolutionId) {
         const val = document.getElementById('collectionSelect').value;
         if (val && val !== '__new__') return val;
         return document.getElementById('collectionName').value.trim();
       }
-      return document.getElementById('collectionNameDirect').value.trim();
+      return '';
     }
 
     // Tab switching helper — can be called programmatically
@@ -2690,7 +3287,17 @@ _INDEX_HTML = """
       if (tab) tab.classList.add('active');
       const panel = document.getElementById('panel-' + name);
       if (panel) panel.classList.remove('hidden');
-      if (name === 'chat') _loadFaqCollections();
+
+      // Solution-aware tab initialization
+      const solId = _currentSolutionId;
+      if (name === 'build' && solId) {
+        loadSolutionCollections(solId);
+        renderRecentFiles();
+      }
+      if (name === 'chat') {
+        _loadFaqCollections();
+        if (solId) _loadChatCollections(solId);
+      }
       if (name === 'wizard') _wizardPopulateSolNameList();
       if (name === 'shopify') { if (typeof loadShopifyStores === 'function') loadShopifyStores(); }
       if (name === 'sites') { if (typeof _loadDomcopStatus === 'function') _loadDomcopStatus(); }
@@ -2764,6 +3371,21 @@ _INDEX_HTML = """
       }
     }
 
+    async function _copyProdData() {
+      const st = document.getElementById('devCopyStatus');
+      st.textContent = 'Copying…';
+      try {
+        const res = await fetch('/api/dev/copy-prod-data', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Copy failed');
+        const n = (data.copied || []).length;
+        st.textContent = n ? '✅ Copied ' + n + ' file(s): ' + data.copied.join(', ') : '✅ No PROD files to copy.';
+        setTimeout(() => { st.textContent = ''; }, 6000);
+      } catch(e) {
+        st.textContent = '❌ ' + (e.message || e);
+      }
+    }
+
     // Tabs
     document.querySelectorAll('.tab').forEach(t => {
       t.onclick = () => showTab(t.dataset.tab);
@@ -2779,7 +3401,7 @@ _INDEX_HTML = """
       // Check for saved state when switching to URL source type
       if (st === 'url') {
         const collName = document.getElementById('collectionSelect').value;
-        if (collName && collName !== '__new__') checkUrlSavedState(collName);
+        if (collName && collName !== '__new__') checkUrlSavedState(collName, _selectedSourceId);
       } else {
         document.getElementById('urlResumeBanner').style.display = 'none';
       }
@@ -2787,13 +3409,15 @@ _INDEX_HTML = """
 
     let _urlSavedStatePath = null;
 
-    async function checkUrlSavedState(collectionName) {
+    async function checkUrlSavedState(collectionName, sourceId) {
       if (!collectionName || collectionName === '__new__') {
         document.getElementById('urlResumeBanner').style.display = 'none';
         return;
       }
       try {
-        const res = await fetch('/api/state/check-by-collection?collection_name=' + encodeURIComponent(collectionName)).then(r => r.json());
+        let url = '/api/state/check-by-collection?collection_name=' + encodeURIComponent(collectionName);
+        if (sourceId) url += '&source_id=' + encodeURIComponent(sourceId);
+        const res = await fetch(url).then(r => r.json());
         if (res.found) {
           _urlSavedStatePath = res.save_path;
           const steps = res.completed_steps.join(', ') || 'none';
@@ -2852,9 +3476,8 @@ _INDEX_HTML = """
 
     function addRecentFile(path) {
       if (!path) return;
-      const sel = document.getElementById('solutionBuild');
-      const solId = sel.value || null;
-      const solName = solId ? (sel.options[sel.selectedIndex].textContent || solId) : null;
+      const solId = _currentSolutionId || null;
+      const solName = solId ? _getSolutionDisplayName(solId) : null;
       let files = getRecentFiles().filter(f => f.path !== path);
       files.unshift({ path, solution_id: solId, solution_name: solName });
       if (files.length > RECENT_MAX) files = files.slice(0, RECENT_MAX);
@@ -2873,7 +3496,7 @@ _INDEX_HTML = """
       const all = getRecentFiles();
       if (!all.length) { container.style.display = 'none'; return; }
 
-      const activeSolId = document.getElementById('solutionBuild').value || null;
+      const activeSolId = _currentSolutionId || null;
 
       // Sort: active solution first, then others
       const mine   = all.filter(f => f.solution_id && f.solution_id === activeSolId);
@@ -2900,10 +3523,10 @@ _INDEX_HTML = """
         btn.textContent = label;
 
         btn.onclick = async () => {
-          // If file belongs to a different solution, switch the solution dropdown
-          if (f.solution_id && f.solution_id !== document.getElementById('solutionBuild').value) {
-            document.getElementById('solutionBuild').value = f.solution_id;
-            await onSolutionChange();
+          // If file belongs to a different solution, switch the global solution
+          if (f.solution_id && f.solution_id !== _currentSolutionId) {
+            document.getElementById('globalSolution').value = f.solution_id;
+            await onGlobalSolutionChange();
           }
           setSelectedPath(f.path);
           addRecentFile(f.path);  // bump to top + update solution tag
@@ -2950,11 +3573,33 @@ _INDEX_HTML = """
           setSelectedPath(res.path);
           addRecentFile(res.path);
           await checkForSavedState(res.path);
+          // Persist file_path to source definition
+          await _persistSourceFilePath(res.path);
         }
       } finally {
         btn.textContent = '📂 Browse…';
         btn.disabled = false;
       }
+    }
+
+    async function _persistSourceFilePath(filePath) {
+      const solId = _currentSolutionId;
+      const collName = document.getElementById('collectionSelect').value;
+      const srcId = _selectedSourceId;
+      if (!solId || !collName || collName === '__new__' || !srcId) return;
+      try {
+        await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections/' + encodeURIComponent(collName) + '/sources/' + encodeURIComponent(srcId), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: filePath })
+        });
+        // Update local cache
+        const coll = _currentCollections[collName];
+        if (coll && coll.sources) {
+          const src = coll.sources.find(s => s.id === srcId);
+          if (src) src.file_path = filePath;
+        }
+      } catch(e) { /* silent — not critical */ }
     }
 
     let _savedStatePath = null;
@@ -3058,6 +3703,7 @@ _INDEX_HTML = """
       return {
         collection_name: getCollectionName(),
         source_type: st,
+        source_id: _selectedSourceId || null,
         source_config,
         embedding_model: embeddingModel,
         chunking_config: {
@@ -3091,7 +3737,7 @@ _INDEX_HTML = """
         }
         // After chunk: auto-save routing metadata if a solution + collection is selected
         if (step === 'chunk' && res.state && res.state.collection_metadata) {
-          const solId = document.getElementById('solutionBuild').value;
+          const solId = _currentSolutionId;
           const collSelect = document.getElementById('collectionSelect');
           if (solId && collSelect && collSelect.value && collSelect.value !== '__new__') {
             const collId = (collSelect.options[collSelect.selectedIndex] || {}).dataset?.collId || collSelect.value;
@@ -3266,6 +3912,19 @@ _INDEX_HTML = """
     document.getElementById('runChunk').onclick = () => runStep('chunk');
     document.getElementById('runPush').onclick = () => runPushWithProgress();
     document.getElementById('runSync').onclick = () => runSync();
+
+    // Disable Push + Sync in DEV mode (don't set .disabled — it swallows click events)
+    if ("__DEV_MODE__" === "1") {
+      ['runPush', 'runSync'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+          btn.style.opacity = '0.45';
+          btn.style.cursor = 'not-allowed';
+          btn.title = 'Push to Qdrant is disabled in DEV mode';
+          btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setLog(buildLog, '⚠ Push to Qdrant is disabled in DEV mode. Merge to main and push from the production server.', true); };
+        }
+      });
+    }
 
     async function runFetchWithProgress() {
       const btn = document.getElementById('runFetch');
@@ -3444,48 +4103,15 @@ _INDEX_HTML = """
       setLog(buildLog, 'State reset.', false);
     };
 
+    // onChatSolutionChange kept as backward-compat alias
     async function onChatSolutionChange() {
-      const sel = document.getElementById('solutionChat');
-      const solId = sel.value;
-      const collRow = document.getElementById('chatCollectionRow');
-      const collSel = document.getElementById('chatCollectionSelect');
-      if (!solId) {
-        collRow.style.display = 'none';
-        collSel.innerHTML = '';
-        return;
-      }
-      collRow.style.display = 'block';
-      collSel.innerHTML = '<option value="">Loading…</option>';
-      try {
-        const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections').then(r => r.json());
-        collSel.innerHTML = '';
-        const existing = (res.collections || []).filter(c => c.exists);
-        if (existing.length > 1) {
-          // "All collections" option for multi-collection solutions
-          const allOpt = document.createElement('option');
-          allOpt.value = '__all__';
-          allOpt.textContent = '⚡ All collections (recommended)';
-          collSel.appendChild(allOpt);
-        }
-        existing.forEach(c => {
-          const o = document.createElement('option');
-          o.value = c.name;
-          o.textContent = c.display_name || c.name;
-          collSel.appendChild(o);
-        });
-        if (!existing.length) {
-          collSel.innerHTML = '<option value="">No collections found in Qdrant yet</option>';
-        }
-      } catch(e) {
-        collSel.innerHTML = '<option value="">Error loading collections</option>';
-      }
+      await _loadChatCollections(_currentSolutionId);
     }
 
     document.getElementById('runQA').onclick = async () => {
-      const sel = document.getElementById('solutionChat');
-      const o = sel.options[sel.selectedIndex];
-      const company = (o && o.value ? o.dataset.company : null) || 'Assistant';
-      const solId = sel.value || null;
+      const solId = _currentSolutionId || null;
+      const sol = solId ? _allSolutions.find(s => s.id === solId) : null;
+      const company = (sol && sol.company_name) ? sol.company_name : 'Assistant';
       const collection = document.getElementById('chatCollectionSelect').value.trim();
       const question = document.getElementById('qaQuestion').value.trim();
       if (!collection || !question) {
@@ -3833,7 +4459,8 @@ _INDEX_HTML = """
         // Try the given solId; if not found or empty, search all solutions for a close match
         // (handles sessions saved as "peixe_fresco" when solution is stored as "peixefresco")
         let apiColls = [];
-        const primary = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections').then(r => r.json());
+        const primaryResp = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections');
+        const primary = primaryResp.ok ? await primaryResp.json() : {};
         if (primary.collections && primary.collections.length) {
           apiColls = primary.collections;
         } else {
@@ -3842,7 +4469,8 @@ _INDEX_HTML = """
           const allData = await fetch('/api/solutions').then(r => r.json());
           for (const sol of (allData.solutions || [])) {
             if (stripped(sol.id) !== stripped(solId)) continue;
-            const res = await fetch('/api/solutions/' + encodeURIComponent(sol.id) + '/collections').then(r => r.json());
+            const innerResp = await fetch('/api/solutions/' + encodeURIComponent(sol.id) + '/collections');
+            const res = innerResp.ok ? await innerResp.json() : {};
             if (res.collections && res.collections.length) {
               apiColls = res.collections;
               _wizardSolId = sol.id; // update cache to canonical id
@@ -3854,13 +4482,21 @@ _INDEX_HTML = """
         apiColls.forEach(c => {
           _wizardConfirmedColls[c.name] = { points_count: c.points_count || 0, exists: c.exists || false };
         });
-        // Back-fill confirmed_collection_name by best-effort suffix or display_name match
-        const apiNames = apiColls.map(c => c.name);
+        // Back-fill confirmed_collection_name by best-effort matching
         _wizardCollections.forEach(wc => {
           if (wc.confirmed_collection_name) return;
-          const suffix = (wc.display_name || '').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
-          const match = apiNames.find(n => n.endsWith('_' + suffix));
-          if (match) wc.confirmed_collection_name = match;
+          const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+          const wizNorm = norm(wc.display_name);
+          // 1) Suffix match: peixefresco_products ends with _products
+          let match = apiColls.find(ac => ac.name.endsWith('_' + wizNorm));
+          // 2) API display_name match: "Products" == "Products" or "Product Catalog" contains "Product"
+          if (!match) match = apiColls.find(ac => norm(ac.display_name) === wizNorm);
+          // 3) Loose: wizard "product_catalog" starts with API suffix "product"
+          if (!match) match = apiColls.find(ac => {
+            const apiSuffix = norm(ac.display_name);
+            return wizNorm.startsWith(apiSuffix) || apiSuffix.startsWith(wizNorm);
+          });
+          if (match) wc.confirmed_collection_name = match.name;
         });
         _wizardRenderCollections();
       } catch(e) { console.warn('[_wizardLoadConfirmedColls]', e); }
@@ -3902,7 +4538,7 @@ _INDEX_HTML = """
       const solName = document.getElementById('wizardSolName').value.trim();
       const lang = document.getElementById('wizardLang').value;
       if (!url) { alert('Please enter a website URL.'); return; }
-      if (!solName) { alert('Please enter a solution name.'); return; }
+      if (!solName) { alert('Please select a solution from the top bar first.'); return; }
       _wizardDomain = url;
 
       // Check if a saved session exists for this solution → offer Fresh vs Update
@@ -4033,7 +4669,7 @@ _INDEX_HTML = """
         const launchBtn = document.createElement('button');
         launchBtn.className = 'wiz-modal-btn primary';
         launchBtn.style.cssText = 'margin-top:0.75rem;width:100%;justify-content:center;opacity:0.4;pointer-events:none;';
-        launchBtn.innerHTML = '▶ Launch';
+        launchBtn.innerHTML = '▶ Select';
 
         let selectedChoice = null;
         const selectChoice = (choice, activeBtn, otherBtn) => {
@@ -5332,7 +5968,7 @@ _INDEX_HTML = """
       document.getElementById('wizardConfirmResult').innerHTML = '';
       log.textContent = 'Creating collections…\\n';
       log.classList.remove('hidden', 'error', 'success');
-      if (!solName) { alert('Solution name is required.'); return; }
+      if (!solName) { alert('Please select a solution from the top bar first.'); return; }
       const activeColls = _wizardCollections.filter(c => c.sitemapIds.size > 0 || c.extraPages.size > 0);
       if (!activeColls.length) { alert('Assign at least one sitemap or page to a collection.'); return; }
 
@@ -5429,71 +6065,70 @@ _INDEX_HTML = """
     }
 
     async function _openCollectionInBuildRag(solutionId, collectionName) {
+      // Step 1: resolve canonical solution ID from the global dropdown.
+      const solSel = document.getElementById('globalSolution');
+      let canonicalSolId = null;
+      const opts = Array.from(solSel.options);
+      const normalize = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (opts.some(o => o.value === solutionId)) {
+        canonicalSolId = solutionId;
+      } else {
+        const normTarget = normalize(solutionId);
+        const match = opts.find(o => normalize(o.value) === normTarget);
+        if (match) canonicalSolId = match.value;
+      }
+
+      // Step 2: set global solution and switch to build tab
+      if (canonicalSolId) {
+        solSel.value = canonicalSolId;
+        _currentSolutionId = canonicalSolId;
+        // Update global badge
+        const sol = _allSolutions.find(s => s.id === canonicalSolId);
+        const lang = sol && sol.language ? sol.language : null;
+        const badge = document.getElementById('globalSolLang');
+        badge.style.display = 'inline-block';
+        badge.textContent = lang ? `🌐 ${lang}` : '🌐 set language';
+      }
+
       showTab('build');
 
-      // Step 1: resolve canonical solution ID from the solutionBuild dropdown.
-      // The wizard may use 'peixe_fresco' (underscored) while the dropdown has
-      // 'peixefresco' (canonical from solutions.yaml) — normalise both sides.
-      const solSel = document.getElementById('solutionBuild');
-      let canonicalSolId = null;
-      if (solSel) {
-        const opts = Array.from(solSel.options);
-        const normalize = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (opts.some(o => o.value === solutionId)) {
-          canonicalSolId = solutionId;  // exact match
-        } else {
-          const normTarget = normalize(solutionId);
-          const match = opts.find(o => normalize(o.value) === normTarget);
-          if (match) canonicalSolId = match.value;
-        }
-      }
-
-      // Step 2a: solution found in dropdown — load its collections then select the right one.
-      if (canonicalSolId && solSel) {
-        solSel.value = canonicalSolId;
+      if (canonicalSolId) {
         try {
           await loadSolutionCollections(canonicalSolId);
-          // loadSolutionCollections auto-selects the first option; override it.
           const collSel = document.getElementById('collectionSelect');
           if (collSel && collectionName) {
-            const hasOpt = Array.from(collSel.options).some(o => o.value === collectionName);
-            if (hasOpt) {
-              collSel.value = collectionName;
+            const opts = Array.from(collSel.options).filter(o => o.value && o.value !== '__new__');
+            // Try exact match first
+            let target = opts.find(o => o.value === collectionName);
+            // Fuzzy: normalize both sides and compare
+            if (!target) {
+              const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              const normTarget = norm(collectionName);
+              target = opts.find(o => norm(o.value) === normTarget);
+            }
+            // Partial: check if one contains the other
+            if (!target) {
+              const normTarget = collectionName.toLowerCase();
+              target = opts.find(o => o.value.toLowerCase().includes(normTarget) || normTarget.includes(o.value.toLowerCase()));
+            }
+            if (target) {
+              collSel.value = target.value;
               onCollectionSelect();
-              return;
+              // Auto-select first source so pipeline is visible
+              const coll = _currentCollections[target.value];
+              const sources = (coll && coll.sources) || [];
+              if (sources.length) selectSource(sources[0].id);
             }
           }
-        } catch(e) { /* fall through to freeform mode */ }
+        } catch(e) { /* ignore */ }
       }
-
-      // Step 2b: no solution match OR collection not in dropdown (local-only collection).
-      // Fall back to freeform mode: clear solution, show the direct name input.
-      if (solSel) solSel.value = '';
-      if (typeof onSolutionChange === 'function') onSolutionChange();
-      const direct = document.getElementById('collectionNameDirect');
-      if (direct && collectionName) direct.value = collectionName;
     }
 
     function _reloadSolutions(selectSolutionId) {
       fetch('/api/solutions').then(r => r.json()).then(data => {
-        if (typeof _allSolutions !== 'undefined') _allSolutions = data.solutions || [];
-        ['solutionBuild', 'solutionChat'].forEach(id => {
-          const sel = document.getElementById(id);
-          if (!sel) return;
-          const prev = sel.value;
-          sel.innerHTML = '<option value="">— Pick a solution —</option>';
-          (data.solutions || []).forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id; opt.textContent = s.display_name || s.id;
-            if (s.id === (selectSolutionId || prev)) opt.selected = true;
-            sel.appendChild(opt);
-          });
-        });
+        _allSolutions = data.solutions || [];
+        _populateGlobalSolutionDropdown(selectSolutionId || _currentSolutionId);
         _wizardPopulateSolNameList();
-        if (selectSolutionId) {
-          document.getElementById('solutionBuild').value = selectSolutionId;
-          if (typeof onSolutionChange === 'function') onSolutionChange();
-        }
       }).catch(() => {});
     }
 
@@ -5580,6 +6215,13 @@ _INDEX_HTML = """
         solInput.value = saved.sol_name;
         // Cache the solId immediately so _wizardRenderCollections() can use it synchronously
         _wizardSolId = saved.sol_name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/,'');
+        // Sync global solution dropdown if this solution exists
+        const globalSel = document.getElementById('globalSolution');
+        const matchOpt = Array.from(globalSel.options).find(o => o.value === _wizardSolId);
+        if (matchOpt) {
+          globalSel.value = _wizardSolId;
+          onGlobalSolutionChange();
+        }
       }
       if (langSel  && saved.sol_lang) langSel.value = saved.sol_lang;
 
@@ -5602,7 +6244,7 @@ _INDEX_HTML = """
     // Save session to disk
     async function wizardSaveSession() {
       const solId = _wizardCurrentSolId();
-      if (!solId) { alert('Enter a solution name before saving.'); return; }
+      if (!solId) { alert('Select a solution from the top bar before saving.'); return; }
       const state = _wizardSerialiseState();
       const statusEl = document.getElementById('wizardAutoSaveStatus');
       try {

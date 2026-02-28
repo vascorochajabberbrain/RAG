@@ -20,5 +20,20 @@ if os.path.exists(_env_path):
                 _k, _v = _line.split("=", 1)
                 os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
-import uvicorn
-uvicorn.run("web.app:app", host="127.0.0.1", port=8000, reload=False)
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+dev_mode = os.environ.get("RAG_DEV_MODE", "") == "1"
+
+if dev_mode:
+    # Use uvicorn CLI for reload mode — avoids socket-binding conflict
+    # that occurs when uvicorn.run(reload=True) is called from a script.
+    import subprocess
+    subprocess.run([
+        sys.executable, "-m", "uvicorn",
+        "web.app:app",
+        "--host", "127.0.0.1",
+        "--port", str(port),
+        "--reload",
+    ])
+else:
+    import uvicorn
+    uvicorn.run("web.app:app", host="127.0.0.1", port=port)
