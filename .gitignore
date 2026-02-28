@@ -9,7 +9,7 @@ __pycache__
 # Temp / generated files
 .rag_state_*.json
 .wizard_state_*.json
-.rag_server.log
+.rag_server*.log
 .domain_rank.db
 .domain_rank.db-shm
 .domain_rank.db-wal
