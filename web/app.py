@@ -530,6 +530,79 @@ def remove_source(solution_id: str, collection_name: str, source_id: str):
     return {"sources": new_sources}
 
 
+@app.delete("/api/solutions/{solution_id}/collections/{collection_name}/sources/{source_id}/chunks")
+def delete_source_chunks(solution_id: str, collection_name: str, source_id: str):
+    """Delete all Qdrant points belonging to a specific source, using source URLs from state file."""
+    if IS_DEV_MODE:
+        raise HTTPException(status_code=403, detail="Qdrant operations are disabled in DEV mode. Merge to main and use the production server.")
+    import json as _json
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # Find the state file
+    candidates = [
+        os.path.join(root, f".rag_state_{collection_name}_{source_id}.json"),
+        os.path.join(root, f".rag_state_{collection_name}.json"),
+    ]
+    state_data = None
+    state_path = None
+    for path in candidates:
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    d = _json.load(f)
+                file_source_id = d.get("source_id")
+                if file_source_id and file_source_id != source_id:
+                    continue
+                state_data = d
+                state_path = path
+                break
+            except Exception:
+                continue
+
+    if not state_data:
+        raise HTTPException(status_code=404,
+            detail=f"No state file found for source '{source_id}' in collection '{collection_name}'")
+
+    # Collect URLs to delete
+    urls_to_delete = set()
+    for item in state_data.get("scraped_items", []):
+        if isinstance(item, dict) and item.get("url"):
+            urls_to_delete.add(item["url"])
+    sc = state_data.get("source_config") or {}
+    file_path = sc.get("path") or sc.get("pdf_path")
+    if file_path:
+        urls_to_delete.add(file_path)
+
+    if not urls_to_delete:
+        raise HTTPException(status_code=400,
+            detail="Could not determine source URLs to delete from state file")
+
+    # Delete from Qdrant
+    from QdrantTracker import QdrantTracker
+    tracker = QdrantTracker()
+    deleted_count = 0
+    errors = []
+    for url in urls_to_delete:
+        try:
+            tracker._delete_points_by_url(collection_name, url)
+            deleted_count += 1
+        except Exception as e:
+            errors.append({"url": url, "error": str(e)})
+
+    # Reset pipeline status: remove 'push_to_qdrant' from completed_steps
+    steps = state_data.get("completed_steps", [])
+    if "push_to_qdrant" in steps:
+        steps.remove("push_to_qdrant")
+        state_data["completed_steps"] = steps
+        try:
+            with open(state_path, "w", encoding="utf-8") as f:
+                _json.dump(state_data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass  # non-fatal
+
+    return {"deleted_count": deleted_count, "urls_processed": len(urls_to_delete), "errors": errors}
+
+
 @app.post("/api/workflow/step")
 def run_workflow_step(req: StepRequest):
     if IS_DEV_MODE and req.step == "push_to_qdrant":
@@ -1965,7 +2038,7 @@ _INDEX_HTML = """
           <label>Collection <span style="font-weight:400;color:#888;font-size:0.85rem;">— which index to build or update</span></label>
           <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem;">
             <select id="collectionSelect" onchange="onCollectionSelect()" style="margin-bottom:0;flex:1;"></select>
-            <button type="button" id="btnDeleteCollection" onclick="deleteCollection()" title="Delete this collection from Qdrant"
+            <button type="button" id="btnDeleteCollection" onclick="deleteCollection(this)" title="Delete this collection from Qdrant"
               style="padding:0.4rem 0.6rem;background:#d32f2f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem;display:none;">🗑</button>
           </div>
           <div id="newCollectionRow" style="display:none;margin-top:0.4rem;">
@@ -2513,6 +2586,49 @@ _INDEX_HTML = """
       el.textContent = msg;
       el.className = 'log' + (isError ? ' error' : ' success');
     };
+
+    // ── Inline confirmation strip ───────────────────────────────────────────
+    // Shows a confirmation bar below the trigger button with a descriptive
+    // message and separate [Confirm] / [✕] buttons. Click outside = dismiss.
+    function _inlineConfirm(btn, { message, onConfirm, confirmLabel }) {
+      if (btn._confirmStrip) return;                       // prevent double-open
+      const strip = document.createElement('div');
+      strip.style.cssText = 'display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0.55rem;background:#fff3e0;border:1px solid #ffe0b2;border-radius:6px;font-size:0.78rem;margin-top:0.25rem;';
+      const msg = document.createElement('span');
+      msg.style.cssText = 'color:#e65100;';
+      msg.textContent = message || 'Are you sure?';
+      strip.appendChild(msg);
+      const yes = document.createElement('button');
+      yes.type = 'button';
+      yes.style.cssText = 'font-size:0.74rem;padding:0.15rem 0.55rem;background:#c0392b;color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap;';
+      yes.textContent = confirmLabel || 'Confirm';
+      strip.appendChild(yes);
+      const no = document.createElement('button');
+      no.type = 'button';
+      no.style.cssText = 'font-size:0.74rem;padding:0.15rem 0.35rem;background:none;border:1px solid #ccc;border-radius:4px;cursor:pointer;color:#666;';
+      no.textContent = '✕';
+      strip.appendChild(no);
+      // Insert strip after the button's parent row
+      const anchor = btn.parentElement;
+      anchor.insertAdjacentElement('afterend', strip);
+      btn._confirmStrip = strip;
+      const cleanup = () => { strip.remove(); btn._confirmStrip = null; document.removeEventListener('click', outsideHandler, true); };
+      yes.onclick = (e) => { e.stopPropagation(); cleanup(); onConfirm(btn); };
+      no.onclick = (e) => { e.stopPropagation(); cleanup(); };
+      const outsideHandler = (e) => { if (!strip.contains(e.target) && !btn.contains(e.target)) cleanup(); };
+      setTimeout(() => document.addEventListener('click', outsideHandler, true), 10);
+    }
+
+    // Flash a temporary warning banner at top of wizard collections list
+    function _wizardFlashWarning(msg) {
+      const target = document.getElementById('wizardCollList') || document.getElementById('wizardResults');
+      if (!target) return;
+      const banner = document.createElement('div');
+      banner.style.cssText = 'padding:0.4rem 0.7rem;background:#fff9c4;color:#f57f17;border:1px solid #ffe082;border-radius:6px;font-size:0.78rem;margin-bottom:0.5rem;';
+      banner.textContent = '⚠ ' + msg;
+      target.prepend(banner);
+      setTimeout(() => banner.remove(), 5000);
+    }
 
     // Load settings (doc_types, models, etc.) on startup
     let _docTypes = ['product_catalog','recipe_book','faq','manual','legal','general']; // defaults, overwritten by API
@@ -3120,12 +3236,45 @@ _INDEX_HTML = """
           row.appendChild(scraperBadge);
         }
 
+        // Per-source delete-chunks button — only when pushed to Qdrant
+        const ps = src.pipeline_status || {};
+        if (ps.status === 'pushed') {
+          const chunkDelBtn = document.createElement('button');
+          chunkDelBtn.type = 'button';
+          chunkDelBtn.style.cssText = 'font-size:0.75rem;padding:0.1rem 0.45rem;background:none;border:1px solid #c0392b;border-radius:4px;color:#c0392b;cursor:pointer;flex-shrink:0;';
+          chunkDelBtn.textContent = '🗑';
+          chunkDelBtn.title = 'Delete this source\\'s chunks from Qdrant';
+          chunkDelBtn.onclick = (e) => {
+            e.stopPropagation();
+            _inlineConfirm(chunkDelBtn, {
+              message: 'Delete chunks for "' + (src.label || src.id) + '" from Qdrant?',
+              confirmLabel: 'Delete',
+              onConfirm: async (btn) => {
+                btn.textContent = '…'; btn.disabled = true;
+                try {
+                  const solId = _currentSolutionId;
+                  const collName = document.getElementById('collectionSelect').value;
+                  const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections/' + encodeURIComponent(collName) + '/sources/' + encodeURIComponent(src.id) + '/chunks', { method: 'DELETE' });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.detail || 'Delete failed');
+                  setLog(buildLog, 'Deleted chunks for source "' + (src.label || src.id) + '" (' + data.urls_processed + ' URLs processed).', false);
+                  await loadSolutionCollections(solId);
+                } catch(err) {
+                  btn.textContent = '🗑'; btn.disabled = false;
+                  setLog(buildLog, 'Delete chunks failed: ' + err.message, true);
+                }
+              }
+            });
+          };
+          row.appendChild(chunkDelBtn);
+        }
+
         const delBtn = document.createElement('button');
         delBtn.type = 'button';
         delBtn.style.cssText = 'font-size:0.75rem;padding:0.1rem 0.35rem;background:none;border:1px solid #ddd;border-radius:4px;color:#c0392b;cursor:pointer;flex-shrink:0;';
         delBtn.textContent = '✕';
         delBtn.title = 'Remove source';
-        delBtn.onclick = (e) => { e.stopPropagation(); removeSource(src.id); };
+        delBtn.onclick = (e) => { e.stopPropagation(); _removeSourceWithConfirm(src, delBtn); };
         row.appendChild(delBtn);
 
         container.appendChild(row);
@@ -3212,43 +3361,59 @@ _INDEX_HTML = """
       } catch(e) { alert('Error adding source: ' + e.message); }
     }
 
-    async function removeSource(sourceId) {
-      const solId = _currentSolutionId;
-      const collName = document.getElementById('collectionSelect').value;
-      if (!solId || !collName) return;
-      if (!confirm('Remove this source from the collection?')) return;
-      try {
-        const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections/' + encodeURIComponent(collName) + '/sources/' + encodeURIComponent(sourceId), {
-          method: 'DELETE'
-        });
-        const data = await res.json();
-        if (!res.ok) { alert(data.detail || 'Failed to remove source'); return; }
-        if (_currentCollections[collName]) _currentCollections[collName].sources = data.sources;
-        if (_selectedSourceId === sourceId) {
-          _selectedSourceId = null;
-          document.getElementById('sourceConfigCard').style.display = 'none';
-          document.getElementById('pipelineCard').style.display = 'none';
+    // Gate source removal on Qdrant state + inline confirmation
+    function _removeSourceWithConfirm(src, btn) {
+      const ps = src.pipeline_status || {};
+      if (ps.status === 'pushed') {
+        alert('This source has chunks in Qdrant. Delete them first using the 🗑 button.');
+        return;
+      }
+      _inlineConfirm(btn, {
+        message: 'Remove source "' + (src.label || src.id) + '"?',
+        confirmLabel: 'Remove',
+        onConfirm: async () => {
+          const solId = _currentSolutionId;
+          const collName = document.getElementById('collectionSelect').value;
+          if (!solId || !collName) return;
+          try {
+            const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections/' + encodeURIComponent(collName) + '/sources/' + encodeURIComponent(src.id), {
+              method: 'DELETE'
+            });
+            const data = await res.json();
+            if (!res.ok) { alert(data.detail || 'Failed to remove source'); return; }
+            if (_currentCollections[collName]) _currentCollections[collName].sources = data.sources;
+            if (_selectedSourceId === src.id) {
+              _selectedSourceId = null;
+              document.getElementById('sourceConfigCard').style.display = 'none';
+              document.getElementById('pipelineCard').style.display = 'none';
+            }
+            renderSourcesList(data.sources);
+          } catch(e) { alert('Error removing source: ' + e.message); }
         }
-        renderSourcesList(data.sources);
-      } catch(e) { alert('Error removing source: ' + e.message); }
+      });
     }
 
-    async function deleteCollection() {
+    function deleteCollection(btn) {
       const solId = _currentSolutionId;
       const name = document.getElementById('collectionSelect').value;
       if (!name || name === '__new__') return;
-      if (!confirm(`Delete collection "${name}" from Qdrant and this solution?\n\nThis cannot be undone.`)) return;
-      try {
-        const res = await fetch('/api/solutions/delete-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ solution_id: solId, collection_name: name })
-        }).then(r => r.json());
-        setLog(buildLog, res.message || res.detail, !!res.detail);
-        await loadSolutionCollections(solId);
-      } catch(e) {
-        setLog(buildLog, 'Delete failed: ' + e.message, true);
-      }
+      _inlineConfirm(btn, {
+        message: 'Delete collection "' + name + '" from Qdrant? This cannot be undone.',
+        confirmLabel: 'Delete',
+        onConfirm: async () => {
+          try {
+            const res = await fetch('/api/solutions/delete-collection', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ solution_id: solId, collection_name: name })
+            }).then(r => r.json());
+            setLog(buildLog, res.message || res.detail, !!res.detail);
+            await loadSolutionCollections(solId);
+          } catch(e) {
+            setLog(buildLog, 'Delete failed: ' + e.message, true);
+          }
+        }
+      });
     }
 
     async function registerCollection() {
@@ -4194,7 +4359,7 @@ _INDEX_HTML = """
             </div>
             <div style="display:flex;gap:0.4rem;flex-shrink:0">
               <button class="btn-secondary" onclick="startEditStore('${s.id}')">Edit</button>
-              <button class="btn-secondary" style="color:#c0392b" onclick="deleteStore('${s.id}','${s.display_name.replace(/'/g,"\\'")}')">Delete</button>
+              <button class="btn-secondary" style="color:#c0392b" onclick="deleteStore('${s.id}','${s.display_name.replace(/'/g,"\\'")}',this)">Delete</button>
             </div>
           </div>
           <div style="margin-top:0.6rem;display:flex;gap:0.5rem">
@@ -4274,10 +4439,15 @@ _INDEX_HTML = """
       _editingStoreId = null;
     }
 
-    async function deleteStore(storeId, name) {
-      if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
-      await fetch('/api/shopify/stores/' + storeId, { method: 'DELETE' });
-      loadShopifyStores();
+    async function deleteStore(storeId, name, btn) {
+      _inlineConfirm(btn, {
+        message: 'Delete store "' + name + '"? This cannot be undone.',
+        confirmLabel: 'Delete',
+        onConfirm: async () => {
+          await fetch('/api/shopify/stores/' + storeId, { method: 'DELETE' });
+          loadShopifyStores();
+        }
+      });
     }
 
     async function testStore(storeId) {
@@ -4857,61 +5027,45 @@ _INDEX_HTML = """
     }
 
     // Confirm and execute Qdrant chunk deletion for a removed URL
-    async function _wizardConfirmDeletePage(url, catId, delBtn, row) {
-      // Inline confirmation: replace button text
-      const orig = delBtn.textContent;
-      delBtn.textContent = 'Sure? [yes]';
-      delBtn.style.background = '#fde8e8';
-      const cancelFn = () => { delBtn.textContent = orig; delBtn.style.background = ''; delBtn.onclick = e => { e.stopPropagation(); _wizardConfirmDeletePage(url, catId, delBtn, row); }; };
-      delBtn.onclick = async e => {
-        e.stopPropagation();
-        delBtn.textContent = 'Deleting…'; delBtn.disabled = true;
+    function _wizardConfirmDeletePage(url, catId, delBtn, row) {
+      _inlineConfirm(delBtn, {
+        message: 'Delete chunks for this page from Qdrant?',
+        confirmLabel: 'Delete',
+        onConfirm: async (btn) => {
+          btn.textContent = 'Deleting…'; btn.disabled = true;
 
-        // Find Qdrant collection name for this catId
-        const collId = _smCollId(catId)
-          || (_wizardPageOverrides[url] !== undefined ? _wizardPageOverrides[url] : null);
-        const coll = _wizardCollections.find(c => c._id === collId);
+          // Find Qdrant collection name for this catId
+          const collId = _smCollId(catId)
+            || (_wizardPageOverrides[url] !== undefined ? _wizardPageOverrides[url] : null);
+          const coll = _wizardCollections.find(c => c._id === collId);
+          const solId = document.getElementById('wizardSolName').value.trim()
+            .toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/,'');
+          const collSuffix = coll
+            ? coll.display_name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/,'')
+            : null;
+          const qdrantName = coll ? solId + '_' + collSuffix : null;
 
-        // Build Qdrant collection name from solution + collection display name
-        const solId = document.getElementById('wizardSolName').value.trim()
-          .toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/,'');
-        const collSuffix = coll
-          ? coll.display_name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/,'')
-          : null;
-        const qdrantName = coll ? solId + '_' + collSuffix : null;
+          if (!qdrantName) {
+            btn.textContent = '⚠ No collection'; btn.disabled = false;
+            return;
+          }
 
-        if (!qdrantName) {
-          delBtn.textContent = '⚠ No collection';
-          delBtn.disabled = false;
-          return;
+          try {
+            const res = await fetch('/api/wizard/delete-pages', {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({collection_name: qdrantName, urls: [url]})
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Delete failed');
+            delete _wizardRemovedUrls[url];
+            row.style.opacity = '1'; row.style.textDecoration = '';
+            btn.textContent = '✅ deleted'; btn.disabled = true;
+            btn.style.background = '#e8f5e9'; btn.style.borderColor = '#a5d6a7'; btn.style.color = '#1b5e20';
+          } catch(err) {
+            btn.textContent = '❌ ' + err.message; btn.disabled = false;
+          }
         }
-
-        try {
-          const res = await fetch('/api/wizard/delete-pages', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({collection_name: qdrantName, urls: [url]})
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || 'Delete failed');
-          // Success: mark as done, remove from _wizardRemovedUrls
-          delete _wizardRemovedUrls[url];
-          row.style.opacity = '1';
-          row.style.textDecoration = '';
-          delBtn.textContent = '✅ deleted';
-          delBtn.disabled = true;
-          delBtn.style.background = '#e8f5e9';
-          delBtn.style.borderColor = '#a5d6a7';
-          delBtn.style.color = '#1b5e20';
-        } catch(err) {
-          delBtn.textContent = '❌ ' + err.message;
-          delBtn.disabled = false;
-        }
-      };
-      // Also add a no-op cancel on next outside click
-      setTimeout(() => {
-        const cancel = e => { if (!delBtn.contains(e.target)) { cancelFn(); document.removeEventListener('click', cancel); } };
-        document.addEventListener('click', cancel);
-      }, 10);
+      });
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -5644,7 +5798,17 @@ _INDEX_HTML = """
         if (source !== 'qdrant') {
           const rmBtn = document.createElement('button');
           rmBtn.className = 'btn-wizard-rm'; rmBtn.title = 'Remove collection'; rmBtn.textContent = '✕';
-          rmBtn.onclick = () => { _wizardCollections = _wizardCollections.filter(x=>x._id!==c._id); _wizardRenderAll(); };
+          rmBtn.onclick = () => {
+            if (source === 'both') {
+              alert('This collection exists in Qdrant. Delete it from Work with RAG first.');
+              return;
+            }
+            _inlineConfirm(rmBtn, {
+              message: 'Remove "' + (c.label || c.display_name) + '" from plan?',
+              confirmLabel: 'Remove',
+              onConfirm: () => { _wizardCollections = _wizardCollections.filter(x=>x._id!==c._id); _wizardRenderAll(); }
+            });
+          };
           top.appendChild(rmBtn);
         }
         block.appendChild(top);
@@ -5698,7 +5862,18 @@ _INDEX_HTML = """
               const rmBtn = document.createElement('button');
               rmBtn.className = 'btn-wizard-rm'; rmBtn.title = 'Unassign sitemap'; rmBtn.textContent = '✕';
               rmBtn.style.marginLeft = 'auto';
-              rmBtn.onclick = () => wizardAssignSitemap(catId, null);
+              rmBtn.onclick = () => {
+                _inlineConfirm(rmBtn, {
+                  message: 'Unassign "' + catId + '" from this collection?',
+                  confirmLabel: 'Unassign',
+                  onConfirm: () => {
+                    wizardAssignSitemap(catId, null);
+                    if (source === 'both') {
+                      _wizardFlashWarning('Chunks from this sitemap are still in Qdrant. Use Work with RAG to remove them.');
+                    }
+                  }
+                });
+              };
               row.appendChild(rmBtn);
 
               body.appendChild(row);
@@ -5741,8 +5916,14 @@ _INDEX_HTML = """
               rmFs.className = 'btn-wizard-rm'; rmFs.title = 'Remove file source'; rmFs.textContent = '✕';
               rmFs.style.marginLeft = 'auto';
               rmFs.onclick = () => {
-                c.fileSources = (c.fileSources || []).filter(f => f.path !== fs.path);
-                _wizardRenderCollections(); _wizardAutoSave();
+                _inlineConfirm(rmFs, {
+                  message: 'Remove "' + (fs.label || fs.path.split('/').pop()) + '"?',
+                  confirmLabel: 'Remove',
+                  onConfirm: () => {
+                    c.fileSources = (c.fileSources || []).filter(f => f.path !== fs.path);
+                    _wizardRenderCollections(); _wizardAutoSave();
+                  }
+                });
               };
               fsRow.appendChild(rmFs);
               body.appendChild(fsRow);
@@ -5835,30 +6016,7 @@ _INDEX_HTML = """
             btnWrap.appendChild(faqBtn);
           }
 
-          // Delete button — only for collections that exist in Qdrant
-          if (source === 'both' || source === 'qdrant') {
-            const delBtn = document.createElement('button');
-            delBtn.type = 'button';
-            delBtn.style.cssText = 'font-size:0.75rem;padding:0.18rem 0.55rem;white-space:nowrap;background:#fff;color:#c0392b;border:1px solid #c0392b;border-radius:5px;cursor:pointer;';
-            delBtn.textContent = '🗑';
-            delBtn.title = 'Delete from Qdrant';
-            delBtn.onclick = async () => {
-              if (!confirm('Delete "' + collName + '" from Qdrant?\\nThis cannot be undone.')) return;
-              delBtn.disabled = true; delBtn.textContent = '…';
-              try {
-                const r = await api('/api/solutions/delete-collection', {
-                  method: 'POST',
-                  body: JSON.stringify({ solution_id: solId, collection_name: collName })
-                });
-                // Remove from local wizard plan too if it was a 'both' entry
-                if (source === 'both' && c) {
-                  _wizardCollections = _wizardCollections.filter(x => x._id !== c._id);
-                }
-                await _wizardLoadConfirmedColls(solId);
-              } catch(e) { alert('Delete failed: ' + e); delBtn.disabled = false; delBtn.textContent = '🗑'; }
-            };
-            btnWrap.appendChild(delBtn);
-          }
+          // Qdrant delete removed — all Qdrant mutations happen in Work with RAG
         }
 
         // "Add to plan" button — for orphan Qdrant-only collections
