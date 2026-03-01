@@ -736,6 +736,9 @@ def update_chunk(collection_name: str, point_id: str, req: ChunkUpdateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Embedding failed: {e}")
 
+    from datetime import datetime, timezone
+    edited_at = datetime.now(timezone.utc).isoformat()
+
     success = tracker.update_point(collection_name, point_id, new_text, new_vector,
                                     original_text=original_text)
     if not success:
@@ -745,6 +748,7 @@ def update_chunk(collection_name: str, point_id: str, req: ChunkUpdateRequest):
         "id": point_id,
         "text": new_text,
         "manually_edited": True,
+        "edited_at": edited_at,
         "original_text": original_text or current_payload.get("original_text"),
     }
 
@@ -3099,22 +3103,6 @@ _INDEX_HTML = """
     }
 
     // ── Push Guard Modal ──────────────────────────────────────────────────
-    async function _checkEditedChunksBeforePush(src, callback) {
-      const collName = document.getElementById('collectionSelect').value;
-      try {
-        const data = await api('/api/collections/' + encodeURIComponent(collName) + '/edited-chunks?source_id=' + encodeURIComponent(src.id));
-        if (!data.edited_urls || data.edited_urls.length === 0) {
-          callback([]); // No edited chunks, proceed normally
-          return;
-        }
-        _showPushGuardModal(data, src, callback);
-      } catch(e) {
-        // If check fails, proceed without guard
-        console.warn('Edited chunks check failed:', e);
-        callback([]);
-      }
-    }
-
     function _showPushGuardModal(data, src, callback) {
       // Overlay
       const overlay = document.createElement('div');
