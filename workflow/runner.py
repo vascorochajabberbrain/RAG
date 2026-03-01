@@ -475,6 +475,18 @@ def _run_push(state: WorkflowState) -> str:
             skip_msg = f" (skipped {skipped} URL(s) with manually edited chunks)"
             print(f"[push] Skipping {skipped} URLs with manually edited chunks: {skip_urls}")
 
+    # ── Excluded URLs: persistently excluded (chunks deleted from Qdrant) ──
+    excluded_urls = state.excluded_urls or []
+    if excluded_urls and items_to_push:
+        excl_set = set(excluded_urls)
+        before = len(items_to_push)
+        items_to_push = [it for it in items_to_push if it.get("url") not in excl_set]
+        chunks_to_push = [it["text"] for it in items_to_push]
+        excluded = before - len(items_to_push)
+        if excluded:
+            skip_msg += f" (excluded {excluded} URL(s) from previous deletions)"
+            print(f"[push] Excluding {excluded} URLs: {excluded_urls}")
+
     if coll is None and tracker._existing_collection_name(name):
         # Append mode: build a temp SCS_Collection, embed, upsert without deleting.
         from my_collections.SCS_Collection import SCS_Collection

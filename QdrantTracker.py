@@ -443,6 +443,20 @@ class QdrantTracker:
                 points_selector=PointIdsList(points=ids_to_delete),
             )
 
+    def delete_points_by_ids(self, collection_name: str, point_ids: list) -> int:
+        """
+        Delete specific Qdrant points by their IDs.
+        Returns the number of points requested for deletion.
+        """
+        from qdrant_client.http.models import PointIdsList
+        if not point_ids or not self._existing_collection_name(collection_name):
+            return 0
+        self._connection.delete(
+            collection_name=collection_name,
+            points_selector=PointIdsList(points=point_ids),
+        )
+        return len(point_ids)
+
     def scroll_points_by_urls(self, collection_name: str, urls: list) -> list:
         """
         Scroll all points whose point.source_url is in the given URL list.

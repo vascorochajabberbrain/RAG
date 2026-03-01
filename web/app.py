@@ -612,8 +612,9 @@ def get_collection_chunks(collection_name: str, source_id: str = None):
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    # Find the state file to get source URLs
+    # Find the state file to get source URLs and excluded URLs
     urls = set()
+    excluded_urls = []
     if source_id:
         candidates = [
             os.path.join(root, f".rag_state_{collection_name}_{source_id}.json"),
@@ -634,6 +635,7 @@ def get_collection_chunks(collection_name: str, source_id: str = None):
                     fp = sc.get("path") or sc.get("pdf_path")
                     if fp:
                         urls.add(fp)
+                    excluded_urls = d.get("excluded_urls", [])
                     break
                 except Exception:
                     continue
@@ -684,7 +686,7 @@ def get_collection_chunks(collection_name: str, source_id: str = None):
         chunks = sorted(by_url[url], key=lambda c: (c["idx"] if c["idx"] is not None else 0))
         url_groups.append({"url": url, "chunks": chunks})
 
-    return {"urls": url_groups, "total_chunks": len(records)}
+    return {"urls": url_groups, "total_chunks": len(records), "excluded_urls": excluded_urls}
 
 
 class ChunkUpdateRequest(BaseModel):
@@ -751,6 +753,122 @@ def update_chunk(collection_name: str, point_id: str, req: ChunkUpdateRequest):
         "edited_at": edited_at,
         "original_text": original_text or current_payload.get("original_text"),
     }
+
+
+def _find_state_file(root: str, collection_name: str, source_id: str):
+    """Find the state file for a source, trying source_id-suffixed path first, then plain."""
+    candidates = [
+        os.path.join(root, f".rag_state_{collection_name}_{source_id}.json"),
+        os.path.join(root, f".rag_state_{collection_name}.json"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path) and os.path.getsize(path) > 0:
+            return path
+    return None
+
+
+class ChunkDeleteRequest(BaseModel):
+    point_ids: list
+    source_id: str = None
+    url: str = None  # set when deleting an entire URL group
+
+
+@app.post("/api/collections/{collection_name}/chunks/delete")
+def delete_chunks(collection_name: str, req: ChunkDeleteRequest):
+    """Delete specific chunks from Qdrant. If all chunks for a URL are deleted, auto-exclude that URL."""
+    if IS_DEV_MODE:
+        raise HTTPException(status_code=403, detail="Qdrant operations are disabled in DEV mode.")
+
+    import json as _json
+    from QdrantTracker import QdrantTracker
+
+    tracker = QdrantTracker()
+    if not tracker._existing_collection_name(collection_name):
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+
+    if not req.point_ids:
+        raise HTTPException(status_code=400, detail="point_ids is required")
+
+    # --- Determine the URL of the deleted chunks (for auto-exclude check) ---
+    chunk_url = req.url
+    if not chunk_url and req.source_id:
+        # Try to figure out the URL from the first point's payload
+        try:
+            points = tracker._connection.retrieve(
+                collection_name=collection_name,
+                ids=[req.point_ids[0]],
+                with_payload=True,
+                with_vectors=False,
+            )
+            if points:
+                chunk_url = points[0].payload.get("point", {}).get("source_url")
+        except Exception:
+            pass
+
+    # --- Delete points ---
+    deleted = tracker.delete_points_by_ids(collection_name, req.point_ids)
+
+    # --- Check if URL should be excluded ---
+    excluded_url = None
+    auto_excluded = False
+
+    if req.url:
+        # Explicit URL group delete → always exclude
+        excluded_url = req.url
+    elif chunk_url and req.source_id:
+        # Individual chunk delete → check if URL still has chunks
+        remaining = tracker.scroll_points_by_urls(collection_name, [chunk_url])
+        if not remaining:
+            excluded_url = chunk_url
+            auto_excluded = True
+
+    # --- Persist exclusion to state file ---
+    if excluded_url and req.source_id:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        state_path = _find_state_file(root, collection_name, req.source_id)
+        if state_path:
+            try:
+                from workflow.models import WorkflowState
+                state = WorkflowState.load_from_disk(state_path)
+                if excluded_url not in (state.excluded_urls or []):
+                    state.excluded_urls.append(excluded_url)
+                    state.save_to_disk()
+            except Exception as e:
+                print(f"[delete_chunks] Failed to update excluded_urls in state: {e}")
+
+    return {
+        "deleted_count": deleted,
+        "excluded_url": excluded_url,
+        "auto_excluded": auto_excluded,
+    }
+
+
+class ChunkRestoreUrlRequest(BaseModel):
+    source_id: str
+    url: str
+
+
+@app.post("/api/collections/{collection_name}/chunks/restore-url")
+def restore_url(collection_name: str, req: ChunkRestoreUrlRequest):
+    """Remove a URL from excluded_urls so it will be included in future pushes."""
+    if IS_DEV_MODE:
+        raise HTTPException(status_code=403, detail="Qdrant operations are disabled in DEV mode.")
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    state_path = _find_state_file(root, collection_name, req.source_id)
+    if not state_path:
+        raise HTTPException(status_code=404, detail=f"State file not found for source '{req.source_id}'")
+
+    try:
+        from workflow.models import WorkflowState
+        state = WorkflowState.load_from_disk(state_path)
+        if req.url in (state.excluded_urls or []):
+            state.excluded_urls.remove(req.url)
+            state.save_to_disk()
+            return {"restored": True}
+        return {"restored": False, "detail": "URL was not in excluded list"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to restore URL: {e}")
 
 
 @app.get("/api/collections/{collection_name}/edited-chunks")
@@ -2829,7 +2947,11 @@ _INDEX_HTML = """
       method: body ? 'POST' : 'GET',
       headers: body ? { 'Content-Type': 'application/json' } : {},
       body: body ? JSON.stringify(body) : undefined
-    }).then(r => r.json());
+    }).then(async r => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || ('HTTP ' + r.status));
+      return data;
+    });
 
     const buildLog = document.getElementById('buildLog');
     const qaResult = document.getElementById('qaResult');
@@ -2915,24 +3037,38 @@ _INDEX_HTML = """
       }
     }
 
+    function _getShortUrl(fullUrl) {
+      try {
+        const u = new URL(fullUrl);
+        return u.pathname.replace(/\/$/, '').split('/').slice(-2).join('/') || u.hostname;
+      } catch(_) { return fullUrl.split('/').pop() || fullUrl; }
+    }
+
     function _renderChunkPanel(src, data, panel, collName) {
       panel.innerHTML = '';
+      let totalChunks = data.total_chunks;
+
       // Header
       const header = document.createElement('div');
       header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;padding-bottom:0.4rem;border-bottom:1px solid #dee2e6;';
       const title = document.createElement('span');
       title.style.cssText = 'font-size:0.85rem;font-weight:600;color:#333;';
-      title.textContent = '📄 ' + (src.label || src.id) + ' (' + data.total_chunks + ' chunks)';
+      title.textContent = '📄 ' + (src.label || src.id) + ' (' + totalChunks + ' chunks)';
       header.appendChild(title);
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
       closeBtn.style.cssText = 'font-size:0.78rem;padding:0.1rem 0.4rem;background:none;border:1px solid #ccc;border-radius:4px;color:#666;cursor:pointer;';
-      closeBtn.textContent = '✕';
+      closeBtn.textContent = '\u2715';
       closeBtn.onclick = () => { panel.remove(); delete _chunkViewerCache[src.id]; };
       header.appendChild(closeBtn);
       panel.appendChild(header);
 
-      if (!data.urls || !data.urls.length) {
+      const updateTotalCount = (delta) => {
+        totalChunks += delta;
+        title.textContent = '📄 ' + (src.label || src.id) + ' (' + totalChunks + ' chunks)';
+      };
+
+      if ((!data.urls || !data.urls.length) && !(data.excluded_urls && data.excluded_urls.length)) {
         const empty = document.createElement('div');
         empty.style.cssText = 'color:#888;font-size:0.82rem;padding:0.5rem 0;';
         empty.textContent = 'No chunks found in Qdrant for this source.';
@@ -2940,31 +3076,110 @@ _INDEX_HTML = """
         return;
       }
 
+      // Excluded URLs section (rendered at bottom, but we need a ref now)
+      const excludedSection = document.createElement('div');
+      excludedSection.style.cssText = 'display:none;margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid #dee2e6;';
+      let excludedUrls = (data.excluded_urls || []).slice();  // mutable copy
+
+      function _renderExcludedSection() {
+        excludedSection.innerHTML = '';
+        if (!excludedUrls.length) { excludedSection.style.display = 'none'; return; }
+        excludedSection.style.display = 'block';
+        const exHeader = document.createElement('div');
+        exHeader.style.cssText = 'font-size:0.78rem;font-weight:600;color:#888;margin-bottom:0.3rem;';
+        exHeader.textContent = '🚫 Excluded URLs (' + excludedUrls.length + ') — will not be re-pushed';
+        excludedSection.appendChild(exHeader);
+        excludedUrls.forEach(exUrl => {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:0.4rem;padding:0.2rem 0.5rem;font-size:0.76rem;color:#999;';
+          const label = document.createElement('span');
+          label.style.cssText = 'flex:1;text-decoration:line-through;';
+          label.textContent = _getShortUrl(exUrl);
+          label.title = exUrl;
+          row.appendChild(label);
+          const restoreBtn = document.createElement('button');
+          restoreBtn.type = 'button';
+          restoreBtn.style.cssText = 'font-size:0.68rem;padding:0.1rem 0.35rem;background:none;border:1px solid #27ae60;border-radius:3px;color:#27ae60;cursor:pointer;';
+          restoreBtn.textContent = 'Restore';
+          restoreBtn.onclick = async (e) => {
+            e.stopPropagation();
+            restoreBtn.disabled = true;
+            restoreBtn.textContent = '...';
+            try {
+              await api('/api/collections/' + encodeURIComponent(collName) + '/chunks/restore-url', {
+                source_id: src.id, url: exUrl
+              });
+              excludedUrls = excludedUrls.filter(u => u !== exUrl);
+              _renderExcludedSection();
+            } catch(err) {
+              restoreBtn.textContent = 'Error';
+              restoreBtn.style.color = '#c0392b';
+              setTimeout(() => { restoreBtn.textContent = 'Restore'; restoreBtn.style.color = '#27ae60'; restoreBtn.disabled = false; }, 2000);
+            }
+          };
+          row.appendChild(restoreBtn);
+          excludedSection.appendChild(row);
+        });
+      }
+
+      function _addToExcluded(url) {
+        if (!excludedUrls.includes(url)) excludedUrls.push(url);
+        _renderExcludedSection();
+      }
+
       // URL groups
-      data.urls.forEach((urlGroup, gi) => {
+      (data.urls || []).forEach((urlGroup, gi) => {
         const urlDiv = document.createElement('div');
         urlDiv.style.cssText = 'margin-bottom:0.3rem;';
+        let urlChunkCount = urlGroup.chunks.length;
 
         const urlHeader = document.createElement('div');
         urlHeader.style.cssText = 'display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0.5rem;background:#e9ecef;border-radius:5px;cursor:pointer;user-select:none;';
         const arrow = document.createElement('span');
-        arrow.textContent = '▸';
+        arrow.textContent = '\u25b8';
         arrow.style.cssText = 'font-size:0.7rem;color:#666;transition:transform 0.15s;';
         urlHeader.appendChild(arrow);
         const urlLabel = document.createElement('span');
         urlLabel.style.cssText = 'font-size:0.8rem;color:#444;flex:1;';
-        // Show last path segment(s) of URL
-        let shortUrl = urlGroup.url;
-        try {
-          const u = new URL(urlGroup.url);
-          shortUrl = u.pathname.replace(/\\/$/, '').split('/').slice(-2).join('/') || u.hostname;
-        } catch(_) { shortUrl = urlGroup.url.split('/').pop() || urlGroup.url; }
-        urlLabel.textContent = shortUrl;
+        urlLabel.textContent = _getShortUrl(urlGroup.url);
         urlHeader.appendChild(urlLabel);
         const countBadge = document.createElement('span');
         countBadge.style.cssText = 'font-size:0.7rem;color:#888;';
-        countBadge.textContent = urlGroup.chunks.length + ' chunk' + (urlGroup.chunks.length > 1 ? 's' : '');
+        countBadge.textContent = urlChunkCount + ' chunk' + (urlChunkCount > 1 ? 's' : '');
         urlHeader.appendChild(countBadge);
+
+        // URL-group delete button
+        const urlDelBtn = document.createElement('button');
+        urlDelBtn.type = 'button';
+        urlDelBtn.style.cssText = 'font-size:0.68rem;padding:0.1rem 0.3rem;background:none;border:1px solid #c0392b;border-radius:3px;color:#c0392b;cursor:pointer;';
+        urlDelBtn.textContent = '🗑';
+        urlDelBtn.title = 'Delete all chunks for this page';
+        urlDelBtn.onclick = (e) => {
+          e.stopPropagation();
+          _inlineConfirm(urlDelBtn, {
+            message: 'Delete all ' + urlChunkCount + ' chunk(s) & exclude page?',
+            confirmLabel: 'Delete + Exclude',
+            onConfirm: async () => {
+              urlDelBtn.disabled = true;
+              urlDelBtn.textContent = '...';
+              try {
+                const ids = urlGroup.chunks.map(c => c.id);
+                await api('/api/collections/' + encodeURIComponent(collName) + '/chunks/delete', {
+                  point_ids: ids, source_id: src.id, url: urlGroup.url
+                });
+                updateTotalCount(-urlChunkCount);
+                urlDiv.remove();
+                _addToExcluded(urlGroup.url);
+              } catch(err) {
+                urlDelBtn.textContent = '🗑';
+                urlDelBtn.disabled = false;
+                alert('Delete failed: ' + (err.message || err));
+              }
+            }
+          });
+        };
+        urlHeader.appendChild(urlDelBtn);
+
         urlDiv.appendChild(urlHeader);
 
         const chunksContainer = document.createElement('div');
@@ -2985,7 +3200,7 @@ _INDEX_HTML = """
           if (isEdited) {
             const editBadge = document.createElement('span');
             editBadge.style.cssText = 'font-size:0.68rem;color:#e67e22;font-weight:500;';
-            editBadge.textContent = '✏️ edited';
+            editBadge.textContent = '\u270f\ufe0f edited';
             if (chunk.edited_at) editBadge.title = 'Edited: ' + chunk.edited_at;
             chunkHeader.appendChild(editBadge);
           }
@@ -2996,8 +3211,45 @@ _INDEX_HTML = """
           const editBtn = document.createElement('button');
           editBtn.type = 'button';
           editBtn.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.4rem;background:none;border:1px solid #2980b9;border-radius:3px;color:#2980b9;cursor:pointer;';
-          editBtn.textContent = '✏️ Edit';
+          editBtn.textContent = '\u270f\ufe0f Edit';
           chunkHeader.appendChild(editBtn);
+          // Per-chunk delete button
+          const chunkDelBtn = document.createElement('button');
+          chunkDelBtn.type = 'button';
+          chunkDelBtn.style.cssText = 'font-size:0.68rem;padding:0.1rem 0.3rem;background:none;border:1px solid #c0392b;border-radius:3px;color:#c0392b;cursor:pointer;';
+          chunkDelBtn.textContent = '🗑';
+          chunkDelBtn.title = 'Delete this chunk';
+          chunkDelBtn.onclick = (e) => {
+            e.stopPropagation();
+            _inlineConfirm(chunkDelBtn, {
+              message: 'Delete this chunk?',
+              confirmLabel: 'Delete',
+              onConfirm: async () => {
+                chunkDelBtn.disabled = true;
+                chunkDelBtn.textContent = '...';
+                try {
+                  const res = await api('/api/collections/' + encodeURIComponent(collName) + '/chunks/delete', {
+                    point_ids: [chunk.id], source_id: src.id
+                  });
+                  chunkRow.remove();
+                  urlChunkCount--;
+                  updateTotalCount(-1);
+                  countBadge.textContent = urlChunkCount + ' chunk' + (urlChunkCount > 1 ? 's' : '');
+                  if (res.auto_excluded) {
+                    urlDiv.remove();
+                    _addToExcluded(res.excluded_url);
+                  } else if (urlChunkCount <= 0) {
+                    urlDiv.remove();
+                  }
+                } catch(err) {
+                  chunkDelBtn.textContent = '🗑';
+                  chunkDelBtn.disabled = false;
+                  alert('Delete failed: ' + (err.message || err));
+                }
+              }
+            });
+          };
+          chunkHeader.appendChild(chunkDelBtn);
           chunkRow.appendChild(chunkHeader);
 
           // Chunk text (readonly view)
@@ -3018,7 +3270,8 @@ _INDEX_HTML = """
 
         // Toggle expand/collapse
         let expanded = false;
-        urlHeader.onclick = () => {
+        urlHeader.onclick = (e) => {
+          if (e.target.tagName === 'BUTTON') return;  // don't toggle on delete button click
           expanded = !expanded;
           chunksContainer.style.display = expanded ? 'block' : 'none';
           arrow.style.transform = expanded ? 'rotate(90deg)' : '';
@@ -3026,6 +3279,10 @@ _INDEX_HTML = """
 
         panel.appendChild(urlDiv);
       });
+
+      // Excluded URLs section at bottom
+      _renderExcludedSection();
+      panel.appendChild(excludedSection);
     }
 
     function _enterChunkEditMode(chunk, chunkRow, textBox, editBtn, collName, src) {

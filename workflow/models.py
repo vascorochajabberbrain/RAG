@@ -90,6 +90,8 @@ class WorkflowState:
 
     # Push guard: URLs to skip during re-push (manually edited chunks preserved)
     skip_urls: list = field(default_factory=list)
+    # URLs excluded from push (chunks deleted from Qdrant) — persistent until restored
+    excluded_urls: list = field(default_factory=list)
 
     # Tracker reference (set by runner; not serialized)
     tracker: Any = None
@@ -126,6 +128,7 @@ class WorkflowState:
             "collection_metadata": self.collection_metadata,
             "relevance_report": self.relevance_report,
             "skip_urls": self.skip_urls,
+            "excluded_urls": self.excluded_urls,
         }
 
     def to_full_dict(self) -> dict:
@@ -161,6 +164,7 @@ class WorkflowState:
             "collection_metadata": self.collection_metadata,
             "relevance_report": self.relevance_report,
             "skip_urls": self.skip_urls,
+            "excluded_urls": self.excluded_urls,
         }
 
     def get_save_path(self) -> Optional[str]:
@@ -248,6 +252,7 @@ class WorkflowState:
             collection_metadata=d.get("collection_metadata"),
             relevance_report=d.get("relevance_report"),
             skip_urls=d.get("skip_urls", []),
+            excluded_urls=d.get("excluded_urls", []),
         )
 
     def get_text_for_chunking(self) -> str:
