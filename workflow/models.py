@@ -88,6 +88,9 @@ class WorkflowState:
     # Shape: {relevant_count, mismatch_count, irrelevant_count,
     #         mismatch_urls: [str], irrelevant_urls: [str]}
 
+    # Push guard: URLs to skip during re-push (manually edited chunks preserved)
+    skip_urls: list = field(default_factory=list)
+
     # Tracker reference (set by runner; not serialized)
     tracker: Any = None
 
@@ -122,6 +125,7 @@ class WorkflowState:
             "save_path": self.save_path,
             "collection_metadata": self.collection_metadata,
             "relevance_report": self.relevance_report,
+            "skip_urls": self.skip_urls,
         }
 
     def to_full_dict(self) -> dict:
@@ -156,6 +160,7 @@ class WorkflowState:
             "completed_steps": self.completed_steps,
             "collection_metadata": self.collection_metadata,
             "relevance_report": self.relevance_report,
+            "skip_urls": self.skip_urls,
         }
 
     def get_save_path(self) -> Optional[str]:
@@ -242,6 +247,7 @@ class WorkflowState:
             completed_steps=d.get("completed_steps", []),
             collection_metadata=d.get("collection_metadata"),
             relevance_report=d.get("relevance_report"),
+            skip_urls=d.get("skip_urls", []),
         )
 
     def get_text_for_chunking(self) -> str:

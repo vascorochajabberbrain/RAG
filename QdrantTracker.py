@@ -443,6 +443,101 @@ class QdrantTracker:
                 points_selector=PointIdsList(points=ids_to_delete),
             )
 
+    def scroll_points_by_urls(self, collection_name: str, urls: list) -> list:
+        """
+        Scroll all points whose point.source_url is in the given URL list.
+        Returns list of Record objects (id + payload, no vector).
+        Falls back to client-side filtering if Qdrant lacks a payload index.
+        """
+        if not urls or not self._existing_collection_name(collection_name):
+            return []
+
+        url_set = set(urls)
+
+        # Try server-side filter first (fast, requires payload index)
+        try:
+            from qdrant_client.http.models import Filter, FieldCondition, MatchAny
+            scroll_filter = Filter(
+                must=[FieldCondition(key="point.source_url", match=MatchAny(any=urls))]
+            )
+            records = []
+            offset = None
+            while True:
+                result, offset = self._connection.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=scroll_filter,
+                    with_payload=True,
+                    with_vectors=False,
+                    offset=offset,
+                    limit=100,
+                )
+                records.extend(result)
+                if offset is None:
+                    break
+            return records
+        except Exception:
+            pass  # Fall back to client-side filtering
+
+        # Fallback: scroll all and filter client-side
+        records = []
+        offset = None
+        while True:
+            result, offset = self._connection.scroll(
+                collection_name=collection_name,
+                with_payload=True,
+                with_vectors=False,
+                offset=offset,
+                limit=100,
+            )
+            for r in result:
+                p = r.payload.get("point", {})
+                if p.get("source_url") in url_set:
+                    records.append(r)
+            if offset is None:
+                break
+        return records
+
+    def update_point(self, collection_name: str, point_id: str, new_text: str,
+                     new_vector: list, original_text: str | None = None) -> bool:
+        """
+        Update a single point's text, vector, and mark it as manually edited.
+        Preserves original_text on first edit; subsequent edits keep it unchanged.
+        Returns True on success, False on failure.
+        """
+        import hashlib
+        from datetime import datetime, timezone
+
+        try:
+            new_hash = hashlib.sha256(new_text.encode("utf-8")).hexdigest()
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            payload_update = {
+                "text": new_text,
+                "content_hash": new_hash,
+                "manually_edited": True,
+                "edited_at": now_iso,
+            }
+            # Only set original_text on first edit
+            if original_text is not None:
+                payload_update["original_text"] = original_text
+
+            self._connection.set_payload(
+                collection_name=collection_name,
+                payload=payload_update,
+                points=[point_id],
+                key="point",
+            )
+            self._connection.update_vectors(
+                collection_name=collection_name,
+                points=[
+                    models.PointVectors(id=point_id, vector=new_vector)
+                ],
+            )
+            return True
+        except Exception as e:
+            print(f"[QdrantTracker] update_point failed for {point_id}: {e}")
+            return False
+
     def scroll_all(self, collection_name: str, limit: int = 200) -> list:
         """
         Return all point payloads from a collection (no query/filter).

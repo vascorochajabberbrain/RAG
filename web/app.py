@@ -603,6 +603,253 @@ def delete_source_chunks(solution_id: str, collection_name: str, source_id: str)
     return {"deleted_count": deleted_count, "urls_processed": len(urls_to_delete), "errors": errors}
 
 
+# ── Chunk viewer / editor endpoints ─────────────────────────────────────
+@app.get("/api/collections/{collection_name}/chunks")
+def get_collection_chunks(collection_name: str, source_id: str = None):
+    """Return all Qdrant points for a source, grouped by source_url."""
+    import json as _json
+    from QdrantTracker import QdrantTracker
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # Find the state file to get source URLs
+    urls = set()
+    if source_id:
+        candidates = [
+            os.path.join(root, f".rag_state_{collection_name}_{source_id}.json"),
+            os.path.join(root, f".rag_state_{collection_name}.json"),
+        ]
+        for path in candidates:
+            if os.path.exists(path) and os.path.getsize(path) > 0:
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        d = _json.load(f)
+                    file_source_id = d.get("source_id")
+                    if file_source_id and file_source_id != source_id:
+                        continue
+                    for item in d.get("scraped_items", []):
+                        if isinstance(item, dict) and item.get("url"):
+                            urls.add(item["url"])
+                    sc = d.get("source_config") or {}
+                    fp = sc.get("path") or sc.get("pdf_path")
+                    if fp:
+                        urls.add(fp)
+                    break
+                except Exception:
+                    continue
+
+    tracker = QdrantTracker()
+    if not tracker._existing_collection_name(collection_name):
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found in Qdrant")
+
+    if urls:
+        records = tracker.scroll_points_by_urls(collection_name, list(urls))
+    else:
+        # No state file or no source_id: return all points
+        records = []
+        offset = None
+        while True:
+            result, off = tracker._connection.scroll(
+                collection_name=collection_name,
+                with_payload=True, with_vectors=False,
+                offset=offset, limit=100,
+            )
+            records.extend(result)
+            if off is None:
+                break
+            offset = off
+
+    # Group by source_url
+    by_url = {}
+    for rec in records:
+        p = rec.payload.get("point", {})
+        url = p.get("source_url", "__no_url__")
+        chunk = {
+            "id": str(rec.id),
+            "text": p.get("text", ""),
+            "idx": p.get("idx"),
+            "source": p.get("source", ""),
+            "source_url": url,
+            "content_hash": p.get("content_hash", ""),
+            "scraped_at": p.get("scraped_at", ""),
+            "manually_edited": p.get("manually_edited", False),
+            "edited_at": p.get("edited_at"),
+            "original_text": p.get("original_text"),
+        }
+        by_url.setdefault(url, []).append(chunk)
+
+    # Sort chunks within each URL by idx
+    url_groups = []
+    for url in sorted(by_url.keys()):
+        chunks = sorted(by_url[url], key=lambda c: (c["idx"] if c["idx"] is not None else 0))
+        url_groups.append({"url": url, "chunks": chunks})
+
+    return {"urls": url_groups, "total_chunks": len(records)}
+
+
+class ChunkUpdateRequest(BaseModel):
+    text: str
+
+
+@app.put("/api/collections/{collection_name}/chunks/{point_id}")
+def update_chunk(collection_name: str, point_id: str, req: ChunkUpdateRequest):
+    """Update a single chunk's text in Qdrant, re-embed, and mark as manually edited."""
+    if IS_DEV_MODE:
+        raise HTTPException(status_code=403, detail="Qdrant operations are disabled in DEV mode.")
+
+    from QdrantTracker import QdrantTracker
+    from vectorization import get_embedding
+
+    tracker = QdrantTracker()
+    if not tracker._existing_collection_name(collection_name):
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+
+    new_text = req.text.strip()
+    if not new_text:
+        raise HTTPException(status_code=400, detail="Chunk text cannot be empty")
+
+    # Get current point to check for existing original_text
+    try:
+        points = tracker._connection.retrieve(
+            collection_name=collection_name,
+            ids=[point_id],
+            with_payload=True,
+            with_vectors=False,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Point '{point_id}' not found: {e}")
+
+    if not points:
+        raise HTTPException(status_code=404, detail=f"Point '{point_id}' not found")
+
+    current_payload = points[0].payload.get("point", {})
+    current_text = current_payload.get("text", "")
+
+    # Only set original_text on first edit
+    original_text = None
+    if not current_payload.get("manually_edited"):
+        original_text = current_text
+
+    # Re-embed
+    try:
+        new_vector = get_embedding(new_text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {e}")
+
+    success = tracker.update_point(collection_name, point_id, new_text, new_vector,
+                                    original_text=original_text)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update point in Qdrant")
+
+    return {
+        "id": point_id,
+        "text": new_text,
+        "manually_edited": True,
+        "original_text": original_text or current_payload.get("original_text"),
+    }
+
+
+@app.get("/api/collections/{collection_name}/edited-chunks")
+def get_edited_chunks(collection_name: str, source_id: str = None):
+    """Check which URLs have manually edited chunks (for push guard)."""
+    import json as _json
+    from QdrantTracker import QdrantTracker
+    from qdrant_client.http.models import Filter, FieldCondition, MatchValue, MatchAny
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tracker = QdrantTracker()
+
+    if not tracker._existing_collection_name(collection_name):
+        return {"edited_urls": [], "total_edited": 0}
+
+    # Get source URLs from state file
+    source_urls = set()
+    if source_id:
+        candidates = [
+            os.path.join(root, f".rag_state_{collection_name}_{source_id}.json"),
+            os.path.join(root, f".rag_state_{collection_name}.json"),
+        ]
+        for path in candidates:
+            if os.path.exists(path) and os.path.getsize(path) > 0:
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        d = _json.load(f)
+                    file_source_id = d.get("source_id")
+                    if file_source_id and file_source_id != source_id:
+                        continue
+                    for item in d.get("scraped_items", []):
+                        if isinstance(item, dict) and item.get("url"):
+                            source_urls.add(item["url"])
+                    sc = d.get("source_config") or {}
+                    fp = sc.get("path") or sc.get("pdf_path")
+                    if fp:
+                        source_urls.add(fp)
+                    break
+                except Exception:
+                    continue
+
+    # Query for manually_edited points
+    # Try server-side filter first; fall back to client-side if payload index missing
+    edited_records = []
+    try:
+        must_filters = [FieldCondition(key="point.manually_edited", match=MatchValue(value=True))]
+        if source_urls:
+            must_filters.append(FieldCondition(key="point.source_url", match=MatchAny(any=list(source_urls))))
+        scroll_filter = Filter(must=must_filters)
+        offset = None
+        while True:
+            result, offset = tracker._connection.scroll(
+                collection_name=collection_name,
+                scroll_filter=scroll_filter,
+                with_payload=True,
+                with_vectors=False,
+                offset=offset,
+                limit=100,
+            )
+            edited_records.extend(result)
+            if offset is None:
+                break
+    except Exception:
+        # Fallback: scroll all points, filter client-side
+        edited_records = []
+        offset = None
+        while True:
+            result, offset = tracker._connection.scroll(
+                collection_name=collection_name,
+                with_payload=True,
+                with_vectors=False,
+                offset=offset,
+                limit=100,
+            )
+            for r in result:
+                p = r.payload.get("point", {})
+                if not p.get("manually_edited"):
+                    continue
+                if source_urls and p.get("source_url") not in source_urls:
+                    continue
+                edited_records.append(r)
+            if offset is None:
+                break
+
+    # Group by URL and count
+    by_url = {}
+    for rec in edited_records:
+        p = rec.payload.get("point", {})
+        url = p.get("source_url", "__no_url__")
+        by_url.setdefault(url, 0)
+        by_url[url] += 1
+
+    # Also get total counts per URL (for display)
+    edited_urls = []
+    for url, edited_count in sorted(by_url.items()):
+        edited_urls.append({
+            "url": url,
+            "edited_count": edited_count,
+        })
+
+    return {"edited_urls": edited_urls, "total_edited": len(edited_records)}
+
+
 @app.post("/api/workflow/step")
 def run_workflow_step(req: StepRequest):
     if IS_DEV_MODE and req.step == "push_to_qdrant":
@@ -2630,6 +2877,328 @@ _INDEX_HTML = """
       setTimeout(() => banner.remove(), 5000);
     }
 
+    // ── Chunk Viewer / Editor ──────────────────────────────────────────────
+    let _chunkViewerCache = {};  // keyed by src.id
+
+    function _toggleChunkViewer(src, row) {
+      // If panel already open for this source, close it
+      const existingPanel = row.nextElementSibling;
+      if (existingPanel && existingPanel.dataset.chunkViewer === src.id) {
+        existingPanel.remove();
+        delete _chunkViewerCache[src.id];
+        return;
+      }
+      // Close any other open viewer
+      document.querySelectorAll('[data-chunk-viewer]').forEach(p => p.remove());
+      // Create and insert panel
+      const panel = document.createElement('div');
+      panel.dataset.chunkViewer = src.id;
+      panel.style.cssText = 'background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:0.7rem;margin-bottom:0.5rem;max-height:500px;overflow-y:auto;';
+      panel.innerHTML = '<div style="text-align:center;color:#888;font-size:0.82rem;padding:1rem 0;">Loading chunks…</div>';
+      row.insertAdjacentElement('afterend', panel);
+      _loadChunkViewer(src, panel);
+    }
+
+    async function _loadChunkViewer(src, panel) {
+      const collName = document.getElementById('collectionSelect').value;
+      const cacheKey = src.id;
+      try {
+        const data = await api('/api/collections/' + encodeURIComponent(collName) + '/chunks?source_id=' + encodeURIComponent(src.id));
+        _chunkViewerCache[cacheKey] = data;
+        _renderChunkPanel(src, data, panel, collName);
+      } catch(e) {
+        panel.innerHTML = '<div style="color:#c0392b;font-size:0.82rem;padding:0.5rem;">Failed to load chunks: ' + e.message + '</div>';
+      }
+    }
+
+    function _renderChunkPanel(src, data, panel, collName) {
+      panel.innerHTML = '';
+      // Header
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;padding-bottom:0.4rem;border-bottom:1px solid #dee2e6;';
+      const title = document.createElement('span');
+      title.style.cssText = 'font-size:0.85rem;font-weight:600;color:#333;';
+      title.textContent = '📄 ' + (src.label || src.id) + ' (' + data.total_chunks + ' chunks)';
+      header.appendChild(title);
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.style.cssText = 'font-size:0.78rem;padding:0.1rem 0.4rem;background:none;border:1px solid #ccc;border-radius:4px;color:#666;cursor:pointer;';
+      closeBtn.textContent = '✕';
+      closeBtn.onclick = () => { panel.remove(); delete _chunkViewerCache[src.id]; };
+      header.appendChild(closeBtn);
+      panel.appendChild(header);
+
+      if (!data.urls || !data.urls.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'color:#888;font-size:0.82rem;padding:0.5rem 0;';
+        empty.textContent = 'No chunks found in Qdrant for this source.';
+        panel.appendChild(empty);
+        return;
+      }
+
+      // URL groups
+      data.urls.forEach((urlGroup, gi) => {
+        const urlDiv = document.createElement('div');
+        urlDiv.style.cssText = 'margin-bottom:0.3rem;';
+
+        const urlHeader = document.createElement('div');
+        urlHeader.style.cssText = 'display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0.5rem;background:#e9ecef;border-radius:5px;cursor:pointer;user-select:none;';
+        const arrow = document.createElement('span');
+        arrow.textContent = '▸';
+        arrow.style.cssText = 'font-size:0.7rem;color:#666;transition:transform 0.15s;';
+        urlHeader.appendChild(arrow);
+        const urlLabel = document.createElement('span');
+        urlLabel.style.cssText = 'font-size:0.8rem;color:#444;flex:1;';
+        // Show last path segment(s) of URL
+        let shortUrl = urlGroup.url;
+        try {
+          const u = new URL(urlGroup.url);
+          shortUrl = u.pathname.replace(/\\/$/, '').split('/').slice(-2).join('/') || u.hostname;
+        } catch(_) { shortUrl = urlGroup.url.split('/').pop() || urlGroup.url; }
+        urlLabel.textContent = shortUrl;
+        urlHeader.appendChild(urlLabel);
+        const countBadge = document.createElement('span');
+        countBadge.style.cssText = 'font-size:0.7rem;color:#888;';
+        countBadge.textContent = urlGroup.chunks.length + ' chunk' + (urlGroup.chunks.length > 1 ? 's' : '');
+        urlHeader.appendChild(countBadge);
+        urlDiv.appendChild(urlHeader);
+
+        const chunksContainer = document.createElement('div');
+        chunksContainer.style.cssText = 'display:none;padding:0.3rem 0 0.3rem 1rem;';
+
+        urlGroup.chunks.forEach((chunk) => {
+          const chunkRow = document.createElement('div');
+          const isEdited = chunk.manually_edited;
+          chunkRow.style.cssText = 'margin-bottom:0.4rem;border:1px solid ' + (isEdited ? '#f0ad4e' : '#dee2e6') + ';border-radius:5px;padding:0.4rem 0.5rem;background:#fff;' + (isEdited ? 'border-left:3px solid #f0ad4e;' : '');
+
+          // Chunk header with index and badges
+          const chunkHeader = document.createElement('div');
+          chunkHeader.style.cssText = 'display:flex;align-items:center;gap:0.4rem;margin-bottom:0.25rem;';
+          const idxBadge = document.createElement('span');
+          idxBadge.style.cssText = 'font-size:0.68rem;color:#888;';
+          idxBadge.textContent = '#' + (chunk.idx != null ? chunk.idx : '?');
+          chunkHeader.appendChild(idxBadge);
+          if (isEdited) {
+            const editBadge = document.createElement('span');
+            editBadge.style.cssText = 'font-size:0.68rem;color:#e67e22;font-weight:500;';
+            editBadge.textContent = '✏️ edited';
+            if (chunk.edited_at) editBadge.title = 'Edited: ' + chunk.edited_at;
+            chunkHeader.appendChild(editBadge);
+          }
+          const spacer = document.createElement('span');
+          spacer.style.cssText = 'flex:1;';
+          chunkHeader.appendChild(spacer);
+          // Edit button
+          const editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.4rem;background:none;border:1px solid #2980b9;border-radius:3px;color:#2980b9;cursor:pointer;';
+          editBtn.textContent = '✏️ Edit';
+          chunkHeader.appendChild(editBtn);
+          chunkRow.appendChild(chunkHeader);
+
+          // Chunk text (readonly view)
+          const textBox = document.createElement('div');
+          textBox.style.cssText = 'font-size:0.78rem;font-family:monospace;color:#333;white-space:pre-wrap;word-break:break-word;max-height:150px;overflow-y:auto;background:#fafafa;padding:0.35rem 0.5rem;border-radius:4px;border:1px solid #eee;line-height:1.45;';
+          textBox.textContent = chunk.text;
+          chunkRow.appendChild(textBox);
+
+          // Edit mode handler
+          editBtn.onclick = (e) => {
+            e.stopPropagation();
+            _enterChunkEditMode(chunk, chunkRow, textBox, editBtn, collName, src);
+          };
+
+          chunksContainer.appendChild(chunkRow);
+        });
+        urlDiv.appendChild(chunksContainer);
+
+        // Toggle expand/collapse
+        let expanded = false;
+        urlHeader.onclick = () => {
+          expanded = !expanded;
+          chunksContainer.style.display = expanded ? 'block' : 'none';
+          arrow.style.transform = expanded ? 'rotate(90deg)' : '';
+        };
+
+        panel.appendChild(urlDiv);
+      });
+    }
+
+    function _enterChunkEditMode(chunk, chunkRow, textBox, editBtn, collName, src) {
+      // Replace textBox with textarea
+      const textarea = document.createElement('textarea');
+      textarea.style.cssText = 'width:100%;min-height:100px;font-size:0.78rem;font-family:monospace;color:#333;background:#fff;padding:0.35rem 0.5rem;border-radius:4px;border:1px solid #2980b9;line-height:1.45;box-sizing:border-box;resize:vertical;';
+      textarea.value = chunk.text;
+      textBox.replaceWith(textarea);
+      editBtn.style.display = 'none';
+
+      // Add save/cancel buttons
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display:flex;gap:0.4rem;margin-top:0.3rem;';
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.style.cssText = 'font-size:0.74rem;padding:0.2rem 0.6rem;background:#27ae60;color:#fff;border:none;border-radius:4px;cursor:pointer;';
+      saveBtn.textContent = '💾 Save';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.style.cssText = 'font-size:0.74rem;padding:0.2rem 0.5rem;background:none;border:1px solid #ccc;border-radius:4px;color:#666;cursor:pointer;';
+      cancelBtn.textContent = '✕ Cancel';
+      btnRow.appendChild(saveBtn);
+      btnRow.appendChild(cancelBtn);
+      chunkRow.appendChild(btnRow);
+
+      cancelBtn.onclick = (e) => {
+        e.stopPropagation();
+        textarea.replaceWith(textBox);
+        btnRow.remove();
+        editBtn.style.display = '';
+      };
+
+      saveBtn.onclick = async (e) => {
+        e.stopPropagation();
+        const newText = textarea.value.trim();
+        if (!newText) { alert('Chunk text cannot be empty.'); return; }
+        if (newText === chunk.text) { cancelBtn.click(); return; }
+        saveBtn.textContent = '⏳ Saving…'; saveBtn.disabled = true;
+        try {
+          const res = await fetch('/api/collections/' + encodeURIComponent(collName) + '/chunks/' + encodeURIComponent(chunk.id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: newText })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Save failed');
+          // Update chunk data in cache
+          chunk.text = newText;
+          chunk.manually_edited = true;
+          chunk.edited_at = data.edited_at || new Date().toISOString();
+          if (data.original_text) chunk.original_text = data.original_text;
+          // Re-render this chunk
+          textBox.textContent = newText;
+          textarea.replaceWith(textBox);
+          btnRow.remove();
+          editBtn.style.display = '';
+          // Update chunk row border to show edited state
+          chunkRow.style.borderColor = '#f0ad4e';
+          chunkRow.style.borderLeft = '3px solid #f0ad4e';
+          // Add edited badge if not already present
+          const header = chunkRow.querySelector('div');
+          if (!header.querySelector('[data-edit-badge]')) {
+            const badge = document.createElement('span');
+            badge.style.cssText = 'font-size:0.68rem;color:#e67e22;font-weight:500;';
+            badge.textContent = '✏️ edited';
+            badge.dataset.editBadge = '1';
+            header.insertBefore(badge, header.children[1]);
+          }
+          setLog(buildLog, 'Chunk updated and re-embedded in Qdrant.', false);
+        } catch(err) {
+          saveBtn.textContent = '💾 Save'; saveBtn.disabled = false;
+          alert('Failed to save chunk: ' + err.message);
+        }
+      };
+    }
+
+    // ── Push Guard Modal ──────────────────────────────────────────────────
+    async function _checkEditedChunksBeforePush(src, callback) {
+      const collName = document.getElementById('collectionSelect').value;
+      try {
+        const data = await api('/api/collections/' + encodeURIComponent(collName) + '/edited-chunks?source_id=' + encodeURIComponent(src.id));
+        if (!data.edited_urls || data.edited_urls.length === 0) {
+          callback([]); // No edited chunks, proceed normally
+          return;
+        }
+        _showPushGuardModal(data, src, callback);
+      } catch(e) {
+        // If check fails, proceed without guard
+        console.warn('Edited chunks check failed:', e);
+        callback([]);
+      }
+    }
+
+    function _showPushGuardModal(data, src, callback) {
+      // Overlay
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+
+      const modal = document.createElement('div');
+      modal.style.cssText = 'background:#fff;border-radius:10px;padding:1.2rem;max-width:550px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.3);';
+
+      // Title
+      const title = document.createElement('div');
+      title.style.cssText = 'font-size:1rem;font-weight:600;color:#e67e22;margin-bottom:0.7rem;';
+      title.textContent = '⚠️ Manually Edited Chunks Detected';
+      modal.appendChild(title);
+
+      const desc = document.createElement('p');
+      desc.style.cssText = 'font-size:0.85rem;color:#555;margin:0 0 0.7rem 0;line-height:1.5;';
+      desc.textContent = 'The following pages have manually edited chunks that will be overwritten if re-pushed:';
+      modal.appendChild(desc);
+
+      // Checkbox list
+      const list = document.createElement('div');
+      list.style.cssText = 'margin-bottom:0.8rem;';
+      const checkboxes = [];
+      data.edited_urls.forEach(eu => {
+        const row = document.createElement('label');
+        row.style.cssText = 'display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0.5rem;margin-bottom:0.2rem;border-radius:5px;cursor:pointer;font-size:0.82rem;color:#333;';
+        row.onmouseenter = () => { row.style.background = '#f5f5f5'; };
+        row.onmouseleave = () => { row.style.background = ''; };
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true; // default: skip (preserve edits)
+        cb.dataset.url = eu.url;
+        checkboxes.push(cb);
+        row.appendChild(cb);
+        let shortUrl = eu.url;
+        try { shortUrl = new URL(eu.url).pathname; } catch(_) {}
+        const label = document.createElement('span');
+        label.textContent = shortUrl + ' (' + eu.edited_count + ' edited chunk' + (eu.edited_count > 1 ? 's' : '') + ')';
+        row.appendChild(label);
+        list.appendChild(row);
+      });
+      modal.appendChild(list);
+
+      const hint = document.createElement('p');
+      hint.style.cssText = 'font-size:0.78rem;color:#888;margin:0 0 0.8rem 0;line-height:1.4;';
+      hint.textContent = 'Checked pages will be SKIPPED (edits preserved). Uncheck to overwrite with fresh pipeline data.';
+      modal.appendChild(hint);
+
+      // Buttons
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display:flex;gap:0.5rem;justify-content:flex-end;';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.style.cssText = 'padding:0.35rem 0.8rem;background:none;border:1px solid #ccc;border-radius:5px;color:#666;cursor:pointer;font-size:0.82rem;';
+      cancelBtn.textContent = '✕ Cancel';
+      cancelBtn.onclick = () => overlay.remove();
+
+      const pushAllBtn = document.createElement('button');
+      pushAllBtn.type = 'button';
+      pushAllBtn.style.cssText = 'padding:0.35rem 0.8rem;background:#c0392b;border:none;border-radius:5px;color:#fff;cursor:pointer;font-size:0.82rem;';
+      pushAllBtn.textContent = 'Push all (overwrite)';
+      pushAllBtn.onclick = () => { overlay.remove(); callback([]); };
+
+      const pushSkipBtn = document.createElement('button');
+      pushSkipBtn.type = 'button';
+      pushSkipBtn.style.cssText = 'padding:0.35rem 0.8rem;background:#27ae60;border:none;border-radius:5px;color:#fff;cursor:pointer;font-size:0.82rem;font-weight:500;';
+      pushSkipBtn.textContent = 'Push with skips';
+      pushSkipBtn.onclick = () => {
+        const skipUrls = checkboxes.filter(cb => cb.checked).map(cb => cb.dataset.url);
+        overlay.remove();
+        callback(skipUrls);
+      };
+
+      btnRow.appendChild(cancelBtn);
+      btnRow.appendChild(pushAllBtn);
+      btnRow.appendChild(pushSkipBtn);
+      modal.appendChild(btnRow);
+
+      overlay.appendChild(modal);
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      document.body.appendChild(overlay);
+    }
+
     // Load settings (doc_types, models, etc.) on startup
     let _docTypes = ['product_catalog','recipe_book','faq','manual','legal','general']; // defaults, overwritten by API
     let _settingsCache = {};
@@ -3267,6 +3836,18 @@ _INDEX_HTML = """
             });
           };
           row.appendChild(chunkDelBtn);
+
+          // View chunks button
+          const viewBtn = document.createElement('button');
+          viewBtn.type = 'button';
+          viewBtn.style.cssText = 'font-size:0.75rem;padding:0.1rem 0.45rem;background:none;border:1px solid #2980b9;border-radius:4px;color:#2980b9;cursor:pointer;flex-shrink:0;';
+          viewBtn.textContent = '👁';
+          viewBtn.title = 'View chunks in Qdrant';
+          viewBtn.onclick = (e) => {
+            e.stopPropagation();
+            _toggleChunkViewer(src, row);
+          };
+          row.appendChild(viewBtn);
         }
 
         const delBtn = document.createElement('button');
@@ -4136,8 +4717,28 @@ _INDEX_HTML = """
       }
     }
 
-    async function runPushWithProgress() {
+    async function runPushWithProgress(skipUrls) {
       const btn = document.getElementById('runPush');
+
+      // Push guard: check for manually edited chunks before pushing
+      if (!skipUrls) {
+        const collName = document.getElementById('collectionSelect').value;
+        const sourceId = _selectedSourceId;
+        if (collName && sourceId) {
+          try {
+            const data = await api('/api/collections/' + encodeURIComponent(collName) + '/edited-chunks?source_id=' + encodeURIComponent(sourceId));
+            if (data.edited_urls && data.edited_urls.length > 0) {
+              // Build a temporary src object for the modal
+              const sources = (_currentCollections[collName] || {}).sources || [];
+              const src = sources.find(s => s.id === sourceId) || { id: sourceId, label: sourceId };
+              _showPushGuardModal(data, src, (urls) => runPushWithProgress(urls));
+              return;
+            }
+          } catch(_) { /* proceed without guard */ }
+        }
+        skipUrls = [];
+      }
+
       _btnRunning(btn);
       setLog(buildLog, 'Pushing to Qdrant… (embedding each chunk with OpenAI)', false);
       buildLog.style.maxHeight = '20rem';
@@ -4156,6 +4757,8 @@ _INDEX_HTML = """
           buildLog.className = 'log success';
           es.close();
           _btnSuccess(btn);
+          // Refresh collection view to update status badges
+          if (_currentSolutionId) loadSolutionCollections(_currentSolutionId);
         } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
           buildLog.textContent += '\\n❌ ' + data;
           buildLog.className = 'log error';
@@ -4166,7 +4769,9 @@ _INDEX_HTML = """
       es.onerror = () => { es.close(); _btnDone(btn); };
 
       try {
-        await api('/api/workflow/push', { step: 'push_to_qdrant', state_update: getStateUpdate() });
+        const stateUpdate = getStateUpdate();
+        if (skipUrls && skipUrls.length > 0) stateUpdate.skip_urls = skipUrls;
+        await api('/api/workflow/push', { step: 'push_to_qdrant', state_update: stateUpdate });
       } catch (e) {
         setLog(buildLog, e.message || String(e), true);
         es.close();

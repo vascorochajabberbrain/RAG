@@ -34,7 +34,7 @@ def run_step(state: WorkflowState, step: Step) -> str:
         return f"Unknown step: {step}"
 
     # Track completion and auto-save for steps that produce persistent output
-    _SAVEABLE_STEPS = {Step.FETCH, Step.TRANSLATE_AND_CLEAN, Step.CHUNK}
+    _SAVEABLE_STEPS = {Step.FETCH, Step.TRANSLATE_AND_CLEAN, Step.CHUNK, Step.PUSH_TO_QDRANT}
     if not msg.startswith("Error") and step in _SAVEABLE_STEPS:
         if step.value not in state.completed_steps:
             state.completed_steps.append(step.value)
@@ -460,29 +460,46 @@ def _run_push(state: WorkflowState) -> str:
     #   B) Collection doesn't exist yet → fresh push (original behaviour)
     embedding_model = state.embedding_model or "text-embedding-ada-002"
 
+    # ── Push guard: filter out skip_urls (manually edited chunks preserved) ──
+    chunks_to_push = state.chunks
+    items_to_push = state.scraped_items or []
+    skip_urls = state.skip_urls or []
+    skip_msg = ""
+    if skip_urls and items_to_push:
+        skip_set = set(skip_urls)
+        before = len(items_to_push)
+        items_to_push = [it for it in items_to_push if it.get("url") not in skip_set]
+        chunks_to_push = [it["text"] for it in items_to_push]
+        skipped = before - len(items_to_push)
+        if skipped:
+            skip_msg = f" (skipped {skipped} URL(s) with manually edited chunks)"
+            print(f"[push] Skipping {skipped} URLs with manually edited chunks: {skip_urls}")
+
     if coll is None and tracker._existing_collection_name(name):
         # Append mode: build a temp SCS_Collection, embed, upsert without deleting.
         from my_collections.SCS_Collection import SCS_Collection
         temp_coll = SCS_Collection(name)
-        temp_coll.append_sentences(state.chunks, state.source_label,
-                                   scraped_items=state.scraped_items or [])
+        temp_coll.append_sentences(chunks_to_push, state.source_label,
+                                   scraped_items=items_to_push)
         points = temp_coll.points_to_save(model_id=embedding_model)
         tracker.append_points_to_collection(name, points)
-        return f"Appended {len(points)} chunks to existing '{name}' in Qdrant (model={embedding_model})."
+        state.skip_urls = []  # clear after push
+        return f"Appended {len(points)} chunks to existing '{name}' in Qdrant (model={embedding_model}).{skip_msg}"
 
     # Fresh push: collection doesn't exist yet — create + save all at once.
     if coll is None:
         coll = tracker.new(name, "scs")
         state.collection_object = coll
 
-    coll.append_sentences(state.chunks, state.source_label,
-                          scraped_items=state.scraped_items or [])
+    coll.append_sentences(chunks_to_push, state.source_label,
+                          scraped_items=items_to_push)
     # Use save_collection for the first push; it calls points_to_save() internally.
     # We need to pass model_id through — override the collection's embedding call.
     # save_collection → _upsert_points(coll.points_to_save()) so patch it here:
     points = coll.points_to_save(model_id=embedding_model)
     tracker._upsert_points(name, points)
-    return f"Pushed {len(points)} chunks to '{name}' in Qdrant (model={embedding_model})."
+    state.skip_urls = []  # clear after push
+    return f"Pushed {len(points)} chunks to '{name}' in Qdrant (model={embedding_model}).{skip_msg}"
 
 
 def _get_collection_routing(state: WorkflowState) -> dict | None:
