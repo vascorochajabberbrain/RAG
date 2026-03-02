@@ -2220,7 +2220,7 @@ _HELP_HTML = """<!DOCTYPE html>
     <div class="toc">
       <div class="toc-title">Contents</div>
       <a href="#what-is-rag">What is RAG?</a>
-      <a href="#how-jb-uses-rag">How Jabberbrain Uses RAG in Chat</a>
+      <a href="#how-jb-uses-rag">How jabberBrain Uses RAG in Chat</a>
       <a href="#overview">RAG Builder Overview</a>
       <a href="#solutions">Solutions &amp; Collections</a>
       <a href="#sources">Sources</a>
@@ -2256,8 +2256,8 @@ _HELP_HTML = """<!DOCTYPE html>
     <p>The result: the chatbot answers questions using your client's real content, not generic AI knowledge. It can cite specific products, prices, recipes, or policies — and it only says things that are actually in the source material.</p>
     <div class="tip"><strong>Why not just use an LLM directly?</strong> LLMs hallucinate — they make things up. RAG constrains the answer to verified content. For a client chatbot, accuracy matters more than creativity.</div>
 
-    <h2 id="how-jb-uses-rag">How Jabberbrain Uses RAG in Chat</h2>
-    <p>Jabberbrain's chatbot uses a <strong>Hierarchical Intent Recognition System (HIRS)</strong> as its primary engine — a rule-based language system that matches user input to known intents and returns precise, client-approved responses. RAG is a <strong>fallback layer</strong> within this pipeline, not the main engine.</p>
+    <h2 id="how-jb-uses-rag">How jabberBrain Uses RAG in Chat</h2>
+    <p>jabberBrain's chatbot uses a <strong>Hierarchical Intent Recognition System (HIRS)</strong> as its primary engine — a rule-based language system that matches user input to known intents and returns precise, client-approved responses. RAG is a <strong>fallback layer</strong> within this pipeline, not the main engine.</p>
     <p>Here's how it fits into the full dialogue flow:</p>
     <ol>
       <li><strong>User sends a message</strong> to the chatbot (e.g. "What fish do you have for grilling?")</li>
@@ -2369,7 +2369,7 @@ _HELP_HTML = """<!DOCTYPE html>
     <p>Select the matching embedding model — it must be the same one used when the collection was built.</p>
 
     <h2 id="faq-generator">FAQ Table Generator</h2>
-    <p>Generates a tab-separated Q&amp;A table from a FAQ-type collection. The output is formatted for direct paste into the Jabberbrain Knowledge Editor (jBKE). Each row contains a question and its answer, separated by a tab character.</p>
+    <p>Generates a tab-separated Q&amp;A table from a FAQ-type collection. The output is formatted for direct paste into the jabberBrain Knowledge Editor (jBKE). Each row contains a question and its answer, separated by a tab character.</p>
 
     <h2 id="routing-metadata">Routing Metadata</h2>
     <p>Each collection has routing metadata used by the Session Engine to decide which collection to search for a given user query:</p>
@@ -7975,7 +7975,7 @@ _INDEX_HTML = """
 
   </script>
   <footer style="text-align:center;padding:1.2rem 0 0.8rem;font-size:0.78rem;color:#aaa;">
-    jabberbrain RAG builder &nbsp;·&nbsp; v__APP_VERSION__
+    jabberBrain RAG builder &nbsp;·&nbsp; v__APP_VERSION__
     &nbsp;&nbsp;
     <button type="button" id="btnShutdown" class="btn-shutdown" onclick="shutdownServer()"
       title="Stop the server (same as Ctrl+C in terminal)">⏹ Stop server</button>

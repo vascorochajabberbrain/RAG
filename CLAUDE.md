@@ -1,4 +1,4 @@
-# CLAUDE.md — RAG Project Context (Jabberbrain)
+# CLAUDE.md — RAG Project Context (jabberBrain)
 
 > This file is read automatically at the start of every Claude Code session.
 > Keep it updated as decisions are made. Last updated: 2026-02-25 (pipeline complete).
@@ -7,11 +7,11 @@
 
 ## Who We Are
 
-**Jabberbrain** builds an advanced chatbot platform using a proprietary **Hierarchical Intent Recognition System (HIRS)**. LLMs are used tactically, not as the primary engine, to avoid hallucination and ensure responses are exactly as clients want.
+**jabberBrain** builds an advanced chatbot platform using a proprietary **Hierarchical Intent Recognition System (HIRS)**. LLMs are used tactically, not as the primary engine, to avoid hallucination and ensure responses are exactly as clients want.
 
 ---
 
-## The Jabberbrain Chatbot Pipeline (simplified)
+## The jabberBrain Chatbot Pipeline (simplified)
 
 Each user input goes through this flow:
 
@@ -246,7 +246,7 @@ wiping existing ones — used for Run 2 (PDF) after Run 1 (website scrape).
 ## Conventions & Patterns
 
 - **One solution = one or more Qdrant collections**, each with a `routing` block in `solution_specs/solutions.yaml`
-- **Solution id maps 1:1** to a solution in the Jabberbrain Session Engine
+- **Solution id maps 1:1** to a solution in the jabberBrain Session Engine
 - **Chunking default**: hierarchical (free, good quality). Use proposition only when quality matters and cost is acceptable.
 - **New scrapers**: add a YAML in `ingestion/scrapers/configs/`, use Playwright (default) unless site is confirmed SSR.
 - **Selenium**: archived as `url_ingestion_legacy.py`. Do not use for new work.
