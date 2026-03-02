@@ -2541,7 +2541,7 @@ _INDEX_HTML = """
     /* ── Help icon & tooltip ── */
     .help-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; border-radius: 50%; background: #e3effd; color: #1976d2; font-size: 0.7rem; font-weight: 700; cursor: pointer; border: 1px solid #bbdefb; line-height: 1; vertical-align: middle; margin-left: 0.3rem; flex-shrink: 0; user-select: none; transition: background 0.15s; }
     .help-icon:hover { background: #bbdefb; }
-    .help-tip { display: none; background: #f0f0f0; border: 1px solid #ddd; border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.35rem; margin-bottom: 0.6rem; font-size: 0.82rem; color: #333; line-height: 1.5; font-weight: 400; }
+    .help-tip { display: none; background: #e8e8e8; border: 1px solid #ccc; border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.35rem; margin-bottom: 0.6rem; font-size: 0.82rem; color: #333; line-height: 1.5; font-weight: 400; }
     .help-tip.open { display: block; }
     .help-tip a { color: #1976d2; text-decoration: none; font-size: 0.8rem; }
     .help-tip a:hover { text-decoration: underline; }
