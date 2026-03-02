@@ -2219,7 +2219,9 @@ _HELP_HTML = """<!DOCTYPE html>
 
     <div class="toc">
       <div class="toc-title">Contents</div>
-      <a href="#overview">Overview</a>
+      <a href="#what-is-rag">What is RAG?</a>
+      <a href="#how-jb-uses-rag">How Jabberbrain Uses RAG in Chat</a>
+      <a href="#overview">RAG Builder Overview</a>
       <a href="#solutions">Solutions &amp; Collections</a>
       <a href="#sources">Sources</a>
       <a href="#source-config">Source Config (Files &amp; Scrapers)</a>
@@ -2242,8 +2244,49 @@ _HELP_HTML = """<!DOCTYPE html>
       <a href="#wizard-collections">Collections (Wizard)</a>
     </div>
 
-    <h2 id="overview">Overview</h2>
-    <p>The RAG Builder ingests content from files (PDF, TXT, CSV) or websites, splits it into chunks, embeds the chunks as vectors, and stores them in a Qdrant vector database. You can then test retrieval quality in the Chat tab.</p>
+    <h2 id="what-is-rag">What is RAG?</h2>
+    <p><strong>RAG (Retrieval-Augmented Generation)</strong> is a technique that gives a chatbot access to specific knowledge — product catalogs, recipes, FAQ pages, policy documents, manuals — without having to retrain an AI model.</p>
+    <p>The idea is simple:</p>
+    <ol>
+      <li><strong>Ingest</strong> — Take your client's content (website pages, PDFs, spreadsheets) and break it into small text chunks.</li>
+      <li><strong>Embed</strong> — Convert each chunk into a mathematical vector (a list of numbers) that captures its meaning. Store these vectors in a database.</li>
+      <li><strong>Retrieve</strong> — When an end user asks a question, convert their question into a vector too, then find the chunks whose vectors are most similar (i.e. most relevant).</li>
+      <li><strong>Generate</strong> — Send the retrieved chunks + the user's question to an LLM (like GPT-4o), which composes a natural-language answer grounded in the actual content.</li>
+    </ol>
+    <p>The result: the chatbot answers questions using your client's real content, not generic AI knowledge. It can cite specific products, prices, recipes, or policies — and it only says things that are actually in the source material.</p>
+    <div class="tip"><strong>Why not just use an LLM directly?</strong> LLMs hallucinate — they make things up. RAG constrains the answer to verified content. For a client chatbot, accuracy matters more than creativity.</div>
+
+    <h2 id="how-jb-uses-rag">How Jabberbrain Uses RAG in Chat</h2>
+    <p>Jabberbrain's chatbot uses a <strong>Hierarchical Intent Recognition System (HIRS)</strong> as its primary engine — a rule-based language system that matches user input to known intents and returns precise, client-approved responses. RAG is a <strong>fallback layer</strong> within this pipeline, not the main engine.</p>
+    <p>Here's how it fits into the full dialogue flow:</p>
+    <ol>
+      <li><strong>User sends a message</strong> to the chatbot (e.g. "What fish do you have for grilling?")</li>
+      <li><strong>HIRS processes the input</strong> — if it matches a known intent (e.g. a configured FAQ question), the chatbot responds with the pre-approved answer. Done.</li>
+      <li><strong>If HIRS can't find a good match</strong>, the system checks whether the question falls within a RAG scope.</li>
+      <li><strong>Collection routing</strong> — The system decides which RAG collection(s) to search:
+        <ul>
+          <li><em>Step 1 (fast, free)</em>: HIRS keyword matching against each collection's <code>keywords</code> metadata. If there's a confident match, go directly to that collection.</li>
+          <li><em>Step 2 (if uncertain)</em>: A small LLM call uses each collection's <code>description</code>, <code>typical_questions</code>, and <code>not_covered</code> metadata to pick the best 1-3 collections.</li>
+        </ul>
+      </li>
+      <li><strong>RAG retrieval</strong> — The user's question is embedded and matched against the selected collection(s) in Qdrant. The most relevant text chunks are retrieved.</li>
+      <li><strong>Answer generation</strong> — The retrieved chunks + the user's question are sent to GPT-4o, which generates a natural answer grounded in the actual content.</li>
+      <li><strong>If RAG also can't help</strong>, the chatbot falls back to a polite "I can't help with that" response.</li>
+    </ol>
+    <div class="tip"><strong>Key principle:</strong> RAG never runs first. HIRS handles the majority of questions with exact, client-approved responses. RAG only kicks in when HIRS doesn't have a match — and even then, the answer is grounded in real content, not AI guesswork.</div>
+
+    <h3>What this means for clients</h3>
+    <p>For each client solution, you build one or more RAG collections from their content. For example, an online fish store might have:</p>
+    <table>
+      <tr><th>Collection</th><th>Content</th><th>Example questions it answers</th></tr>
+      <tr><td><code>products</code></td><td>All products from the website</td><td>"What fish do you have?" / "How much is the sea bass?"</td></tr>
+      <tr><td><code>recipes</code></td><td>Recipe pages + a PDF cookbook</td><td>"How do I cook cod?" / "Any recipe with shrimp?"</td></tr>
+      <tr><td><code>pages</code></td><td>About us, FAQ, delivery info, terms</td><td>"Do you deliver to Lisbon?" / "What are your opening hours?"</td></tr>
+    </table>
+    <p>The <strong>routing metadata</strong> (keywords, description, typical questions, not covered) ensures the right collection is searched for each question. This metadata is generated automatically during the build process and can be fine-tuned manually.</p>
+
+    <h2 id="overview">RAG Builder Overview</h2>
+    <p>This tool is where you build and maintain those RAG collections. It ingests content from files (PDF, TXT, CSV) or websites, splits it into chunks, embeds the chunks as vectors, and stores them in Qdrant. You can then test retrieval quality in the Chat tab.</p>
     <p>The typical workflow is: <strong>Create collection &rarr; Fetch &rarr; Chunk &rarr; Push to Qdrant</strong>.</p>
 
     <h2 id="solutions">Solutions &amp; Collections</h2>
