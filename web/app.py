@@ -2235,7 +2235,11 @@ _HELP_HTML = """<!DOCTYPE html>
       <a href="#chat">Chat / Test Q&amp;A</a>
       <a href="#faq-generator">FAQ Table Generator</a>
       <a href="#routing-metadata">Routing Metadata</a>
+      <a href="#sync">Sync (Check for Changes)</a>
       <a href="#scraper-engines">Scraper Engines</a>
+      <a href="#wizard">Analyse Site Wizard</a>
+      <a href="#wizard-sitemaps">Sitemaps (Wizard)</a>
+      <a href="#wizard-collections">Collections (Wizard)</a>
     </div>
 
     <h2 id="overview">Overview</h2>
@@ -2288,6 +2292,10 @@ _HELP_HTML = """<!DOCTYPE html>
     <p>Embeds all chunks using the selected OpenAI model and uploads them to the Qdrant collection. Each chunk becomes a vector point with metadata (source, text, position).</p>
     <p>If the collection already has points from a previous source, new points are appended (not overwritten).</p>
 
+    <h3 id="sync">5. Sync (Check for Changes)</h3>
+    <p>Compares current source data against what's already stored in Qdrant. Detects new content, changed content, and removed pages so you can update the collection incrementally instead of rebuilding from scratch.</p>
+    <div class="tip">Sync is useful when a website is updated over time. Instead of deleting and re-pushing everything, sync shows you exactly what changed.</div>
+
     <h2 id="embedding-model">Embedding Model</h2>
     <p>Three OpenAI embedding models are available:</p>
     <table>
@@ -2338,6 +2346,37 @@ _HELP_HTML = """<!DOCTYPE html>
       <tr><td><strong>Shopify API</strong></td><td>Fast</td><td>Shopify stores. Uses the JSON product API directly — no HTML scraping.</td></tr>
     </table>
     <div class="tip">Use Playwright (default) unless you're certain the site is SSR-only. For Shopify stores, the Shopify API engine is always the best choice.</div>
+
+    <h2 id="wizard">Analyse Site Wizard</h2>
+    <p>The Analyse Site wizard automates the discovery of a website's content structure. Enter a URL and the wizard will:</p>
+    <ol>
+      <li>Fetch the site's <code>sitemap.xml</code> (and nested sitemaps)</li>
+      <li>Categorize sitemaps by content type (products, pages, recipes, etc.)</li>
+      <li>Let you drag sitemaps or individual pages into collections</li>
+      <li>Generate scraper configs and routing metadata automatically</li>
+    </ol>
+    <p>Use the "🚀 Launch" button to start, or "📂 Load session" to resume a previous analysis.</p>
+
+    <h3 id="wizard-sitemaps">Sitemaps (Wizard)</h3>
+    <p>The left panel shows all sitemaps discovered from the site. Each sitemap groups related pages (e.g. all products, all blog posts).</p>
+    <ul>
+      <li><strong>Expand</strong> (▶) — see individual pages within a sitemap</li>
+      <li><strong>Preview</strong> (👁) — view extracted text content from a page</li>
+      <li><strong>Drag</strong> — drag an entire sitemap or individual pages to a collection on the right</li>
+      <li><strong>Skip</strong> (✕) — mark irrelevant sitemaps to exclude them</li>
+      <li><strong>Search</strong> — filter pages by URL text</li>
+    </ul>
+    <div class="tip">Sitemaps are discovered from <code>sitemap.xml</code>. WordPress sites with Yoast SEO usually have clean, well-organized sitemaps.</div>
+
+    <h3 id="wizard-collections">Collections (Wizard)</h3>
+    <p>The right panel holds your target collections. Each collection becomes a separate Qdrant index.</p>
+    <ul>
+      <li><strong>+ New</strong> — create a new collection</li>
+      <li><strong>Drag targets</strong> — drop sitemaps or pages here to assign them</li>
+      <li><strong>Type</strong> — set the collection type (product_catalog, recipe_book, faq, etc.) to enable proper routing</li>
+      <li><strong>Name</strong> — the Qdrant collection name (e.g. <code>peixefresco_products</code>)</li>
+    </ul>
+    <p>When you confirm the wizard, it creates scraper configs, registers collections in <code>solutions.yaml</code>, and generates routing metadata for each collection.</p>
 
   </div>
 </body>
@@ -2754,9 +2793,21 @@ _INDEX_HTML = """
             ⚠️ Locked at collection creation — all sources pushed to the same collection must use the same model.
           </p>
         </div>
-        <button type="button" class="btn-primary" id="runCreate">1. Create collection</button>
-        <button type="button" class="btn-primary" id="runFetch">2. Fetch</button>
-        <button type="button" class="btn-translate" id="runTranslate">2b. Translate &amp; Clean (PT) 🇵🇹</button>
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+          <button type="button" class="btn-primary" id="runCreate">1. Create collection</button>
+          <span class="help-icon" onclick="toggleHelp('help-create')" title="Help">?</span>
+        </div>
+        <div id="help-create" class="help-tip">Creates a new Qdrant collection with the selected embedding model dimensions. Skipped if the collection already exists. <a href="/help#create-collection" target="_blank">Learn more &rarr;</a></div>
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+          <button type="button" class="btn-primary" id="runFetch">2. Fetch</button>
+          <span class="help-icon" onclick="toggleHelp('help-fetch')" title="Help">?</span>
+        </div>
+        <div id="help-fetch" class="help-tip">Extracts raw text from the source. For files, reads the document. For URLs, runs the configured scraper. Auto-saves state after completion. <a href="/help#fetch" target="_blank">Learn more &rarr;</a></div>
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+          <button type="button" class="btn-translate" id="runTranslate">2b. Translate &amp; Clean (PT) 🇵🇹</button>
+          <span class="help-icon" onclick="toggleHelp('help-translate')" title="Help">?</span>
+        </div>
+        <div id="help-translate" class="help-tip">Optional. Uses an LLM to translate bilingual or foreign-language content to the solution's base language and clean up artifacts. <a href="/help#translate-clean" target="_blank">Learn more &rarr;</a></div>
         <div class="progress-wrap" id="translateProgress">
           <div class="progress-bar-bg"><div class="progress-bar-fill" id="translateBar"></div></div>
           <div class="progress-label" id="translateLabel">Starting…</div>
@@ -2782,8 +2833,16 @@ _INDEX_HTML = """
             </label>
           </div>
         </div>
-        <button type="button" class="btn-primary" id="runPush">4. Push to Qdrant</button>
-        <button type="button" class="btn-sync hidden" id="runSync">5. Sync (check for changes)</button>
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+          <button type="button" class="btn-primary" id="runPush">4. Push to Qdrant</button>
+          <span class="help-icon" onclick="toggleHelp('help-push')" title="Help">?</span>
+        </div>
+        <div id="help-push" class="help-tip">Embeds all chunks using OpenAI and uploads them to Qdrant. New points are appended — existing data is not overwritten. <a href="/help#push" target="_blank">Learn more &rarr;</a></div>
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+          <button type="button" class="btn-sync hidden" id="runSync">5. Sync (check for changes)</button>
+          <span class="help-icon" onclick="toggleHelp('help-sync')" title="Help">?</span>
+        </div>
+        <div id="help-sync" class="help-tip">Compares current source data against what's already in Qdrant. Detects new, changed, or removed content so you can update incrementally. <a href="/help#sync" target="_blank">Learn more &rarr;</a></div>
         <button type="button" class="btn-secondary" id="runReset">Reset state</button> <span class="help-icon" onclick="toggleHelp('help-reset')" title="Help">?</span>
         <div id="help-reset" class="help-tip">Clears the in-memory session state only. Does <strong>not</strong> delete files on disk or data in Qdrant. <a href="/help#reset-state" target="_blank">Learn more &rarr;</a></div>
         <div id="syncResult" class="hidden" style="margin-top:0.6rem;padding:0.6rem 0.9rem;border-radius:8px;font-size:0.88rem;font-family:monospace;"></div>
@@ -2954,9 +3013,10 @@ _INDEX_HTML = """
         <div class="wizard-left">
           <div class="card" style="padding:1rem;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
-              <h2 style="margin:0;">Sitemaps</h2>
+              <h2 style="margin:0;">Sitemaps <span class="help-icon" onclick="toggleHelp('help-sitemaps')" title="Help">?</span></h2>
               <input id="wizardSearch" type="search" placeholder="Search pages…" style="width:160px;margin:0;padding:0.28rem 0.5rem;font-size:0.82rem;" oninput="_wizardOnSearch(this.value)">
             </div>
+            <div id="help-sitemaps" class="help-tip">Sitemaps discovered from the site's <code>sitemap.xml</code>. Expand a sitemap to see its pages. Drag entire sitemaps or individual pages to collections on the right. Skip irrelevant sitemaps with the ✕ button. <a href="/help#wizard-sitemaps" target="_blank">Learn more &rarr;</a></div>
             <p class="status" style="margin:0 0 0.6rem;">Drag a sitemap or page to a collection on the right. Click ▶ to expand. Click 👁 to preview page content.</p>
             <div id="wizardDiffBanner" style="display:none;" class="wiz-diff-banner"></div>
             <div id="wizardSitemapList"></div>
@@ -2967,9 +3027,10 @@ _INDEX_HTML = """
         <div class="wizard-right">
           <div class="card" style="padding:1rem;margin-bottom:0.75rem;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
-              <h2 style="margin:0;font-size:1rem;">Collections</h2>
+              <h2 style="margin:0;font-size:1rem;">Collections <span class="help-icon" onclick="toggleHelp('help-wizard-colls')" title="Help">?</span></h2>
               <button class="btn-wizard-add" onclick="wizardAddCollection()">+ New</button>
             </div>
+            <div id="help-wizard-colls" class="help-tip">Collections are Qdrant indexes where your content will be stored. Create one per content type (e.g. products, recipes, FAQ). Drag sitemaps or pages here to assign them. <a href="/help#wizard-collections" target="_blank">Learn more &rarr;</a></div>
             <div id="wizardCollList"></div>
           </div>
 
