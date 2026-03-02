@@ -86,6 +86,11 @@ def root():
     return HTMLResponse(html)
 
 
+@app.get("/help")
+def help_page():
+    return HTMLResponse(_HELP_HTML.replace("__APP_VERSION__", APP_VERSION))
+
+
 @app.post("/api/shutdown")
 def api_shutdown():
     """Gracefully shut down the server process."""
@@ -2174,6 +2179,172 @@ def sites_update_domcop(background_tasks: BackgroundTasks):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+_HELP_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Help — RAG Builder</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; color: #333; line-height: 1.6; }
+    .help-container { max-width: 780px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    h1 { font-size: 1.6rem; margin-bottom: 0.3rem; }
+    .help-version { font-size: 0.78rem; color: #888; margin-bottom: 2rem; }
+    h2 { font-size: 1.15rem; margin: 2rem 0 0.6rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; color: #0066cc; }
+    h2:first-of-type { border-top: none; margin-top: 1rem; }
+    h3 { font-size: 0.95rem; margin: 1.2rem 0 0.4rem; color: #444; }
+    p { margin-bottom: 0.7rem; font-size: 0.92rem; }
+    ul, ol { margin: 0.3rem 0 0.7rem 1.5rem; font-size: 0.92rem; }
+    li { margin-bottom: 0.3rem; }
+    code { background: #eef1f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.85rem; }
+    .tip { background: #e8f5e9; border-left: 3px solid #4caf50; padding: 0.5rem 0.75rem; border-radius: 0 6px 6px 0; margin: 0.5rem 0 0.7rem; font-size: 0.88rem; }
+    .warn { background: #fff3e0; border-left: 3px solid #ff9800; padding: 0.5rem 0.75rem; border-radius: 0 6px 6px 0; margin: 0.5rem 0 0.7rem; font-size: 0.88rem; }
+    .back-link { display: inline-block; margin-bottom: 1.5rem; color: #0066cc; text-decoration: none; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; font-size: 0.88rem; }
+    th, td { text-align: left; padding: 0.4rem 0.7rem; border: 1px solid #ddd; }
+    th { background: #f5f6fa; font-weight: 600; }
+    .toc { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+    .toc-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem; color: #444; }
+    .toc a { color: #0066cc; text-decoration: none; font-size: 0.88rem; display: block; padding: 0.15rem 0; }
+    .toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="help-container">
+    <a href="/" class="back-link">&larr; Back to RAG Builder</a>
+    <h1>RAG Builder — Help</h1>
+    <p class="help-version">v__APP_VERSION__</p>
+
+    <div class="toc">
+      <div class="toc-title">Contents</div>
+      <a href="#overview">Overview</a>
+      <a href="#solutions">Solutions &amp; Collections</a>
+      <a href="#sources">Sources</a>
+      <a href="#source-config">Source Config (Files &amp; Scrapers)</a>
+      <a href="#pipeline">Pipeline Steps</a>
+      <a href="#create-collection">1. Create Collection</a>
+      <a href="#fetch">2. Fetch</a>
+      <a href="#translate-clean">2b. Translate &amp; Clean</a>
+      <a href="#chunk">3. Chunk (Modes)</a>
+      <a href="#push">4. Push to Qdrant</a>
+      <a href="#embedding-model">Embedding Model</a>
+      <a href="#saved-state">Saved State &amp; Resume</a>
+      <a href="#reset-state">Reset State</a>
+      <a href="#chat">Chat / Test Q&amp;A</a>
+      <a href="#faq-generator">FAQ Table Generator</a>
+      <a href="#routing-metadata">Routing Metadata</a>
+      <a href="#scraper-engines">Scraper Engines</a>
+    </div>
+
+    <h2 id="overview">Overview</h2>
+    <p>The RAG Builder ingests content from files (PDF, TXT, CSV) or websites, splits it into chunks, embeds the chunks as vectors, and stores them in a Qdrant vector database. You can then test retrieval quality in the Chat tab.</p>
+    <p>The typical workflow is: <strong>Create collection &rarr; Fetch &rarr; Chunk &rarr; Push to Qdrant</strong>.</p>
+
+    <h2 id="solutions">Solutions &amp; Collections</h2>
+    <p>A <strong>solution</strong> represents a client or project (e.g. "Peixe Fresco"). Each solution has one or more <strong>collections</strong> — separate Qdrant indexes for different content types (products, recipes, FAQ, etc.).</p>
+    <p>Select a solution from the top bar. Its collections appear in the Build tab. You can create new collections or work with existing ones.</p>
+    <div class="tip">One solution can have multiple collections. Each collection is an independent Qdrant index with its own vector space.</div>
+
+    <h2 id="sources">Sources</h2>
+    <p>Each collection can have multiple <strong>sources</strong> — independent content inputs that get fetched and chunked separately, then pushed into the same Qdrant collection.</p>
+    <p>For example, a recipes collection might have two sources: one from a website scrape and one from a PDF cookbook.</p>
+
+    <h2 id="source-config">Source Config (Files &amp; Scrapers)</h2>
+    <p>After selecting a source, configure it:</p>
+    <ul>
+      <li><strong>PDF / TXT / CSV</strong> — pick a local file using the Browse button</li>
+      <li><strong>Website (URL)</strong> — enter a scraper name (a YAML config in <code>ingestion/scrapers/configs/</code>)</li>
+    </ul>
+    <p>For websites, choose a <strong>scraping engine</strong> (see <a href="#scraper-engines">Scraper Engines</a> below).</p>
+
+    <h2 id="pipeline">Pipeline Steps</h2>
+    <p>The pipeline runs in order: Create &rarr; Fetch &rarr; (Translate) &rarr; Chunk &rarr; Push. Each step builds on the previous one. State is auto-saved after key steps so you can resume later.</p>
+
+    <h3 id="create-collection">1. Create Collection</h3>
+    <p>Creates a new Qdrant collection with the selected embedding model dimensions. If the collection already exists, this step is skipped.</p>
+    <div class="warn">The embedding model is locked at creation time. All sources pushed to the same collection must use the same model.</div>
+
+    <h3 id="fetch">2. Fetch</h3>
+    <p>Extracts raw text from the source. For files this reads the document content. For URLs it runs the configured scraper to crawl the website.</p>
+    <p>After fetching, the raw text is stored in the workflow state and auto-saved to disk.</p>
+
+    <h3 id="translate-clean">2b. Translate &amp; Clean</h3>
+    <p>Optional step for bilingual or foreign-language documents. Uses an LLM to translate content to the solution's base language and clean up formatting artifacts.</p>
+    <p>Useful for bilingual PDFs (e.g. Portuguese + Spanish) where you want a clean single-language output.</p>
+
+    <h3 id="chunk">3. Chunk (Modes)</h3>
+    <p>Splits the fetched text into smaller pieces for embedding. Three modes available:</p>
+    <table>
+      <tr><th>Mode</th><th>Speed</th><th>Cost</th><th>How it works</th><th>Best for</th></tr>
+      <tr><td><strong>Simple</strong></td><td>Fast</td><td>Free</td><td>Splits by character count with overlap</td><td>Quick tests, most content</td></tr>
+      <tr><td><strong>Hierarchical</strong></td><td>Medium</td><td>Free</td><td>Large parent context + small child passages</td><td>Structured docs (recipes, manuals, catalogs)</td></tr>
+      <tr><td><strong>Proposition</strong></td><td>Slow</td><td>$$</td><td>LLM rewrites each chunk into atomic self-contained facts</td><td>Dense academic text, precision-critical content</td></tr>
+    </table>
+    <div class="tip">Start with <strong>Simple</strong> for testing. Use <strong>Hierarchical</strong> for production — it gives the best quality-to-cost ratio. Use <strong>Proposition</strong> only when maximum retrieval precision is needed and cost is acceptable.</div>
+
+    <h3 id="push">4. Push to Qdrant</h3>
+    <p>Embeds all chunks using the selected OpenAI model and uploads them to the Qdrant collection. Each chunk becomes a vector point with metadata (source, text, position).</p>
+    <p>If the collection already has points from a previous source, new points are appended (not overwritten).</p>
+
+    <h2 id="embedding-model">Embedding Model</h2>
+    <p>Three OpenAI embedding models are available:</p>
+    <table>
+      <tr><th>Model</th><th>Dimensions</th><th>Notes</th></tr>
+      <tr><td><code>text-embedding-ada-002</code></td><td>1536</td><td>Default. Widest compatibility.</td></tr>
+      <tr><td><code>text-embedding-3-small</code></td><td>1536</td><td>Newer, cheaper. Drop-in upgrade for ada-002.</td></tr>
+      <tr><td><code>text-embedding-3-large</code></td><td>3072</td><td>Highest quality. NOT compatible with 1536-dim collections.</td></tr>
+    </table>
+    <div class="warn">The model is locked when the collection is created. Mixing models in the same collection will produce incorrect search results.</div>
+
+    <h2 id="saved-state">Saved State &amp; Resume</h2>
+    <p>The pipeline auto-saves progress to a <code>.rag_state.json</code> file after Fetch, Translate, and Chunk steps. When you return to a source with saved state, you'll see a green "Saved state found" banner.</p>
+    <ul>
+      <li><strong>Resume</strong> — loads the saved state and continues from where you left off</li>
+      <li><strong>Start fresh</strong> — ignores the saved state and starts a new pipeline run (the state file is kept on disk)</li>
+    </ul>
+
+    <h2 id="reset-state">Reset State</h2>
+    <p>The "Reset state" button clears the in-memory workflow state for the current session. It does <strong>not</strong> delete any files on disk or data in Qdrant — it only resets the session so you can start fresh without reloading the page.</p>
+
+    <h2 id="chat">Chat / Test Q&amp;A</h2>
+    <p>The Chat tab lets you test retrieval quality by asking questions against a collection. The pipeline is:</p>
+    <ol>
+      <li>Your question is rewritten by GPT-4o-mini for better retrieval</li>
+      <li>The rewritten query is embedded and used for similarity search in Qdrant</li>
+      <li>Retrieved chunks + your question are sent to GPT-4o to generate the answer</li>
+    </ol>
+    <p>Select the matching embedding model — it must be the same one used when the collection was built.</p>
+
+    <h2 id="faq-generator">FAQ Table Generator</h2>
+    <p>Generates a tab-separated Q&amp;A table from a FAQ-type collection. The output is formatted for direct paste into the Jabberbrain Knowledge Editor (jBKE). Each row contains a question and its answer, separated by a tab character.</p>
+
+    <h2 id="routing-metadata">Routing Metadata</h2>
+    <p>Each collection has routing metadata used by the Session Engine to decide which collection to search for a given user query:</p>
+    <ul>
+      <li><strong>Keywords</strong> — terms that trigger this collection via HIRS pattern matching</li>
+      <li><strong>Description</strong> — one sentence describing what this collection contains</li>
+      <li><strong>Typical questions</strong> — example questions this collection answers</li>
+      <li><strong>Not covered</strong> — topics explicitly NOT in this collection (helps the LLM rule it out)</li>
+    </ul>
+    <p>Routing metadata can be auto-generated (via the "Suggest" button) or manually edited.</p>
+
+    <h2 id="scraper-engines">Scraper Engines</h2>
+    <table>
+      <tr><th>Engine</th><th>Speed</th><th>Best for</th></tr>
+      <tr><td><strong>Playwright</strong></td><td>Normal</td><td>Default. Handles JavaScript, SPAs, dynamic content, Elementor sites.</td></tr>
+      <tr><td><strong>httpx (fast)</strong></td><td>~10x faster</td><td>SSR-only sites (WordPress, WooCommerce without Elementor). No browser needed.</td></tr>
+      <tr><td><strong>Shopify API</strong></td><td>Fast</td><td>Shopify stores. Uses the JSON product API directly — no HTML scraping.</td></tr>
+    </table>
+    <div class="tip">Use Playwright (default) unless you're certain the site is SSR-only. For Shopify stores, the Shopify API engine is always the best choice.</div>
+
+  </div>
+</body>
+</html>
+"""
+
+
 _INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -2328,6 +2499,13 @@ _INDEX_HTML = """
     .wiz-modal-btn-desc { font-size: 0.75rem; color: inherit; opacity: 0.8; display: block; margin-top: 0.1rem; }
     .wiz-modal-cancel { display: block; text-align: center; margin-top: 0.9rem; font-size: 0.85rem; color: #888; cursor: pointer; background: none; border: none; }
     .wiz-modal-cancel:hover { color: #333; text-decoration: underline; }
+    /* ── Help icon & tooltip ── */
+    .help-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; border-radius: 50%; background: #e3effd; color: #1976d2; font-size: 0.7rem; font-weight: 700; cursor: pointer; border: 1px solid #bbdefb; line-height: 1; vertical-align: middle; margin-left: 0.3rem; flex-shrink: 0; user-select: none; transition: background 0.15s; }
+    .help-icon:hover { background: #bbdefb; }
+    .help-tip { display: none; background: #f5f8ff; border: 1px solid #c8d8f0; border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.35rem; font-size: 0.82rem; color: #333; line-height: 1.5; font-weight: 400; }
+    .help-tip.open { display: block; }
+    .help-tip a { color: #1976d2; text-decoration: none; font-size: 0.8rem; }
+    .help-tip a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -2335,7 +2513,10 @@ _INDEX_HTML = """
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.1rem">
       <h1 style="margin:0">RAG – Build &amp; Chat</h1>
       <script>if("__DEV_MODE__"==="1")document.currentScript.previousElementSibling.insertAdjacentHTML('beforeend',' <span style="font-size:0.55em;padding:0.15rem 0.5rem;border-radius:4px;background:#ff6b00;color:#fff;vertical-align:middle;letter-spacing:0.05em;">DEV</span>')</script>
-      <span id="serverStatusBadge" style="font-size:0.8rem;font-weight:600;padding:0.2rem 0.65rem;border-radius:12px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;" title="Server status">&#9679; Online</span>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <a href="/help" target="_blank" style="font-size:0.8rem;font-weight:500;color:#1976d2;text-decoration:none;padding:0.2rem 0.55rem;border-radius:12px;background:#e3effd;border:1px solid #bbdefb;" title="Open help page">? Help</a>
+        <span id="serverStatusBadge" style="font-size:0.8rem;font-weight:600;padding:0.2rem 0.65rem;border-radius:12px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;" title="Server status">&#9679; Online</span>
+      </div>
     </div>
     <div class="global-sol-wrap" style="margin:0.3rem 0 0.8rem 0;">
       <label>Solution:</label>
@@ -2363,7 +2544,8 @@ _INDEX_HTML = """
 
     <div id="panel-build" class="panel hidden">
       <div class="card">
-        <h2>1. Collection</h2>
+        <h2>1. Collection <span class="help-icon" onclick="toggleHelp('help-collection')" title="Help">?</span></h2>
+        <div id="help-collection" class="help-tip">A <strong>solution</strong> is a client or project. Each solution has one or more <strong>collections</strong> — separate Qdrant indexes for different content types. <a href="/help#solutions" target="_blank">Learn more &rarr;</a></div>
 
         <!-- Inline language editor (hidden by default) -->
         <div id="solLangEditor" style="display:none;background:#f8faff;border:1px solid #c0d4f0;border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.5rem;font-size:0.875rem;">
@@ -2430,9 +2612,10 @@ _INDEX_HTML = """
       <!-- 2. Sources list -->
       <div class="card" id="sourcesCard">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-          <h2 style="margin:0;">2. Sources</h2>
+          <h2 style="margin:0;">2. Sources <span class="help-icon" onclick="toggleHelp('help-sources')" title="Help">?</span></h2>
           <button type="button" class="btn-secondary" id="btnAddSource" onclick="showAddSourceForm()" style="font-size:0.82rem;padding:0.25rem 0.65rem;">+ Add source</button>
         </div>
+        <div id="help-sources" class="help-tip">Each collection can have multiple sources — independent content inputs (files, URLs) fetched and chunked separately, then pushed into the same Qdrant collection. <a href="/help#sources" target="_blank">Learn more &rarr;</a></div>
         <p style="font-size:0.82rem;color:#888;margin:0 0 0.5rem;">Each source is fetched and chunked independently, then pushed to the same Qdrant collection.</p>
         <div id="sourcesList"></div>
         <!-- Inline add-source form (hidden by default) -->
@@ -2455,7 +2638,8 @@ _INDEX_HTML = """
 
       <!-- 3. Source config (shown when a source is selected) -->
       <div class="card" id="sourceConfigCard" style="display:none;">
-        <h2>3. Source config <span id="sourceConfigLabel" style="font-weight:400;color:#888;font-size:0.85rem;"></span></h2>
+        <h2>3. Source config <span id="sourceConfigLabel" style="font-weight:400;color:#888;font-size:0.85rem;"></span> <span class="help-icon" onclick="toggleHelp('help-source-config')" title="Help">?</span></h2>
+        <div id="help-source-config" class="help-tip">Configure how this source is fetched. For files (PDF/TXT/CSV), pick a local file. For websites, enter a scraper name and choose an engine. <a href="/help#source-config" target="_blank">Learn more &rarr;</a></div>
         <label>Source type</label>
         <select id="sourceType" onchange="onSourceTypeChange()">
           <option value="pdf">PDF file</option>
@@ -2511,7 +2695,8 @@ _INDEX_HTML = """
                 <input id="loginSubmitSel" type="text" placeholder="Submit selector" style="flex:1;min-width:140px;padding:0.22rem 0.4rem;border:1px solid #ddd;border-radius:5px;font-size:0.77rem;" />
               </div>
             </div>
-          <label style="margin-top:0.6rem;">Scraping engine</label>
+          <label style="margin-top:0.6rem;">Scraping engine <span class="help-icon" onclick="toggleHelp('help-scraper-engine')" title="Help">?</span></label>
+          <div id="help-scraper-engine" class="help-tip">Playwright is the safe default for all sites. Use httpx only for confirmed SSR-only sites (much faster). Shopify API is best for Shopify stores. <a href="/help#scraper-engines" target="_blank">Learn more &rarr;</a></div>
           <div style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.9rem;margin-top:0.2rem;">
             <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
               <input type="radio" name="scraperEngine" value="playwright" checked onchange="onScraperEngineChange()" style="width:auto;margin-top:2px;">
@@ -2551,12 +2736,14 @@ _INDEX_HTML = """
 
       <!-- 4. Run pipeline (shown when a source is selected) -->
       <div class="card" id="pipelineCard" style="display:none;">
-        <h2>4. Run pipeline</h2>
+        <h2>4. Run pipeline <span class="help-icon" onclick="toggleHelp('help-pipeline')" title="Help">?</span></h2>
+        <div id="help-pipeline" class="help-tip">Run each step in order. State is auto-saved after Fetch, Translate, and Chunk so you can resume later. <a href="/help#pipeline" target="_blank">Learn more &rarr;</a></div>
         <p class="status">Create collection → Fetch → (Translate &amp; Clean) → Chunk → Push to Qdrant</p>
         <div style="margin-bottom:0.85rem;">
           <label title="The OpenAI embedding model used to vectorize text chunks. The vector dimension is fixed at collection creation and cannot be changed afterwards. Default: text-embedding-ada-002 (1536 dims).">
-            Embedding model
+            Embedding model <span class="help-icon" onclick="toggleHelp('help-embedding')" title="Help">?</span>
           </label>
+          <div id="help-embedding" class="help-tip">The embedding model converts text to vectors. It's locked at collection creation — all sources in the same collection must use the same model. ada-002 and 3-small are interchangeable (1536 dims), but 3-large (3072 dims) is not compatible. <a href="/help#embedding-model" target="_blank">Learn more &rarr;</a></div>
           <select id="embeddingModel"
             title="text-embedding-ada-002: original model, 1536 dims — safest default, widest compatibility. text-embedding-3-small: newer, cheaper, same 1536 dims — good drop-in upgrade. text-embedding-3-large: highest quality, 3072 dims — NOT compatible with ada-002 or 3-small collections.">
             <option value="text-embedding-ada-002" selected>text-embedding-ada-002 — default · 1536 dims</option>
@@ -2574,11 +2761,12 @@ _INDEX_HTML = """
           <div class="progress-bar-bg"><div class="progress-bar-fill" id="translateBar"></div></div>
           <div class="progress-label" id="translateLabel">Starting…</div>
         </div>
-        <div style="margin-top:0.75rem;margin-bottom:0.5rem;">
+        <div style="margin-top:0.75rem;margin-bottom:0.5rem;border:1px solid #ccc;border-radius:8px;padding:0.75rem 1rem;background:#fafafa;">
           <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem;">
             <button type="button" class="btn-primary" id="runChunk">3. Chunk</button>
-            <span style="font-size:0.9rem;font-weight:500;color:#333;">Mode:</span>
+            <span style="font-size:0.9rem;font-weight:500;color:#333;">Mode: <span class="help-icon" onclick="toggleHelp('help-chunk')" title="Help">?</span></span>
           </div>
+          <div id="help-chunk" class="help-tip">Start with <strong>Simple</strong> for testing. Use <strong>Hierarchical</strong> for production (best quality-to-cost ratio). Use <strong>Proposition</strong> only when maximum precision is needed (LLM cost applies). <a href="/help#chunk" target="_blank">Learn more &rarr;</a></div>
           <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.9rem;padding-left:0.25rem;">
             <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
               <input type="radio" name="chunkMode" value="simple" checked style="margin-top:0.2rem;width:auto;">
@@ -2596,7 +2784,8 @@ _INDEX_HTML = """
         </div>
         <button type="button" class="btn-primary" id="runPush">4. Push to Qdrant</button>
         <button type="button" class="btn-sync hidden" id="runSync">5. Sync (check for changes)</button>
-        <button type="button" class="btn-secondary" id="runReset">Reset state</button>
+        <button type="button" class="btn-secondary" id="runReset">Reset state</button> <span class="help-icon" onclick="toggleHelp('help-reset')" title="Help">?</span>
+        <div id="help-reset" class="help-tip">Clears the in-memory session state only. Does <strong>not</strong> delete files on disk or data in Qdrant. <a href="/help#reset-state" target="_blank">Learn more &rarr;</a></div>
         <div id="syncResult" class="hidden" style="margin-top:0.6rem;padding:0.6rem 0.9rem;border-radius:8px;font-size:0.88rem;font-family:monospace;"></div>
         <div id="buildLog" class="log"></div>
       </div>
@@ -2604,7 +2793,8 @@ _INDEX_HTML = """
 
     <div id="panel-chat" class="panel hidden">
       <div class="card">
-        <h2>Chat with a solution</h2>
+        <h2>Chat with a solution <span class="help-icon" onclick="toggleHelp('help-chat')" title="Help">?</span></h2>
+        <div id="help-chat" class="help-tip">Test retrieval quality by asking questions against a collection. Your query is rewritten, embedded, matched in Qdrant, then GPT-4o generates the answer. <a href="/help#chat" target="_blank">Learn more &rarr;</a></div>
         <div id="chatNoSolutionMsg" style="margin-bottom:0.6rem;">
           <p class="status" style="margin:0;color:#888;">Select a solution from the top bar to start chatting.</p>
         </div>
@@ -2613,8 +2803,9 @@ _INDEX_HTML = """
           <select id="chatCollectionSelect" style="margin-bottom:0.75rem;"></select>
         </div>
         <label title="Must match the embedding model used when the collection was built. Default: text-embedding-ada-002.">
-          Embedding model
+          Embedding model <span class="help-icon" onclick="toggleHelp('help-chat-embedding')" title="Help">?</span>
         </label>
+        <div id="help-chat-embedding" class="help-tip">Must match the model used when the collection was built. Using a different model will return incorrect results. <a href="/help#embedding-model" target="_blank">Learn more &rarr;</a></div>
         <select id="chatEmbeddingModel"
           title="Select the embedding model that was used to ingest this collection. Using a different model will return incorrect results. text-embedding-ada-002 is the default (1536 dims). text-embedding-3-small is 1536 dims. text-embedding-3-large is 3072 dims.">
           <option value="text-embedding-ada-002" selected>text-embedding-ada-002 — default · 1536 dims</option>
@@ -2627,7 +2818,8 @@ _INDEX_HTML = """
         <div id="qaResult" class="log"></div>
         <!-- FAQ Table Generation -->
         <div id="faqTableSection" style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid #eee;">
-          <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.6rem;">📋 FAQ Table Generator</div>
+          <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.6rem;">📋 FAQ Table Generator <span class="help-icon" onclick="toggleHelp('help-faq')" title="Help">?</span></div>
+          <div id="help-faq" class="help-tip">Generates a tab-separated Q&amp;A table from a FAQ collection, formatted for direct paste into the jBKE Knowledge Editor. <a href="/help#faq-generator" target="_blank">Learn more &rarr;</a></div>
           <p style="font-size:0.82rem;color:#666;margin:0 0 0.75rem;">Generate a tab-separated Q&amp;A table from any FAQ collection — paste directly into jBKE Knowledge Editor.</p>
           <div id="faqCollList" style="font-size:0.83rem;color:#888;font-style:italic;">Loading FAQ collections…</div>
         </div>
@@ -2981,6 +3173,16 @@ _INDEX_HTML = """
       el.textContent = msg;
       el.className = 'log' + (isError ? ' error' : ' success');
     };
+
+    // ── Help tooltip toggle ────────────────────────────────────────────────
+    function toggleHelp(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const isOpen = el.classList.contains('open');
+      // close all open tips first
+      document.querySelectorAll('.help-tip.open').forEach(t => t.classList.remove('open'));
+      if (!isOpen) el.classList.add('open');
+    }
 
     // ── Inline confirmation strip ───────────────────────────────────────────
     // Shows a confirmation bar below the trigger button with a descriptive
