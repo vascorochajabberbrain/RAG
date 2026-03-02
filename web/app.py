@@ -2474,10 +2474,21 @@ _INDEX_HTML = """
           </div>
           <div id="sourcePathFull" style="font-size:0.75rem;color:#aaa;margin-bottom:0.3rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;" title=""></div>
           <div id="recentFiles" style="display:none;margin-bottom:0.6rem;"></div>
-          <div id="resumeBanner" style="display:none;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;margin-bottom:0.75rem;font-size:0.9rem;">
-            <strong>💾 Saved state found!</strong> <span id="resumeInfo"></span>
-            <button type="button" onclick="resumeState()" style="margin-left:0.75rem;padding:0.25rem 0.75rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">Resume →</button>
-            <button type="button" onclick="dismissResume()" style="margin-left:0.4rem;padding:0.25rem 0.5rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">Start fresh</button>
+          <div id="resumeBanner" style="display:none;margin-bottom:0.75rem;">
+            <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;font-size:0.9rem;">
+              <strong>💾 Saved state found!</strong> <span id="resumeInfo"></span>
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+              <button type="button" onclick="resumeState()" style="padding:0.4rem 1rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Resume →</button>
+              <button type="button" id="startFreshBtn" onclick="confirmStartFresh()" style="padding:0.4rem 1rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Start fresh</button>
+            </div>
+            <div id="startFreshConfirm" style="display:none;margin-top:0.4rem;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.5rem 0.75rem;font-size:0.83rem;">
+              <span style="color:#e65100;">⚠ This will ignore your saved progress and start a new pipeline run. The saved state file is kept on disk.</span>
+              <div style="margin-top:0.4rem;display:flex;gap:0.4rem;">
+                <button type="button" onclick="doStartFresh()" style="padding:0.25rem 0.75rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Yes, start fresh</button>
+                <button type="button" onclick="cancelStartFresh()" style="padding:0.25rem 0.75rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
+              </div>
+            </div>
           </div>
         </div>
         <div id="scraperRow" class="hidden">
@@ -2519,10 +2530,21 @@ _INDEX_HTML = """
             <label>Shop URL</label>
             <input type="text" id="shopUrl" placeholder="https://mystore.myshopify.com">
           </div>
-          <div id="urlResumeBanner" style="display:none;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;margin-top:0.75rem;font-size:0.9rem;">
-            <strong>💾 Saved state found!</strong> <span id="urlResumeInfo"></span>
-            <button type="button" onclick="resumeUrlState()" style="margin-left:0.75rem;padding:0.25rem 0.75rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">Resume →</button>
-            <button type="button" onclick="dismissUrlResume()" style="margin-left:0.4rem;padding:0.25rem 0.5rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">Start fresh</button>
+          <div id="urlResumeBanner" style="display:none;margin-top:0.75rem;">
+            <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;font-size:0.9rem;">
+              <strong>💾 Saved state found!</strong> <span id="urlResumeInfo"></span>
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+              <button type="button" onclick="resumeUrlState()" style="padding:0.4rem 1rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Resume →</button>
+              <button type="button" id="urlStartFreshBtn" onclick="confirmUrlStartFresh()" style="padding:0.4rem 1rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Start fresh</button>
+            </div>
+            <div id="urlStartFreshConfirm" style="display:none;margin-top:0.4rem;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.5rem 0.75rem;font-size:0.83rem;">
+              <span style="color:#e65100;">⚠ This will ignore your saved progress and start a new pipeline run. The saved state file is kept on disk.</span>
+              <div style="margin-top:0.4rem;display:flex;gap:0.4rem;">
+                <button type="button" onclick="doUrlStartFresh()" style="padding:0.25rem 0.75rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Yes, start fresh</button>
+                <button type="button" onclick="cancelUrlStartFresh()" style="padding:0.25rem 0.75rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -4416,6 +4438,9 @@ _INDEX_HTML = """
           const items = res.scraped_items_count ? ` ${res.scraped_items_count} scraped pages.` : '';
           document.getElementById('urlResumeInfo').textContent = `Steps done: ${steps}.${items}${chunks}`;
           document.getElementById('urlResumeBanner').style.display = 'block';
+          document.getElementById('urlStartFreshConfirm').style.display = 'none';
+          // Hide pipeline until user chooses Resume or Start fresh
+          document.getElementById('pipelineCard').style.display = 'none';
         } else {
           _urlSavedStatePath = null;
           document.getElementById('urlResumeBanner').style.display = 'none';
@@ -4436,14 +4461,24 @@ _INDEX_HTML = """
         }).then(r => r.json());
         setLog(buildLog, res.message || res.detail, !!res.detail);
         document.getElementById('urlResumeBanner').style.display = 'none';
+        document.getElementById('pipelineCard').style.display = 'block';
       } catch(e) {
         setLog(buildLog, 'Resume failed: ' + e.message, true);
       }
     }
 
-    function dismissUrlResume() {
+    function confirmUrlStartFresh() {
+      document.getElementById('urlStartFreshConfirm').style.display = 'block';
+    }
+
+    function cancelUrlStartFresh() {
+      document.getElementById('urlStartFreshConfirm').style.display = 'none';
+    }
+
+    function doUrlStartFresh() {
       document.getElementById('urlResumeBanner').style.display = 'none';
       _urlSavedStatePath = null;
+      document.getElementById('pipelineCard').style.display = 'block';
     }
 
     // Show/hide Shopify URL field based on engine selection
@@ -4636,6 +4671,9 @@ _INDEX_HTML = """
             : 'Empty state file found.';
           document.getElementById('resumeInfo').innerHTML = info;
           document.getElementById('resumeBanner').style.display = 'block';
+          document.getElementById('startFreshConfirm').style.display = 'none';
+          // Hide pipeline until user chooses Resume or Start fresh
+          document.getElementById('pipelineCard').style.display = 'none';
           // Pre-fill collection name if available
           if (res.collection_name && !document.getElementById('collectionName').value.trim()) {
             document.getElementById('collectionName').value = res.collection_name;
@@ -4649,10 +4687,20 @@ _INDEX_HTML = """
     function hideBanner() {
       _savedStatePath = null;
       document.getElementById('resumeBanner').style.display = 'none';
+      document.getElementById('startFreshConfirm').style.display = 'none';
     }
 
-    function dismissResume() {
+    function confirmStartFresh() {
+      document.getElementById('startFreshConfirm').style.display = 'block';
+    }
+
+    function cancelStartFresh() {
+      document.getElementById('startFreshConfirm').style.display = 'none';
+    }
+
+    function doStartFresh() {
       hideBanner();
+      document.getElementById('pipelineCard').style.display = 'block';
     }
 
     async function resumeState() {
@@ -4670,6 +4718,7 @@ _INDEX_HTML = """
           if (cn && !cn.value.trim()) cn.value = res.state.collection_name;
         }
         hideBanner();
+        document.getElementById('pipelineCard').style.display = 'block';
       } catch(e) {
         setLog(buildLog, 'Failed to resume: ' + e.message, true);
       }
