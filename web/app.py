@@ -7687,11 +7687,18 @@ _INDEX_HTML = """
         const res = await fetch('/api/wizard/list-saves');
         const data = await res.json();
         dd.innerHTML = '';
-        const saves = data.saves || [];
+        let saves = data.saves || [];
+        // Filter by current solution if one is selected
+        if (_currentSolutionId) {
+          const solKey = _currentSolutionId.trim().toLowerCase().replace(/\s+/g, '_');
+          saves = saves.filter(s => s.solution_id === solKey);
+        }
         if (!saves.length) {
           const em = document.createElement('span');
           em.className = 'wiz-load-empty';
-          em.textContent = 'No saved sessions yet.';
+          em.textContent = _currentSolutionId
+            ? 'No saved sessions for this solution.'
+            : 'No saved sessions yet.';
           dd.appendChild(em);
           return;
         }
