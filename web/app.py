@@ -6212,6 +6212,7 @@ _INDEX_HTML = """
 
     // Helper: get origins (sitemap catIds) that have pages in this collection
     function _collectionOrigins(c) {
+      if (!c) return new Map();
       const origins = new Map(); // origin_id → {origin, count, excludedCount}
       for (const p of (c.pages || [])) {
         const key = p.origin_id || '__manual__';
@@ -6224,6 +6225,7 @@ _INDEX_HTML = """
     }
 
     function _collectionIncludedPages(c) {
+      if (!c) return [];
       return (c.pages || []).filter(p => p.status === 'included');
     }
 
@@ -7335,6 +7337,7 @@ _INDEX_HTML = """
 
       for (const item of merged) {
         const { source, wizColl: c, apiColl } = item;
+        if (!c && source !== 'qdrant') continue; // skip broken entries
         const block = document.createElement('div');
         block.className = 'wiz-coll-block';
         if (source === 'local') {
