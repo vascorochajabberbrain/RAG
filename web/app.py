@@ -4048,7 +4048,7 @@ _INDEX_HTML = """
     let _currentCollections = {};
     let _selectedSourceId = null; // currently selected source within the active collection
 
-    async function loadSolutionCollections(solId) {
+    async function loadSolutionCollections(solId, {autoSelect = true} = {}) {
       const collSelect = document.getElementById('collectionSelect');
       collSelect.innerHTML = '<option value="">Loading…</option>';
       try {
@@ -4077,13 +4077,15 @@ _INDEX_HTML = """
         // Render sub-collection pills
         renderSubCollectionPicker(res.collections, solId);
 
-        // Auto-select first existing, or first option
-        const first = res.collections.find(c => c.exists) || res.collections[0];
-        if (first) {
-          collSelect.value = first.name;
-          onCollectionSelect();
-        } else {
-          onCollectionSelect();
+        // Auto-select first existing, or first option (skip when caller will select)
+        if (autoSelect) {
+          const first = res.collections.find(c => c.exists) || res.collections[0];
+          if (first) {
+            collSelect.value = first.name;
+            onCollectionSelect();
+          } else {
+            onCollectionSelect();
+          }
         }
       } catch(e) {
         collSelect.innerHTML = '<option value="__new__">＋ Create new collection…</option>';
@@ -7458,7 +7460,7 @@ _INDEX_HTML = """
 
       if (canonicalSolId) {
         try {
-          await loadSolutionCollections(canonicalSolId);
+          await loadSolutionCollections(canonicalSolId, {autoSelect: false});
           const collSel = document.getElementById('collectionSelect');
           if (collSel && collectionName) {
             const opts = Array.from(collSel.options).filter(o => o.value && o.value !== '__new__');
@@ -7470,10 +7472,13 @@ _INDEX_HTML = """
               const normTarget = norm(collectionName);
               target = opts.find(o => norm(o.value) === normTarget);
             }
-            // Partial: check if one contains the other
+            // Partial: target ends with the collection suffix (e.g. "peixefresco_faq" matches option "peixefresco_faq_pages")
             if (!target) {
               const normTarget = collectionName.toLowerCase();
-              target = opts.find(o => o.value.toLowerCase().includes(normTarget) || normTarget.includes(o.value.toLowerCase()));
+              target = opts.find(o => {
+                const ov = o.value.toLowerCase();
+                return ov.includes(normTarget) || normTarget.includes(ov);
+              });
             }
             if (target) {
               collSel.value = target.value;
@@ -7482,6 +7487,14 @@ _INDEX_HTML = """
               const coll = _currentCollections[target.value];
               const sources = (coll && coll.sources) || [];
               if (sources.length) selectSource(sources[0].id);
+            } else {
+              // No match found — fall back to auto-selecting first collection
+              console.warn('[Work with RAG] No collection match for "' + collectionName + '" in dropdown:', opts.map(o => o.value));
+              const first = opts[0];
+              if (first) {
+                collSel.value = first.value;
+                onCollectionSelect();
+              }
             }
           }
         } catch(e) { /* ignore */ }
