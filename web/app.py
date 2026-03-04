@@ -7296,17 +7296,8 @@ _INDEX_HTML = """
           nameWrap.appendChild(qdrantRow);
         }
 
-        // Orange dot if collection has unsaved changes vs solutions.yaml
-        if (c && source !== 'qdrant') {
-          const fp = _collFingerprint(c);
-          const savedFp = _wizardCollFingerprints[c._id];
-          if (!savedFp || savedFp !== fp) {
-            const dot = document.createElement('span');
-            dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;background:#e65100;flex-shrink:0;margin-left:0.3rem;';
-            dot.title = 'Unsaved changes — not yet in solutions.yaml';
-            top.appendChild(dot);
-          }
-        }
+        // Track if collection has unsaved changes (used to style save button)
+        const collUnsaved = c && source !== 'qdrant' && (!_wizardCollFingerprints[c._id] || _wizardCollFingerprints[c._id] !== _collFingerprint(c));
         top.appendChild(nameWrap);
 
         // doc_type selector (editable for local/both, readonly display for qdrant)
@@ -7322,8 +7313,9 @@ _INDEX_HTML = """
         // Save + Remove buttons (local/both only)
         if (source !== 'qdrant') {
           const saveBtn = document.createElement('button');
-          saveBtn.style.cssText = 'font-size:0.7rem;padding:0.15rem 0.4rem;background:#fff;color:#1a5276;border:1px solid #1a5276;border-radius:4px;cursor:pointer;white-space:nowrap;';
-          saveBtn.title = 'Save this collection to solutions.yaml';
+          saveBtn.style.cssText = 'font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;cursor:pointer;white-space:nowrap;'
+            + (collUnsaved ? 'background:#e65100;color:#fff;border:1px solid #e65100;' : 'background:#fff;color:#1a5276;border:1px solid #1a5276;');
+          saveBtn.title = collUnsaved ? 'Unsaved changes — click to save to solutions.yaml' : 'Save this collection to solutions.yaml';
           saveBtn.textContent = '💾';
           saveBtn.onclick = async () => {
             saveBtn.disabled = true; saveBtn.textContent = '⏳';
@@ -8081,8 +8073,12 @@ _INDEX_HTML = """
       // Load confirmed collection statuses from the API
       _wizardLoadConfirmedColls(_wizardCurrentSolId());
 
-      // Check if wizard state was modified after last registration → show dirty indicator
-      if (!_wizardRegisteredAt || (saved.saved_at && saved.saved_at > _wizardRegisteredAt)) {
+      // Check if any collection has unsaved changes vs solutions.yaml (fingerprint-based)
+      const hasUnsaved = _wizardCollections.some(c => {
+        if (!c) return false;
+        return !_wizardCollFingerprints[c._id] || _wizardCollFingerprints[c._id] !== _collFingerprint(c);
+      });
+      if (hasUnsaved) {
         _wizardDirty = true;
         const btn = document.getElementById('btnWizardSave');
         if (btn) {
