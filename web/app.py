@@ -5992,6 +5992,14 @@ _INDEX_HTML = """
     let _wizardConfirmedColls = {}; // fullCollName → {points_count, exists} — populated from API
     let _wizardDirty = false;      // true when user has unsaved changes
     let _wizardRegisteredAt = null; // ISO timestamp of last successful Save & Register
+    let _wizardCollFingerprints = {}; // collId → fingerprint string at last registration
+
+    function _collFingerprint(c) {
+      const incl = (c.pages || []).filter(p => p.status === 'included').length;
+      const excl = (c.pages || []).filter(p => p.status === 'excluded').length;
+      const files = (c.fileSources || []).map(f => f.path || f.label).sort().join(',');
+      return [c.display_name, c.doc_type || 'general', c.qdrant_name || '', incl, excl, files].join('|');
+    }
 
     function _wizardMarkDirty() {
       _wizardDirty = true;
@@ -6007,13 +6015,18 @@ _INDEX_HTML = """
     function _wizardMarkClean() {
       _wizardDirty = false;
       _wizardRegisteredAt = new Date().toISOString();
+      // Snapshot fingerprints for all collections
+      _wizardCollFingerprints = {};
+      for (const c of _wizardCollections) {
+        if (c) _wizardCollFingerprints[c._id] = _collFingerprint(c);
+      }
       const btn = document.getElementById('btnWizardSave');
       if (btn) {
         btn.style.background = '';
         btn.style.borderColor = '';
         btn.textContent = '💾 Save Solution Data';
       }
-      _wizardAutoSave(); // persist the updated registered_at timestamp
+      _wizardAutoSave(); // persist the updated registered_at + fingerprints
     }
     let _wizardSolId = '';          // cached solution id — avoids DOM read timing issues
     let _wizardCollPagesOpen = new Set(); // keys: "{collId}::{originId}" — which origin page groups are expanded
@@ -7283,6 +7296,17 @@ _INDEX_HTML = """
           nameWrap.appendChild(qdrantRow);
         }
 
+        // Orange dot if collection has unsaved changes vs solutions.yaml
+        if (c && source !== 'qdrant') {
+          const fp = _collFingerprint(c);
+          const savedFp = _wizardCollFingerprints[c._id];
+          if (!savedFp || savedFp !== fp) {
+            const dot = document.createElement('span');
+            dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;background:#e65100;flex-shrink:0;margin-left:0.3rem;';
+            dot.title = 'Unsaved changes — not yet in solutions.yaml';
+            top.appendChild(dot);
+          }
+        }
         top.appendChild(nameWrap);
 
         // doc_type selector (editable for local/both, readonly display for qdrant)
@@ -7295,8 +7319,21 @@ _INDEX_HTML = """
         if (source !== 'qdrant') dtSel.onchange = () => { c.doc_type = dtSel.value; _wizardMarkDirty(); _wizardRenderCollections(); };
         top.appendChild(dtSel);
 
-        // Remove button (local/both only)
+        // Save + Remove buttons (local/both only)
         if (source !== 'qdrant') {
+          const saveBtn = document.createElement('button');
+          saveBtn.style.cssText = 'font-size:0.7rem;padding:0.15rem 0.4rem;background:#fff;color:#1a5276;border:1px solid #1a5276;border-radius:4px;cursor:pointer;white-space:nowrap;';
+          saveBtn.title = 'Save this collection to solutions.yaml';
+          saveBtn.textContent = '💾';
+          saveBtn.onclick = async () => {
+            saveBtn.disabled = true; saveBtn.textContent = '⏳';
+            const ok = await _registerSingleCollection(c, solId);
+            saveBtn.disabled = false;
+            saveBtn.textContent = ok ? '✅' : '❌';
+            if (ok) setTimeout(() => _wizardRenderCollections(), 1500);
+          };
+          top.appendChild(saveBtn);
+
           const rmBtn = document.createElement('button');
           rmBtn.className = 'btn-wizard-rm'; rmBtn.title = 'Remove collection'; rmBtn.textContent = '✕';
           rmBtn.onclick = () => {
@@ -7697,7 +7734,8 @@ _INDEX_HTML = """
 
       const header = document.createElement('div');
       header.style.cssText = 'font-weight:600;color:#2e7d32;margin-bottom:0.6rem;font-size:0.92rem;';
-      header.textContent = '✅ ' + data.message;
+      const n = (data.collections || []).length;
+      header.textContent = '✅ Solution "' + (data.solution_id || '') + '" saved with ' + n + ' collection' + (n !== 1 ? 's' : '') + '.';
       container.appendChild(header);
 
       (data.collections || []).forEach(c => {
@@ -7780,8 +7818,11 @@ _INDEX_HTML = """
         if (data.collections && data.collections.length) {
           c.confirmed_collection_name = data.collections[0].collection_name;
         }
+        // Snapshot fingerprint for this collection
+        _wizardCollFingerprints[c._id] = _collFingerprint(c);
         await _reloadSolutions(solId);
         _wizardLoadConfirmedColls(solId);
+        _wizardAutoSave(); // persist updated fingerprint
         return true;
       } catch(e) { alert('Failed to register collection: ' + e); return false; }
     }
@@ -7910,6 +7951,7 @@ _INDEX_HTML = """
         sol_lang: document.getElementById('wizardLang').value,
         saved_at: new Date().toISOString(),
         registered_at: _wizardRegisteredAt,
+        coll_fingerprints: _wizardCollFingerprints,
         categories: _wizardCategories,
         collections: _wizardCollections.filter(c => c != null).map(c => ({
           _id: c._id,
@@ -7940,6 +7982,7 @@ _INDEX_HTML = """
       _wizardNextCollId = saved.next_coll_id || 0;
       _wizardPreviews = saved.previews || {};
       _wizardRegisteredAt = saved.registered_at || null;
+      _wizardCollFingerprints = saved.coll_fingerprints || {};
       _wizardSearchQ = '';
       _wizardExpanded = {};
 
