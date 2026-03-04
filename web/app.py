@@ -158,12 +158,22 @@ def qdrant_overview():
                 info = client.get_collection(c.name)
                 vec_cfg = info.config.params.vectors
                 size = vec_cfg.size if hasattr(vec_cfg, 'size') else 1536
+                # Get last_updated from a sample point
+                last_updated = None
+                try:
+                    pts, _ = client.scroll(c.name, limit=1, with_payload=True, with_vectors=False)
+                    if pts:
+                        pd = (pts[0].payload or {}).get("point", pts[0].payload or {})
+                        last_updated = pd.get("scraped_at")
+                except Exception:
+                    pass
                 qdrant_colls[c.name] = {
                     "points_count": info.points_count,
                     "vectors_size": size,
+                    "last_updated": last_updated,
                 }
             except Exception:
-                qdrant_colls[c.name] = {"points_count": 0, "vectors_size": None}
+                qdrant_colls[c.name] = {"points_count": 0, "vectors_size": None, "last_updated": None}
     except Exception as e:
         return {"collections": [], "error": f"Failed to connect to Qdrant: {e}"}
 
@@ -201,6 +211,7 @@ def qdrant_overview():
             "solution_id": r["solution_id"] if r else None,
             "solution_name": r["solution_name"] if r else None,
             "display_name": r["display_name"] if r else name,
+            "last_updated": q["last_updated"] if q else None,
         })
     return {"collections": result}
 
@@ -2876,8 +2887,8 @@ _INDEX_HTML = """
             <div id="loginSection" style="display:none;margin-top:0.45rem;background:#fff8f0;border:1px solid #ffe0b2;border-radius:6px;padding:0.6rem 0.75rem;font-size:0.82rem;">
               <div style="font-weight:600;margin-bottom:0.35rem;color:#7a4a00;">Login credentials <span style="font-weight:400;font-size:0.76rem;color:#999;">(session only — never saved to disk)</span></div>
               <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.3rem;">
-                <input id="loginUsername" type="text" placeholder="Username / email" style="flex:1;min-width:140px;padding:0.28rem 0.45rem;border:1px solid #e0b080;border-radius:5px;" />
-                <input id="loginPassword" type="password" placeholder="Password" style="flex:1;min-width:140px;padding:0.28rem 0.45rem;border:1px solid #e0b080;border-radius:5px;" />
+                <input id="loginUsername" type="text" placeholder="Username / email" autocomplete="off" style="flex:1;min-width:140px;padding:0.28rem 0.45rem;border:1px solid #e0b080;border-radius:5px;" />
+                <input id="loginPassword" type="password" placeholder="Password" autocomplete="new-password" style="flex:1;min-width:140px;padding:0.28rem 0.45rem;border:1px solid #e0b080;border-radius:5px;" />
               </div>
               <div style="color:#aaa;font-size:0.75rem;margin-bottom:0.2rem;">Optional — CSS selectors (leave blank for auto-detect):</div>
               <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
@@ -3060,7 +3071,7 @@ _INDEX_HTML = """
           Access token <span class="status">(optional — enables Admin API: pages, articles, metafields)</span>
         </label>
         <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem">
-          <input id="shopify-form-token" type="password" placeholder="shpat_... (leave blank for public /products.json API)" style="margin:0;flex:1">
+          <input id="shopify-form-token" type="password" placeholder="shpat_... (leave blank for public /products.json API)" autocomplete="new-password" style="margin:0;flex:1">
           <button type="button" class="btn-secondary" style="white-space:nowrap;margin:0"
             onclick="const f=document.getElementById('shopify-form-token');f.type=f.type==='password'?'text':'password'">👁</button>
         </div>
@@ -3108,8 +3119,8 @@ _INDEX_HTML = """
         <div id="wizardLoginSection" style="display:none;margin-bottom:0.5rem;background:#fff8f0;border:1px solid #ffe0b2;border-radius:6px;padding:0.6rem 0.75rem;font-size:0.83rem;">
           <div style="font-weight:600;margin-bottom:0.4rem;color:#7a4a00;">Login credentials (session only — never saved to disk)</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <input id="wizardLoginUsername" type="text" placeholder="Username / email" style="flex:1;min-width:140px;padding:0.3rem 0.5rem;border:1px solid #e0b080;border-radius:5px;">
-            <input id="wizardLoginPassword" type="password" placeholder="Password" style="flex:1;min-width:140px;padding:0.3rem 0.5rem;border:1px solid #e0b080;border-radius:5px;">
+            <input id="wizardLoginUsername" type="text" placeholder="Username / email" autocomplete="off" style="flex:1;min-width:140px;padding:0.3rem 0.5rem;border:1px solid #e0b080;border-radius:5px;">
+            <input id="wizardLoginPassword" type="password" placeholder="Password" autocomplete="new-password" style="flex:1;min-width:140px;padding:0.3rem 0.5rem;border:1px solid #e0b080;border-radius:5px;">
           </div>
           <div style="margin-top:0.3rem;color:#999;font-size:0.76rem;">Login URL (if different from site URL):</div>
           <input id="wizardLoginUrl" type="text" placeholder="https://example.com/login" style="width:100%;box-sizing:border-box;margin-top:0.2rem;padding:0.25rem 0.45rem;border:1px solid #ddd;border-radius:5px;font-size:0.78rem;">
@@ -3305,11 +3316,22 @@ _INDEX_HTML = """
 
     <!-- ── Qdrant panel ── -->
     <div id="panel-qdrant" class="panel hidden">
-      <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1rem;">
+      <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.5rem;">
         <h2 style="margin:0;">🗄 Qdrant Collections</h2>
         <button type="button" onclick="loadQdrantOverview()" style="font-size:0.8rem;padding:0.25rem 0.6rem;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff;">🔄 Refresh</button>
+        <span id="qdrantRefreshTime" style="font-size:0.75rem;color:#999;"></span>
       </div>
-      <div id="qdrantSummary" style="font-size:0.85rem;color:#666;margin-bottom:0.8rem;"></div>
+      <div id="qdrantSummary" style="font-size:0.85rem;color:#666;margin-bottom:0.5rem;"></div>
+      <div style="display:flex;gap:0.8rem;margin-bottom:0.8rem;">
+        <input id="qdrantFilterName" type="search" placeholder="Filter by collection…" oninput="_qdrantFilterName=this.value.toLowerCase();_renderQdrantTable()" style="padding:0.3rem 0.5rem;font-size:0.82rem;border:1px solid #ccc;border-radius:4px;width:200px;">
+        <input id="qdrantFilterSol" type="search" placeholder="Filter by solution…" oninput="_qdrantFilterSol=this.value.toLowerCase();_renderQdrantTable()" style="padding:0.3rem 0.5rem;font-size:0.82rem;border:1px solid #ccc;border-radius:4px;width:200px;">
+      </div>
+      <div id="help-qdrant-status" class="help-tip">
+        <strong>Status badges:</strong><br>
+        ✅ <strong>Live</strong> — Collection exists in Qdrant AND is registered in solutions.yaml<br>
+        ⚠️ <strong>Empty</strong> — Registered in solutions.yaml but no data in Qdrant yet<br>
+        🔴 <strong>Orphaned</strong> — Exists in Qdrant but is NOT registered in solutions.yaml (can be deleted)
+      </div>
       <div id="qdrantTableWrap" style="overflow-x:auto;">
         <p style="color:#999;">Click the 🗄 Qdrant tab to load collections.</p>
       </div>
@@ -8160,6 +8182,10 @@ _INDEX_HTML = """
     // ── Qdrant Overview ─────────────────────────────────────────────────────
 
     let _qdrantData = [];
+    let _qdrantFilterName = '';
+    let _qdrantFilterSol = '';
+    let _qdrantSortCol = 'name';
+    let _qdrantSortAsc = true;
 
     async function loadQdrantOverview() {
       const wrap = document.getElementById('qdrantTableWrap');
@@ -8172,32 +8198,79 @@ _INDEX_HTML = """
         if (data.error) { wrap.innerHTML = '<p style="color:#c00;">' + data.error + '</p>'; return; }
         _qdrantData = data.collections || [];
         _renderQdrantTable();
+        // Show refresh timestamp
+        const ts = document.getElementById('qdrantRefreshTime');
+        if (ts) ts.textContent = 'Last refreshed: ' + new Date().toLocaleTimeString();
       } catch(e) { wrap.innerHTML = '<p style="color:#c00;">Error: ' + e + '</p>'; }
+    }
+
+    function _qdrantSort(col) {
+      if (_qdrantSortCol === col) { _qdrantSortAsc = !_qdrantSortAsc; }
+      else { _qdrantSortCol = col; _qdrantSortAsc = true; }
+      _renderQdrantTable();
     }
 
     function _renderQdrantTable() {
       const wrap = document.getElementById('qdrantTableWrap');
       const summary = document.getElementById('qdrantSummary');
-      const colls = _qdrantData;
-      if (!colls.length) { wrap.innerHTML = '<p style="color:#999;">No collections found.</p>'; return; }
+      const allColls = _qdrantData;
+      if (!allColls.length) { wrap.innerHTML = '<p style="color:#999;">No collections found.</p>'; summary.textContent = ''; return; }
 
-      const live = colls.filter(c => c.status === 'live').length;
-      const empty = colls.filter(c => c.status === 'not_pushed').length;
-      const orphaned = colls.filter(c => c.status === 'orphaned').length;
-      summary.innerHTML = '<strong>' + colls.length + '</strong> collections total · '
+      // Summary (unfiltered)
+      const live = allColls.filter(c => c.status === 'live').length;
+      const empty = allColls.filter(c => c.status === 'not_pushed').length;
+      const orphaned = allColls.filter(c => c.status === 'orphaned').length;
+      summary.innerHTML = '<strong>' + allColls.length + '</strong> collections total · '
         + '<span style="color:#2e7d32;">✅ ' + live + ' live</span> · '
         + '<span style="color:#e65100;">⚠️ ' + empty + ' registered (empty)</span> · '
         + '<span style="color:#c62828;">🔴 ' + orphaned + ' orphaned</span>';
 
+      // Filter
+      const fn = _qdrantFilterName;
+      const fs = _qdrantFilterSol;
+      let colls = allColls;
+      if (fn || fs) {
+        colls = allColls.filter(c =>
+          (!fn || c.name.toLowerCase().includes(fn) || (c.display_name || '').toLowerCase().includes(fn))
+          && (!fs || (c.solution_name || '').toLowerCase().includes(fs) || (c.solution_id || '').toLowerCase().includes(fs))
+        );
+      }
+
+      // Sort
+      const sc = _qdrantSortCol;
+      const dir = _qdrantSortAsc ? 1 : -1;
+      const statusOrder = {live: 0, not_pushed: 1, orphaned: 2};
+      colls = [...colls].sort((a, b) => {
+        let va, vb;
+        if (sc === 'status') { va = statusOrder[a.status] || 9; vb = statusOrder[b.status] || 9; }
+        else if (sc === 'name') { va = (a.display_name || a.name).toLowerCase(); vb = (b.display_name || b.name).toLowerCase(); }
+        else if (sc === 'chunks') { va = a.points_count || 0; vb = b.points_count || 0; }
+        else if (sc === 'solution') { va = (a.solution_name || '').toLowerCase(); vb = (b.solution_name || '').toLowerCase(); }
+        else if (sc === 'updated') { va = a.last_updated || ''; vb = b.last_updated || ''; }
+        else { va = a[sc] || ''; vb = b[sc] || ''; }
+        if (va < vb) return -1 * dir;
+        if (va > vb) return 1 * dir;
+        return 0;
+      });
+
+      // Sort arrow helper
+      const arrow = col => _qdrantSortCol === col ? (_qdrantSortAsc ? ' ▲' : ' ▼') : '';
+      const thStyle = 'padding:0.5rem;cursor:pointer;user-select:none;';
+
       let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
       html += '<thead><tr style="background:#f5f5f5;text-align:left;">'
-        + '<th style="padding:0.5rem;">Status</th>'
-        + '<th style="padding:0.5rem;">Collection</th>'
-        + '<th style="padding:0.5rem;text-align:right;">Points</th>'
-        + '<th style="padding:0.5rem;text-align:right;">Dims</th>'
-        + '<th style="padding:0.5rem;">Solution</th>'
+        + '<th style="' + thStyle + '" onclick="_qdrantSort(&apos;status&apos;)">Status' + arrow('status') + ' <span class="help-icon" onclick="event.stopPropagation();toggleHelp(&apos;help-qdrant-status&apos;)" title="Help">?</span></th>'
+        + '<th style="' + thStyle + '" onclick="_qdrantSort(&apos;name&apos;)">Collection' + arrow('name') + '</th>'
+        + '<th style="' + thStyle + 'text-align:right;" onclick="_qdrantSort(&apos;chunks&apos;)">Chunks' + arrow('chunks') + '</th>'
+        + '<th style="' + thStyle + 'text-align:right;">Dims</th>'
+        + '<th style="' + thStyle + '" onclick="_qdrantSort(&apos;solution&apos;)">Solution' + arrow('solution') + '</th>'
+        + '<th style="' + thStyle + '" onclick="_qdrantSort(&apos;updated&apos;)">Last Updated' + arrow('updated') + '</th>'
         + '<th style="padding:0.5rem;">Actions</th>'
         + '</tr></thead><tbody>';
+
+      if (!colls.length) {
+        html += '<tr><td colspan="7" style="padding:1rem;color:#999;text-align:center;">No collections match filter.</td></tr>';
+      }
 
       for (const c of colls) {
         const badge = c.status === 'live' ? '<span style="color:#2e7d32;" title="Registered & has data">✅</span>'
@@ -8206,13 +8279,22 @@ _INDEX_HTML = """
         const solLabel = c.solution_name ? c.solution_name + ' <span style="color:#999;font-size:0.75rem;">(' + c.solution_id + ')</span>' : '<span style="color:#999;">—</span>';
         const nameLabel = c.display_name !== c.name ? c.display_name + ' <span style="color:#999;font-size:0.75rem;">' + c.name + '</span>' : c.name;
 
+        // Format last_updated
+        let updatedLabel = '<span style="color:#999;">—</span>';
+        if (c.last_updated) {
+          try {
+            const d = new Date(c.last_updated);
+            updatedLabel = d.toISOString().slice(0, 16).replace('T', ' ');
+          } catch(e) { updatedLabel = c.last_updated; }
+        }
+
         let actions = '';
         const esc = s => s.replace(/'/g, '&apos;');
         if (c.in_qdrant) {
-          actions += '<button type="button" onclick="inspectQdrantCollection(&apos;' + esc(c.name) + '&apos;, this)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:#fff;" title="Show sample points">🔍</button> ';
+          actions += '<button type="button" onclick="inspectQdrantCollection(&apos;' + esc(c.name) + '&apos;, this)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:#fff;" title="Show sample chunks">🔍</button> ';
         }
         if (c.registered && c.solution_id) {
-          actions += '<button type="button" onclick="_openCollectionInBuildRag(&apos;' + esc(c.solution_id) + '&apos;, &apos;' + esc(c.name) + '&apos;)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #1a5276;border-radius:3px;cursor:pointer;background:#1a5276;color:#fff;" title="Open in Work with RAG">🛠</button> ';
+          actions += '<button type="button" onclick="_openCollectionInBuildRag(&apos;' + esc(c.solution_id) + '&apos;, &apos;' + esc(c.name) + '&apos;)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #1a5276;border-radius:3px;cursor:pointer;background:#fff;color:#1a5276;" title="Open in Work with RAG">🛠</button> ';
         }
         if (c.status === 'orphaned') {
           actions += '<button type="button" onclick="deleteOrphanedCollection(&apos;' + esc(c.name) + '&apos;)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #c62828;border-radius:3px;cursor:pointer;background:#fff;color:#c62828;" title="Delete orphaned collection">🗑</button>';
@@ -8224,6 +8306,7 @@ _INDEX_HTML = """
           + '<td style="padding:0.5rem;text-align:right;font-family:monospace;">' + (c.points_count || 0).toLocaleString() + '</td>'
           + '<td style="padding:0.5rem;text-align:right;font-family:monospace;">' + (c.vectors_size || '—') + '</td>'
           + '<td style="padding:0.5rem;">' + solLabel + '</td>'
+          + '<td style="padding:0.5rem;font-size:0.8rem;">' + updatedLabel + '</td>'
           + '<td style="padding:0.5rem;white-space:nowrap;">' + actions + '</td>'
           + '</tr>';
       }
@@ -8251,7 +8334,7 @@ _INDEX_HTML = """
         const detailRow = document.createElement('tr');
         detailRow.id = detailId;
         const td = document.createElement('td');
-        td.colSpan = 6;
+        td.colSpan = 7;
         td.style.cssText = 'padding:0.5rem 1rem;background:#fafafa;border-bottom:2px solid #ddd;';
 
         if (!points.length) {
