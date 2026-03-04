@@ -6076,7 +6076,7 @@ _INDEX_HTML = """
           _wizardConfirmedColls[c.name] = { points_count: c.points_count || 0, exists: c.exists || false };
         });
         // Back-fill confirmed_collection_name by best-effort matching
-        _wizardCollections.forEach(wc => {
+        _wizardCollections.filter(wc => wc != null).forEach(wc => {
           if (wc.confirmed_collection_name) return;
           const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
           const wizNorm = norm(wc.display_name);
@@ -7127,7 +7127,7 @@ _INDEX_HTML = """
       history.scrollTop = history.scrollHeight;
 
       // Serialize collections for chat context
-      const collsSer = _wizardCollections.map(c => {
+      const collsSer = _wizardCollections.filter(c => c != null).map(c => {
         const origins = _collectionOrigins(c);
         const originIds = [];
         for (const [k, info] of origins) { if (k !== '__manual__') originIds.push(info.origin_id); }
@@ -7196,7 +7196,7 @@ _INDEX_HTML = """
       const used = new Set();
       const result = [];
       const solId = _wizardSolId || _wizardCurrentSolId();
-      for (const wc of _wizardCollections) {
+      for (const wc of _wizardCollections.filter(x => x != null)) {
         // Try to match by confirmed name, then by display_name, then by suffix
         const suffix = (wc.display_name || '').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
         const apiMatch = apiColls.find(ac =>
