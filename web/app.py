@@ -6006,6 +6006,9 @@ _INDEX_HTML = """
     let _wizardDirty = false;      // true when user has unsaved changes
     let _wizardStructureDirty = false; // true when collections added/removed (not tracked per-collection)
 
+    // Ensure _wizardCollections never contains nulls (defensive cleanup)
+    function _wizClean() { _wizardCollections = _wizardCollections.filter(c => c != null); }
+
     function _collIsUnsaved(c) {
       if (!c) return false;
       if (!c._lastRegistered) return true;  // never saved to solutions.yaml
@@ -6041,7 +6044,8 @@ _INDEX_HTML = """
       _wizardAutoSave(); // persist the updated timestamps
     }
     function _wizardSyncDirtyState() {
-      const hasUnsaved = _wizardStructureDirty || _wizardCollections.some(c => c && _collIsUnsaved(c));
+      _wizClean();
+      const hasUnsaved = _wizardStructureDirty || _wizardCollections.some(c => _collIsUnsaved(c));
       _wizardDirty = hasUnsaved;
       const btn = document.getElementById('btnWizardSave');
       if (btn) {
@@ -6072,6 +6076,7 @@ _INDEX_HTML = """
 
     async function _wizardLoadConfirmedColls(solId) {
       if (!solId) return;
+      _wizClean();
       _wizardSolId = solId;
       try {
         // Try the given solId; if not found or empty, search all solutions for a close match
@@ -6578,7 +6583,7 @@ _INDEX_HTML = """
     // ── Render ────────────────────────────────────────────────────────────────
 
     function _wizardRenderAll() {
-      _wizardCollections = _wizardCollections.filter(c => c != null);
+      _wizClean();
       _wizardRenderSitemapList();
       _wizardRenderCollections();
       _wizardAutoSave();
@@ -7721,7 +7726,7 @@ _INDEX_HTML = """
       log.classList.remove('hidden', 'error', 'success');
       if (!solName) { alert('Please select a solution from the top bar first.'); return; }
       const activeColls = _wizardCollections.filter(c => _collectionIncludedPages(c).length > 0 || (c.fileSources || []).length > 0);
-      if (!activeColls.length && !_wizardStructureDirty) { alert('Assign at least one page or file source to a collection.'); return; }
+      if (!activeColls.length && !_wizardCollections.length) { alert('No collections to save. Add at least one collection first.'); return; }
 
       const collections = activeColls.map(c => {
         // Group included pages by origin for the API
@@ -8044,6 +8049,7 @@ _INDEX_HTML = """
 
     // Serialise JS state (Set/Map → plain objects) for JSON storage
     function _wizardSerialiseState() {
+      _wizClean();
       return {
         _version: 2,  // data model version for migration detection
         domain: _wizardDomain,
