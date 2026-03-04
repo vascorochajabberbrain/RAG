@@ -4455,6 +4455,10 @@ _INDEX_HTML = """
         }
         delBtn.style.display = exists ? 'block' : 'none';
         renderSourcesList(sources);
+        // Update routing metadata panel for this collection
+        if (coll && _currentSolutionId) {
+          renderRoutingMetadataPanel(coll, _currentSolutionId);
+        }
       }
       // Hide source config and pipeline until a source is selected
       document.getElementById('sourceConfigCard').style.display = 'none';
