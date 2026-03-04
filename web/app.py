@@ -2100,7 +2100,7 @@ def wizard_diff(req: WizardDiffRequest):
 
     def _run():
         try:
-            _progress_queue.put("LOG:Loading saved site & collections…")
+            _progress_queue.put("LOG:Loading saved collection config…")
             with open(path, "r", encoding="utf-8") as f:
                 saved = _json.load(f)
 
@@ -2518,7 +2518,7 @@ _HELP_HTML = """<!DOCTYPE html>
       <li>Let you drag sitemaps or individual pages into collections</li>
       <li>Generate scraper configs and routing metadata automatically</li>
     </ol>
-    <p>Use the "🚀 Launch" button to start, or "📂 Load" to resume a previous site &amp; collections setup.</p>
+    <p>Use the "🚀 Launch" button to start, or "📂 Load Collection Config" to resume a previous setup.</p>
 
     <h3 id="wizard-sitemaps">Sitemaps (Wizard)</h3>
     <p>The left panel shows all sitemaps discovered from the site. Each sitemap groups related pages (e.g. all products, all blog posts).</p>
@@ -2727,7 +2727,7 @@ _INDEX_HTML = """
       </select>
       <span id="globalSolLang" class="global-sol-lang" style="display:none;" title="Click to change base language" onclick="showLangEditor()"></span>
       <div style="position:relative;display:inline-block;">
-        <button type="button" id="btnWizardLoad" class="btn-sm" onclick="_wizardShowLoadDropdown(this)" title="Load saved site &amp; collections data" style="background:#f0f4fa;color:#555;border:1px solid #c8d8f0;font-size:0.78rem;cursor:pointer;">📂 Load</button>
+        <button type="button" id="btnWizardLoad" class="btn-sm" onclick="_wizardShowLoadDropdown(this)" title="Load saved collection config" style="background:#f0f4fa;color:#555;border:1px solid #c8d8f0;font-size:0.78rem;cursor:pointer;">📂 Load Collection Config</button>
         <div id="wizardLoadDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #c8d8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:220px;padding:0.4rem 0;margin-top:2px;"></div>
       </div>
       <input id="globalSolNewName" type="text" placeholder="New solution name…" style="display:none;">
@@ -3165,7 +3165,7 @@ _INDEX_HTML = """
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
           <button type="button" class="btn-wizard" onclick="runWizardAnalyse()">🔍 Select Analyse Mode</button>
-          <button type="button" id="btnWizardSave" class="btn-wizard-add" onclick="wizardSaveSession()" style="display:none;" title="Save site &amp; collections data to disk">💾 Save</button>
+          <button type="button" id="btnWizardSaveTop" class="btn-wizard-add" onclick="wizardSaveSession()" style="display:none;" title="Save collection config to disk">💾 Save Collection Config</button>
         </div>
         <div id="wizardLog" class="log hidden" style="margin-top:0.75rem;max-height:8rem;"></div>
       </div>
@@ -3215,7 +3215,7 @@ _INDEX_HTML = """
 
           <!-- Card: Confirm -->
           <div class="card" style="padding:1rem;">
-            <button type="button" id="btnWizardSave" class="btn-wizard" style="width:100%;" onclick="runWizardConfirm()">💾 Save & Register</button>
+            <button type="button" id="btnWizardSave" class="btn-wizard" style="width:100%;" onclick="runWizardConfirm()">💾 Save Collection Config & Register</button>
             <div id="wizardConfirmLog" class="log hidden" style="margin-top:0.6rem;max-height:8rem;overflow-y:auto;"></div>
             <div id="wizardConfirmResult" style="margin-top:0.5rem;"></div>
             <div id="wizardAutoSaveStatus" style="display:none;font-size:0.75rem;color:#888;margin-top:0.5rem;text-align:right;"></div>
@@ -5991,6 +5991,7 @@ _INDEX_HTML = """
     let _wizardPendingMode = null; // {type:'fresh'|'update', url, solId, solName, lang} — mode chosen but not yet launched
     let _wizardConfirmedColls = {}; // fullCollName → {points_count, exists} — populated from API
     let _wizardDirty = false;      // true when user has unsaved changes
+    let _wizardRegisteredAt = null; // ISO timestamp of last successful Save & Register
 
     function _wizardMarkDirty() {
       _wizardDirty = true;
@@ -5998,19 +5999,21 @@ _INDEX_HTML = """
       if (btn) {
         btn.style.background = '#e65100';
         btn.style.borderColor = '#e65100';
-        btn.textContent = '💾 Save & Register (changes pending)';
+        btn.textContent = '💾 Save Collection Config & Register (changes pending)';
       }
       _wizardAutoSave();  // auto-save wizard state to disk (1.5s debounce)
     }
 
     function _wizardMarkClean() {
       _wizardDirty = false;
+      _wizardRegisteredAt = new Date().toISOString();
       const btn = document.getElementById('btnWizardSave');
       if (btn) {
         btn.style.background = '';
         btn.style.borderColor = '';
-        btn.textContent = '💾 Save & Register';
+        btn.textContent = '💾 Save Collection Config & Register';
       }
+      _wizardAutoSave(); // persist the updated registered_at timestamp
     }
     let _wizardSolId = '';          // cached solution id — avoids DOM read timing issues
     let _wizardCollPagesOpen = new Set(); // keys: "{collId}::{originId}" — which origin page groups are expanded
@@ -6213,7 +6216,7 @@ _INDEX_HTML = """
               _wizardInitState(p.categories, p.suggested_collections);
               _wizardRenderAll();
               document.getElementById('wizardResults').style.display = 'flex';
-              const saveBtn = document.getElementById('btnWizardSave');
+              const saveBtn = document.getElementById('btnWizardSaveTop');
               if (saveBtn) saveBtn.style.display = '';
               // Fetch confirmed collection statuses (for returning users with existing collections)
               _wizardLoadConfirmedColls(_wizardCurrentSolId());
@@ -6269,11 +6272,11 @@ _INDEX_HTML = """
 
         const title = document.createElement('div');
         title.className = 'wiz-modal-title';
-        title.textContent = '💾 Saved site & collections found';
+        title.textContent = '💾 Saved collection config found';
 
         const sub = document.createElement('div');
         sub.className = 'wiz-modal-sub';
-        sub.textContent = 'Saved site & collections data exists for "' + solName + '". What would you like to do?';
+        sub.textContent = 'A saved collection config exists for "' + solName + '". What would you like to do?';
 
         const btns = document.createElement('div');
         btns.className = 'wiz-modal-btns';
@@ -6333,7 +6336,7 @@ _INDEX_HTML = """
     async function _runWizardDiff(url, solId, lang) {
       _wizardHideModeBar();
       const log = document.getElementById('wizardLog');
-      log.textContent = 'Loading saved site & collections…\\n';
+      log.textContent = 'Loading saved collection config…\\n';
       log.classList.remove('hidden', 'error', 'success');
       document.getElementById('wizardResults').style.display = 'none';
 
@@ -6416,7 +6419,7 @@ _INDEX_HTML = """
       _wizardRenderDiffBanner(data);
       _wizardRenderAll();
       document.getElementById('wizardResults').style.display = 'flex';
-      const saveBtn = document.getElementById('btnWizardSave');
+      const saveBtn = document.getElementById('btnWizardSaveTop');
       if (saveBtn) saveBtn.style.display = '';
     }
 
@@ -7908,8 +7911,9 @@ _INDEX_HTML = """
         sol_name: document.getElementById('wizardSolName').value.trim(),
         sol_lang: document.getElementById('wizardLang').value,
         saved_at: new Date().toISOString(),
+        registered_at: _wizardRegisteredAt,
         categories: _wizardCategories,
-        collections: _wizardCollections.map(c => ({
+        collections: _wizardCollections.filter(c => c != null).map(c => ({
           _id: c._id,
           display_name: c.display_name,
           doc_type: c.doc_type,
@@ -7932,10 +7936,12 @@ _INDEX_HTML = """
 
     // Restore JS state from a saved JSON object and re-render
     function _wizardRestoreState(saved) {
+      if (!saved || typeof saved !== 'object') throw new Error('Invalid saved state');
       _wizardDomain = saved.domain || '';
       _wizardCategories = saved.categories || [];
       _wizardNextCollId = saved.next_coll_id || 0;
       _wizardPreviews = saved.previews || {};
+      _wizardRegisteredAt = saved.registered_at || null;
       _wizardSearchQ = '';
       _wizardExpanded = {};
 
@@ -7958,7 +7964,7 @@ _INDEX_HTML = """
         const oldExcluded = saved.excluded || {};
         const oldOverrides = saved.page_overrides || {};
 
-        _wizardCollections = (saved.collections || []).map(c => {
+        _wizardCollections = (saved.collections || []).filter(c => c != null).map(c => {
           const pages = [];
           // Add pages from assigned sitemaps
           for (const catId of (c.sitemapIds || [])) {
@@ -7992,7 +7998,7 @@ _INDEX_HTML = """
         });
       } else {
         // v2 format — direct restore
-        _wizardCollections = (saved.collections || []).map(c => ({
+        _wizardCollections = (saved.collections || []).filter(c => c != null).map(c => ({
           _id: c._id,
           display_name: c.display_name,
           doc_type: c.doc_type,
@@ -8023,7 +8029,7 @@ _INDEX_HTML = """
       if (langSel  && saved.sol_lang) langSel.value = saved.sol_lang;
 
       // Show results and re-render
-      const saveBtn = document.getElementById('btnWizardSave');
+      const saveBtn = document.getElementById('btnWizardSaveTop');
       if (saveBtn) saveBtn.style.display = '';
       document.getElementById('wizardResults').style.display = 'flex';
       document.getElementById('wizardSearch').value = '';
@@ -8035,6 +8041,25 @@ _INDEX_HTML = """
       _wizardRenderAll();
       // Load confirmed collection statuses from the API
       _wizardLoadConfirmedColls(_wizardCurrentSolId());
+
+      // Check if wizard state was modified after last registration → show dirty indicator
+      if (!_wizardRegisteredAt || (saved.saved_at && saved.saved_at > _wizardRegisteredAt)) {
+        _wizardDirty = true;
+        const btn = document.getElementById('btnWizardSave');
+        if (btn) {
+          btn.style.background = '#e65100';
+          btn.style.borderColor = '#e65100';
+          btn.textContent = '💾 Save Collection Config & Register (changes pending)';
+        }
+      } else {
+        _wizardDirty = false;
+        const btn = document.getElementById('btnWizardSave');
+        if (btn) {
+          btn.style.background = '';
+          btn.style.borderColor = '';
+          btn.textContent = '💾 Save Collection Config & Register';
+        }
+      }
     }
 
     // Derive solution_id from current sol name input
@@ -8086,13 +8111,13 @@ _INDEX_HTML = """
       if (dd) dd.style.display = 'none';
       try {
         const res = await fetch('/api/wizard/load?solution_id=' + encodeURIComponent(solId));
-        if (!res.ok) { alert('Could not load site & collections for "' + solId + '".'); return; }
+        if (!res.ok) { alert('Could not load collection config for "' + solId + '".'); return; }
         const data = await res.json();
         _wizardRestoreState(data.state);
         const log = document.getElementById('wizardLog');
-        log.textContent = '📂 Site & collections "' + solId + '" loaded.\\n';
+        log.textContent = '📂 Collection config "' + solId + '" loaded.\\n';
         log.classList.remove('hidden', 'error', 'success');
-        const saveBtn = document.getElementById('btnWizardSave');
+        const saveBtn = document.getElementById('btnWizardSaveTop');
         if (saveBtn) saveBtn.style.display = '';
       } catch(err) {
         alert('Load failed: ' + err.message);
