@@ -250,6 +250,41 @@ def list_solutions_api():
         return {"solutions": [], "error": str(e)}
 
 
+@app.delete("/api/solutions/{solution_id}")
+def delete_solution(solution_id: str):
+    """Delete a solution from solutions.yaml. Only allowed when no collections and no config file."""
+    import yaml
+    sid = solution_id.strip().lower().replace(" ", "_")
+    try:
+        with open(_specs_file(), "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        solutions = data.get("solutions", [])
+        sol = next((s for s in solutions if s.get("id") == sid), None)
+        if not sol:
+            raise HTTPException(status_code=404, detail=f"Solution '{sid}' not found")
+        # Check: no collections registered
+        colls = sol.get("collections", [])
+        if colls:
+            raise HTTPException(status_code=400,
+                                detail=f"Solution has {len(colls)} collection(s) registered. Remove them first.")
+        # Check: no saved wizard config file
+        config_path = os.path.join(_DATA_ROOT, f".wizard_state_{sid}.json")
+        if os.path.isfile(config_path):
+            raise HTTPException(status_code=400,
+                                detail="Solution has a saved Collection Config file. Delete it first.")
+        # Remove from solutions.yaml
+        data["solutions"] = [s for s in solutions if s.get("id") != sid]
+        with open(_specs_file(), "w", encoding="utf-8") as f:
+            yaml.dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+        from solution_specs import reload
+        reload()
+        return {"deleted": True, "solution_id": sid}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 _DEFAULT_SETTINGS = {
     "doc_types": ["product_catalog", "recipe_book", "faq", "manual", "legal", "general"],
     "llm_chat_model": "gpt-4o",
@@ -2747,6 +2782,7 @@ _INDEX_HTML = """
         <option value="">— Select a solution —</option>
       </select>
       <span id="globalSolLang" class="global-sol-lang" style="display:none;" title="Click to change base language" onclick="showLangEditor()"></span>
+      <button type="button" id="btnDeleteSolution" style="display:none;background:transparent;border:1px solid #e57373;color:#c62828;font-size:0.78rem;padding:0.15rem 0.5rem;border-radius:6px;cursor:pointer;margin-left:0.3rem;" title="Delete this solution" onclick="_deleteSolution()">🗑</button>
       <div style="position:relative;display:inline-block;">
         <button type="button" id="btnWizardLoad" class="btn-sm" onclick="_wizardShowLoadDropdown(this)" title="Load saved collection config" style="background:#f0f4fa;color:#555;border:1px solid #c8d8f0;font-size:0.78rem;cursor:pointer;">📂 Load Collection Config</button>
         <div id="wizardLoadDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #c8d8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:220px;padding:0.4rem 0;margin-top:2px;"></div>
@@ -4011,6 +4047,7 @@ _INDEX_HTML = """
         document.getElementById('globalSolNewBtn').style.display = '';
         document.getElementById('globalSolNewCancel').style.display = '';
         document.getElementById('globalSolLang').style.display = 'none';
+        document.getElementById('btnDeleteSolution').style.display = 'none';
         document.getElementById('globalSolNewName').focus();
         _currentSolutionId = null;
         _pendingNewSolutionName = null;
@@ -4026,8 +4063,9 @@ _INDEX_HTML = """
 
       _currentSolutionId = val || null;
 
-      // Update language badge
+      // Update language badge + delete button
       const langBadge = document.getElementById('globalSolLang');
+      const delBtn = document.getElementById('btnDeleteSolution');
       if (_currentSolutionId) {
         const sol = _allSolutions.find(s => s.id === _currentSolutionId);
         const lang = sol && sol.language ? sol.language : null;
@@ -4036,11 +4074,29 @@ _INDEX_HTML = """
         langBadge.title = lang
           ? `Base language: ${lang} — click to change`
           : 'No base language set — click to set';
+        delBtn.style.display = 'inline-block';
       } else {
         langBadge.style.display = 'none';
+        delBtn.style.display = 'none';
       }
 
       await _applyGlobalSolution();
+    }
+
+    async function _deleteSolution() {
+      if (!_currentSolutionId) return;
+      const sid = _currentSolutionId;
+      if (!confirm(`Delete solution "${sid}"? This cannot be undone.`)) return;
+      if (!confirm(`Are you sure you want to permanently delete "${sid}" from solutions.yaml?`)) return;
+      try {
+        const r = await fetch(`/api/solutions/${encodeURIComponent(sid)}`, {method:'DELETE'});
+        const d = await r.json();
+        if (!r.ok) { alert(d.detail || 'Delete failed'); return; }
+        _currentSolutionId = null;
+        await _loadSolutions();
+        document.getElementById('globalSolution').value = '';
+        await onGlobalSolutionChange();
+      } catch(e) { alert('Error: ' + e.message); }
     }
 
     async function _applyGlobalSolution() {
