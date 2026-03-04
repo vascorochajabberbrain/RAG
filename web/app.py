@@ -2100,7 +2100,7 @@ def wizard_diff(req: WizardDiffRequest):
 
     def _run():
         try:
-            _progress_queue.put("LOG:Loading saved session…")
+            _progress_queue.put("LOG:Loading saved site & collections…")
             with open(path, "r", encoding="utf-8") as f:
                 saved = _json.load(f)
 
@@ -2518,7 +2518,7 @@ _HELP_HTML = """<!DOCTYPE html>
       <li>Let you drag sitemaps or individual pages into collections</li>
       <li>Generate scraper configs and routing metadata automatically</li>
     </ol>
-    <p>Use the "🚀 Launch" button to start, or "📂 Load session" to resume a previous analysis.</p>
+    <p>Use the "🚀 Launch" button to start, or "📂 Load" to resume a previous site &amp; collections setup.</p>
 
     <h3 id="wizard-sitemaps">Sitemaps (Wizard)</h3>
     <p>The left panel shows all sitemaps discovered from the site. Each sitemap groups related pages (e.g. all products, all blog posts).</p>
@@ -2727,7 +2727,7 @@ _INDEX_HTML = """
       </select>
       <span id="globalSolLang" class="global-sol-lang" style="display:none;" title="Click to change base language" onclick="showLangEditor()"></span>
       <div style="position:relative;display:inline-block;">
-        <button type="button" id="btnWizardLoad" class="btn-sm" onclick="_wizardShowLoadDropdown(this)" title="Load a previously saved wizard session" style="background:#f0f4fa;color:#555;border:1px solid #c8d8f0;font-size:0.78rem;cursor:pointer;">📂 Load session</button>
+        <button type="button" id="btnWizardLoad" class="btn-sm" onclick="_wizardShowLoadDropdown(this)" title="Load saved site &amp; collections data" style="background:#f0f4fa;color:#555;border:1px solid #c8d8f0;font-size:0.78rem;cursor:pointer;">📂 Load</button>
         <div id="wizardLoadDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #c8d8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:220px;padding:0.4rem 0;margin-top:2px;"></div>
       </div>
       <input id="globalSolNewName" type="text" placeholder="New solution name…" style="display:none;">
@@ -3165,7 +3165,7 @@ _INDEX_HTML = """
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
           <button type="button" class="btn-wizard" onclick="runWizardAnalyse()">🔍 Select Analyse Mode</button>
-          <button type="button" id="btnWizardSave" class="btn-wizard-add" onclick="wizardSaveSession()" style="display:none;" title="Save current wizard session to disk">💾 Save session</button>
+          <button type="button" id="btnWizardSave" class="btn-wizard-add" onclick="wizardSaveSession()" style="display:none;" title="Save site &amp; collections data to disk">💾 Save</button>
         </div>
         <div id="wizardLog" class="log hidden" style="margin-top:0.75rem;max-height:8rem;"></div>
       </div>
@@ -6269,11 +6269,11 @@ _INDEX_HTML = """
 
         const title = document.createElement('div');
         title.className = 'wiz-modal-title';
-        title.textContent = '💾 Saved session found';
+        title.textContent = '💾 Saved site & collections found';
 
         const sub = document.createElement('div');
         sub.className = 'wiz-modal-sub';
-        sub.textContent = 'A saved wizard session exists for "' + solName + '". What would you like to do?';
+        sub.textContent = 'Saved site & collections data exists for "' + solName + '". What would you like to do?';
 
         const btns = document.createElement('div');
         btns.className = 'wiz-modal-btns';
@@ -6290,7 +6290,7 @@ _INDEX_HTML = """
         freshBtn.className = 'wiz-modal-btn';
         freshBtn.innerHTML = '<span class="wiz-modal-btn-icon">🆕</span>'
           + '<span class="wiz-modal-btn-label">Fresh start</span>'
-          + '<span class="wiz-modal-btn-desc">Discard saved session and re-analyse from scratch</span>';
+          + '<span class="wiz-modal-btn-desc">Discard saved data and re-analyse from scratch</span>';
 
         // Launch button (disabled until a choice is selected)
         const launchBtn = document.createElement('button');
@@ -6333,7 +6333,7 @@ _INDEX_HTML = """
     async function _runWizardDiff(url, solId, lang) {
       _wizardHideModeBar();
       const log = document.getElementById('wizardLog');
-      log.textContent = 'Loading saved session…\\n';
+      log.textContent = 'Loading saved site & collections…\\n';
       log.classList.remove('hidden', 'error', 'success');
       document.getElementById('wizardResults').style.display = 'none';
 
@@ -8086,11 +8086,11 @@ _INDEX_HTML = """
       if (dd) dd.style.display = 'none';
       try {
         const res = await fetch('/api/wizard/load?solution_id=' + encodeURIComponent(solId));
-        if (!res.ok) { alert('Could not load session for "' + solId + '".'); return; }
+        if (!res.ok) { alert('Could not load site & collections for "' + solId + '".'); return; }
         const data = await res.json();
         _wizardRestoreState(data.state);
         const log = document.getElementById('wizardLog');
-        log.textContent = '📂 Session "' + solId + '" loaded from disk.\\n';
+        log.textContent = '📂 Site & collections "' + solId + '" loaded.\\n';
         log.classList.remove('hidden', 'error', 'success');
         const saveBtn = document.getElementById('btnWizardSave');
         if (saveBtn) saveBtn.style.display = '';
@@ -8131,8 +8131,8 @@ _INDEX_HTML = """
           const em = document.createElement('span');
           em.className = 'wiz-load-empty';
           em.textContent = _currentSolutionId
-            ? 'No saved sessions for this solution.'
-            : 'No saved sessions yet.';
+            ? 'No saved data for this solution.'
+            : 'No saved data yet.';
           dd.appendChild(em);
           return;
         }
