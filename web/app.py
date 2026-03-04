@@ -1386,7 +1386,7 @@ def faq_generate_table(req: FaqTableRequest):
                 pass
 
     if not texts:
-        return {"table": "", "count": 0, "error": "No content found. Open 'Work with RAG', run the Fetch step for this collection, then try again."}
+        return {"table": "", "count": 0, "error": "No content found. Open 'Work with RAG', run the Ingest step for this collection, then try again."}
 
     joined = "\n---\n".join(t[:400] for t in texts)
     system_prompt = (
@@ -2403,7 +2403,7 @@ _HELP_HTML = """<!DOCTYPE html>
       <a href="#source-config">Source Config (Files &amp; Scrapers)</a>
       <a href="#pipeline">Pipeline Steps</a>
       <a href="#create-collection">1. Create Collection</a>
-      <a href="#fetch">2. Fetch</a>
+      <a href="#ingest">2. Ingest</a>
       <a href="#translate-clean">2b. Translate &amp; Clean</a>
       <a href="#chunk">3. Chunk (Modes)</a>
       <a href="#push">4. Push to Qdrant</a>
@@ -2463,7 +2463,7 @@ _HELP_HTML = """<!DOCTYPE html>
 
     <h2 id="overview">RAG Builder Overview</h2>
     <p>This tool is where you build and maintain those RAG collections. It ingests content from files (PDF, TXT, CSV) or websites, splits it into chunks, embeds the chunks as vectors, and stores them in Qdrant. You can then test retrieval quality in the Chat tab.</p>
-    <p>The typical workflow is: <strong>Create collection &rarr; Fetch &rarr; Chunk &rarr; Push to Qdrant</strong>.</p>
+    <p>The typical workflow is: <strong>Create collection &rarr; Ingest &rarr; Chunk &rarr; Push to Qdrant</strong>.</p>
 
     <h2 id="solutions">Solutions &amp; Collections</h2>
     <p>A <strong>solution</strong> represents a client or project (e.g. "Peixe Fresco"). Each solution has one or more <strong>collections</strong> — separate Qdrant indexes for different content types (products, recipes, FAQ, etc.).</p>
@@ -2483,15 +2483,15 @@ _HELP_HTML = """<!DOCTYPE html>
     <p>For websites, choose a <strong>scraping engine</strong> (see <a href="#scraper-engines">Scraper Engines</a> below).</p>
 
     <h2 id="pipeline">Pipeline Steps</h2>
-    <p>The pipeline runs in order: Create &rarr; Fetch &rarr; (Translate) &rarr; Chunk &rarr; Push. Each step builds on the previous one. State is auto-saved after key steps so you can resume later.</p>
+    <p>The pipeline runs in order: Create &rarr; Ingest &rarr; (Translate) &rarr; Chunk &rarr; Push. Each step builds on the previous one. State is auto-saved after key steps so you can resume later.</p>
 
     <h3 id="create-collection">1. Create Collection</h3>
     <p>Creates a new Qdrant collection with the selected embedding model dimensions. If the collection already exists, this step is skipped.</p>
     <div class="warn">The embedding model is locked at creation time. All sources pushed to the same collection must use the same model.</div>
 
-    <h3 id="fetch">2. Fetch</h3>
-    <p>Extracts raw text from the source. For files this reads the document content. For URLs it runs the configured scraper to crawl the website.</p>
-    <p>After fetching, the raw text is stored in the workflow state and auto-saved to disk.</p>
+    <h3 id="ingest">2. Ingest</h3>
+    <p>Extracts content from your sources: scrapes web pages (using the scraper config from Analyse Site) or reads uploaded files (PDF, TXT, CSV).</p>
+    <p>After ingesting, the raw text is stored in the workflow state and auto-saved to disk.</p>
 
     <h3 id="translate-clean">2b. Translate &amp; Clean</h3>
     <p>Optional step for bilingual or foreign-language documents. Uses an LLM to translate content to the solution's base language and clean up formatting artifacts.</p>
@@ -3022,10 +3022,10 @@ _INDEX_HTML = """
         </div>
         <div id="help-create" class="help-tip">Creates a new Qdrant collection with the selected embedding model dimensions. Skipped if the collection already exists. <a href="/help#create-collection" target="_blank">Learn more &rarr;</a></div>
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
-          <button type="button" class="btn-primary" id="runFetch">2. Fetch</button>
+          <button type="button" class="btn-primary" id="runFetch">2. Ingest</button>
           <span class="help-icon" onclick="toggleHelp('help-fetch')" title="Help">?</span>
         </div>
-        <div id="help-fetch" class="help-tip">Extracts raw text from the source. For files, reads the document. For URLs, runs the configured scraper. Auto-saves state after completion. <a href="/help#fetch" target="_blank">Learn more &rarr;</a></div>
+        <div id="help-fetch" class="help-tip">Extracts content from your sources: scrapes web pages or reads files (PDF, TXT, CSV). Auto-saves state after completion. <a href="/help#ingest" target="_blank">Learn more &rarr;</a></div>
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
           <button type="button" class="btn-translate" id="runTranslate">2b. Translate &amp; Clean (PT) 🇵🇹</button>
           <span class="help-icon" onclick="toggleHelp('help-translate')" title="Help">?</span>
@@ -5523,8 +5523,8 @@ _INDEX_HTML = """
     async function runFetchWithProgress() {
       const btn = document.getElementById('runFetch');
       _btnRunning(btn);
-      btn.textContent = '2. Fetching…';
-      setLog(buildLog, 'Fetching… (this may take a few minutes for large sites)', false);
+      btn.textContent = '2. Ingesting…';
+      setLog(buildLog, 'Ingesting… (this may take a few minutes for large sites)', false);
       buildLog.style.maxHeight = '20rem';
 
       const es = new EventSource('/api/progress');
@@ -5540,7 +5540,7 @@ _INDEX_HTML = """
           buildLog.scrollTop = buildLog.scrollHeight;
           buildLog.className = 'log success';
           es.close();
-          _btnSuccess(btn); btn.textContent = '2. Fetch';
+          _btnSuccess(btn); btn.textContent = '2. Ingest';
           // Fetch updated state to render relevance report card (if check ran)
           api('/api/workflow/state').then(st => {
             if (st && st.relevance_report) renderRelevanceCard(st.relevance_report);
@@ -5549,10 +5549,10 @@ _INDEX_HTML = """
           buildLog.textContent += '\\n❌ ' + data;
           buildLog.className = 'log error';
           es.close();
-          _btnDone(btn); btn.textContent = '2. Fetch';
+          _btnDone(btn); btn.textContent = '2. Ingest';
         }
       };
-      es.onerror = () => { es.close(); _btnDone(btn); btn.textContent = '2. Fetch'; };
+      es.onerror = () => { es.close(); _btnDone(btn); btn.textContent = '2. Ingest'; };
 
       try {
         const _lc = _buildLoginConfig();
@@ -5561,7 +5561,7 @@ _INDEX_HTML = """
         setLog(buildLog, e.message || String(e), true);
         es.close();
         btn.disabled = false;
-        btn.textContent = '2. Fetch';
+        btn.textContent = '2. Ingest';
       }
     }
 
@@ -7643,7 +7643,7 @@ _INDEX_HTML = """
             badge.textContent = '✅ Live — ' + pts + ' chunks' + (nSrc > 1 ? ' · ' + nSrc + ' sources' : '');
           } else {
             badge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.45rem;border-radius:10px;background:#e3f0fd;color:#1a5276;border:1px solid #aed6f1;';
-            badge.textContent = '📥 Fetched (0 chunks)';
+            badge.textContent = '📥 Ingested (0 chunks)';
           }
           badgeWrap.appendChild(badge);
         }
@@ -7922,7 +7922,7 @@ _INDEX_HTML = """
 
         const badge = document.createElement('span');
         badge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.45rem;border-radius:10px;background:#e3f0fd;color:#1a5276;border:1px solid #aed6f1;white-space:nowrap;flex-shrink:0;';
-        badge.textContent = '📥 Fetched';
+        badge.textContent = '📥 Ingested';
 
         const name = document.createElement('span');
         name.style.cssText = 'font-size:0.85rem;font-weight:500;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
