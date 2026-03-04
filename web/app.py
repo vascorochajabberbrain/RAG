@@ -8207,14 +8207,15 @@ _INDEX_HTML = """
         const nameLabel = c.display_name !== c.name ? c.display_name + ' <span style="color:#999;font-size:0.75rem;">' + c.name + '</span>' : c.name;
 
         let actions = '';
+        const esc = s => s.replace(/'/g, '&apos;');
         if (c.in_qdrant) {
-          actions += '<button type="button" onclick="inspectQdrantCollection(\'' + c.name + '\', this)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:#fff;" title="Show sample points">🔍</button> ';
+          actions += '<button type="button" onclick="inspectQdrantCollection(&apos;' + esc(c.name) + '&apos;, this)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:#fff;" title="Show sample points">🔍</button> ';
         }
         if (c.registered && c.solution_id) {
-          actions += '<button type="button" onclick="_openCollectionInBuildRag(\'' + c.solution_id + '\', \'' + c.name + '\')" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #1a5276;border-radius:3px;cursor:pointer;background:#1a5276;color:#fff;" title="Open in Work with RAG">🛠</button> ';
+          actions += '<button type="button" onclick="_openCollectionInBuildRag(&apos;' + esc(c.solution_id) + '&apos;, &apos;' + esc(c.name) + '&apos;)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #1a5276;border-radius:3px;cursor:pointer;background:#1a5276;color:#fff;" title="Open in Work with RAG">🛠</button> ';
         }
         if (c.status === 'orphaned') {
-          actions += '<button type="button" onclick="deleteOrphanedCollection(\'' + c.name + '\')" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #c62828;border-radius:3px;cursor:pointer;background:#fff;color:#c62828;" title="Delete orphaned collection">🗑</button>';
+          actions += '<button type="button" onclick="deleteOrphanedCollection(&apos;' + esc(c.name) + '&apos;)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #c62828;border-radius:3px;cursor:pointer;background:#fff;color:#c62828;" title="Delete orphaned collection">🗑</button>';
         }
 
         html += '<tr style="border-bottom:1px solid #eee;" id="qdrant-row-' + c.name.replace(/[^a-z0-9_]/g,'') + '">'
