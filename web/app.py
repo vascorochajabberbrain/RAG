@@ -6040,6 +6040,16 @@ _INDEX_HTML = """
           btn.textContent = '💾 Save Solution Data';
         }
       }
+      // Update per-collection save button styles
+      for (const c of _wizardCollections) {
+        if (!c) continue;
+        const saveBtn = document.querySelector('[data-save-coll="' + c._id + '"]');
+        if (!saveBtn) continue;
+        const unsaved = _collIsUnsaved(c);
+        saveBtn.style.cssText = 'font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;cursor:pointer;white-space:nowrap;'
+          + (unsaved ? 'background:#e65100;color:#fff;border:1px solid #e65100;' : 'background:#fff;color:#1a5276;border:1px solid #1a5276;');
+        saveBtn.title = unsaved ? 'Unsaved changes — click to save to solutions.yaml' : 'Save this collection to solutions.yaml';
+      }
     }
 
     let _wizardSolId = '';          // cached solution id — avoids DOM read timing issues
@@ -7185,7 +7195,7 @@ _INDEX_HTML = """
       // Set page status back to included
       for (const c of _wizardCollections) {
         const p = (c.pages || []).find(p => p.url === url);
-        if (p) { p.status = 'included'; return; }
+        if (p) { p.status = 'included'; _collMarkModified(c); return; }
       }
     }
 
@@ -7340,6 +7350,7 @@ _INDEX_HTML = """
         // Save + Remove buttons (local/both only)
         if (source !== 'qdrant') {
           const saveBtn = document.createElement('button');
+          saveBtn.dataset.saveColl = c._id;
           saveBtn.style.cssText = 'font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;cursor:pointer;white-space:nowrap;'
             + (collUnsaved ? 'background:#e65100;color:#fff;border:1px solid #e65100;' : 'background:#fff;color:#1a5276;border:1px solid #1a5276;');
           saveBtn.title = collUnsaved ? 'Unsaved changes — click to save to solutions.yaml' : 'Save this collection to solutions.yaml';
@@ -7430,10 +7441,11 @@ _INDEX_HTML = """
                   confirmLabel: 'Remove',
                   onConfirm: () => {
                     c.pages = (c.pages || []).filter(p => p.origin_id !== capturedOriginId);
+                    _collMarkModified(c);
                     if (source === 'both') {
                       _wizardFlashWarning('Chunks from this source may still be in Qdrant. Use Work with RAG to remove them.');
                     }
-                    _wizardRenderAll();
+                    _wizardMarkDirty(); _wizardRenderAll();
                   }
                 });
               };
@@ -7488,7 +7500,7 @@ _INDEX_HTML = """
                   confirmLabel: 'Remove',
                   onConfirm: () => {
                     c.fileSources = (c.fileSources || []).filter(f => f.path !== fs.path);
-                    _wizardRenderCollections(); _wizardAutoSave();
+                    _collMarkModified(c); _wizardMarkDirty(); _wizardRenderCollections();
                   }
                 });
               };
@@ -7509,7 +7521,7 @@ _INDEX_HTML = """
                   const label = res.path.split('/').pop();
                   if (!c.fileSources.find(f => f.path === res.path)) {
                     c.fileSources.push({ path: res.path, label });
-                    _wizardRenderCollections(); _wizardAutoSave();
+                    _collMarkModified(c); _wizardMarkDirty(); _wizardRenderCollections();
                   }
                 }
               } catch(e) { /* user cancelled picker */ }
