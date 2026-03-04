@@ -179,6 +179,33 @@ solutions:
       - Informações sobre restaurantes
       language: pt
       doc_type: product_catalog
+  - id: peixefresco_faq
+    display_name: faq
+    collection_name: peixefresco_faq
+    collection_type: scs
+    scraper_name: peixefresco_faq
+    scraper_config:
+      name: peixefresco_faq
+      engine: httpx
+      scrape_mode: sitemap
+      text_selector: main, article, .entry-content, body
+      extra_urls:
+      - https://store.peixefresco.com.pt/perguntas-frequentes/
+    routing: {}
+  - id: peixefresco_customer_support
+    display_name: Customer Support
+    collection_name: peixefresco_customer_support
+    collection_type: scs
+    scraper_name: peixefresco_customer_support
+    scraper_config:
+      name: peixefresco_customer_support
+      engine: httpx
+      scrape_mode: sitemap
+      sitemap_url: https://store.peixefresco.com.pt/page-sitemap.xml
+      text_selector: main, article, .entry-content, body
+      excluded_urls:
+      - https://store.peixefresco.com.pt/receitas/
+    routing: {}
 settings:
   doc_types:
   - product_catalog

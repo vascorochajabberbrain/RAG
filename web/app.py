@@ -1748,8 +1748,10 @@ def wizard_confirm(req: WizardConfirmRequest):
     import yaml, re as _re
     from ingestion.scrapers.sitemap_analyzer import generate_scraper_config
 
-    # Derive solution_id from name
-    solution_id = _re.sub(r"[^a-z0-9]+", "_", req.solution_name.lower()).strip("_")
+    # Use explicit solution_id if provided, else derive from name
+    solution_id = (req.solution_id or '').strip()
+    if not solution_id:
+        solution_id = _re.sub(r"[^a-z0-9]+", "_", req.solution_name.lower()).strip("_")
 
     created = []
     for coll in req.collections:
@@ -2471,7 +2473,7 @@ _INDEX_HTML = """
     .status { font-size: 0.85rem; color: #666; margin-top: 0.5rem; }
     .row { display: flex; gap: 1rem; flex-wrap: wrap; }
     .row > * { flex: 1 1 200px; }
-    .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; position: sticky; top: 0; z-index: 100; background: #fff; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0; }
     .tab { padding: 0.5rem 1rem; border-radius: 6px; background: #e9ecef; border: none; cursor: pointer; font-size: 0.9rem; }
     .tab.active { background: #0066cc; color: #fff; }
     .tab:hover:not(.active) { background: #dee2e6; }
@@ -3094,7 +3096,7 @@ _INDEX_HTML = """
 
           <!-- Card: Confirm -->
           <div class="card" style="padding:1rem;">
-            <button type="button" class="btn-wizard" style="width:100%;" onclick="runWizardConfirm()">✅ Confirm &amp; Create</button>
+            <button type="button" class="btn-wizard" style="width:100%;" onclick="runWizardConfirm()">📋 Register All Collections</button>
             <div id="wizardConfirmLog" class="log hidden" style="margin-top:0.6rem;max-height:8rem;overflow-y:auto;"></div>
             <div id="wizardConfirmResult" style="margin-top:0.5rem;"></div>
             <div id="wizardAutoSaveStatus" style="display:none;font-size:0.75rem;color:#888;margin-top:0.5rem;text-align:right;"></div>
@@ -4601,6 +4603,7 @@ _INDEX_HTML = """
     }
 
     // Tab switching helper — can be called programmatically
+    let _skipBuildAutoLoad = false;  // set by _openCollectionInBuildRag to prevent double-load
     function showTab(name) {
       document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(x => x.classList.add('hidden'));
@@ -4611,10 +4614,11 @@ _INDEX_HTML = """
 
       // Solution-aware tab initialization
       const solId = _currentSolutionId;
-      if (name === 'build' && solId) {
+      if (name === 'build' && solId && !_skipBuildAutoLoad) {
         loadSolutionCollections(solId);
         renderRecentFiles();
       }
+      _skipBuildAutoLoad = false;
       if (name === 'chat') {
         _loadFaqCollections();
         if (solId) _loadChatCollections(solId);
@@ -5811,13 +5815,11 @@ _INDEX_HTML = """
 
     // State
     let _wizardCategories = [];   // category dicts from analyse
-    let _wizardCollections = [];  // [{_id, display_name, doc_type, sitemapIds: Set, excludedUrls: Map<catId,Set<url>>, extraPages: Set<url>, fileSources: [{path, label}]}]
+    let _wizardCollections = [];  // [{_id, display_name, doc_type, qdrant_name, confirmed_collection_name, pages: [{url, origin, origin_id, status}], fileSources: [{path, label}]}]
     let _wizardNextCollId = 0;
     let _wizardDomain = '';
     let _wizardExpanded = {};     // catId → bool
     let _wizardPages = {};        // catId → string[] or null (not yet loaded)
-    let _wizardPageOverrides = {}; // url → collId  (page sent to a different coll than its sitemap)
-    let _wizardExcluded = {};     // url → catId  (pages excluded from their sitemap's coll)
     let _wizardSearchQ = '';
     let _wizardPreviews = {};     // url → string  (cached page content previews)
     let _wizardShowAll = {};      // catId → bool  (show all pages, bypass PAGE_LIMIT)
@@ -5827,7 +5829,7 @@ _INDEX_HTML = """
     let _wizardPendingMode = null; // {type:'fresh'|'update', url, solId, solName, lang} — mode chosen but not yet launched
     let _wizardConfirmedColls = {}; // fullCollName → {points_count, exists} — populated from API
     let _wizardSolId = '';          // cached solution id — avoids DOM read timing issues
-    let _wizardCollPagesOpen = new Set(); // keys: "{collId}::{catId}" — which sitemap page panels are expanded
+    let _wizardCollPagesOpen = new Set(); // keys: "{collId}::{originId}" — which origin page groups are expanded
 
     async function _wizardLoadConfirmedColls(solId) {
       if (!solId) return;
@@ -5880,31 +5882,95 @@ _INDEX_HTML = """
     }
 
     function _collQdrantName(c) {
-      // Returns the Qdrant collection name for a wizard collection entry
-      if (c.confirmed_collection_name) return '🗄 ' + c.confirmed_collection_name;
-      const solId = _wizardSolId || _wizardCurrentSolId();
+      // Returns the raw Qdrant collection name (no emoji prefix) for a wizard collection entry
+      if (c.confirmed_collection_name) return c.confirmed_collection_name;
+      // Prefer canonical solution ID (from global dropdown) over wizard's stored ID
+      const solId = _currentSolutionId || _wizardSolId || _wizardCurrentSolId();
       if (!solId) return '';
+      if (c.qdrant_name) return c.qdrant_name;
       const suffix = (c.display_name || '').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
-      return '🗄 ' + solId + '_' + suffix + ' (pending confirm)';
+      return solId + '_' + suffix;
+    }
+
+    function _isQdrantNameLocked(c) {
+      // Qdrant name is locked once data exists in Qdrant under that name
+      if (!c.confirmed_collection_name) return false;
+      const info = _wizardConfirmedColls[c.confirmed_collection_name];
+      return info && info.points_count > 0;
+    }
+
+    // Helper: get origins (sitemap catIds) that have pages in this collection
+    function _collectionOrigins(c) {
+      const origins = new Map(); // origin_id → {origin, count, excludedCount}
+      for (const p of (c.pages || [])) {
+        const key = p.origin_id || '__manual__';
+        if (!origins.has(key)) origins.set(key, {origin: p.origin, origin_id: p.origin_id, total: 0, excluded: 0});
+        const o = origins.get(key);
+        o.total++;
+        if (p.status === 'excluded') o.excluded++;
+      }
+      return origins;
+    }
+
+    function _collectionIncludedPages(c) {
+      return (c.pages || []).filter(p => p.status === 'included');
+    }
+
+    function _collectionPageCount(c) {
+      return _collectionIncludedPages(c).length;
+    }
+
+    // Add all pages from a sitemap to a collection
+    function _addSitemapPages(c, catId, urls) {
+      // Remove existing pages from this origin to avoid duplicates
+      c.pages = (c.pages || []).filter(p => p.origin_id !== catId);
+      for (const url of urls) {
+        c.pages.push({url, origin: 'sitemap', origin_id: catId, status: 'included'});
+      }
+    }
+
+    // Find which collection a page belongs to (first match)
+    function _pageCollection(url) {
+      for (const c of _wizardCollections) {
+        const p = (c.pages || []).find(p => p.url === url);
+        if (p && p.status === 'included') return c;
+      }
+      return null;
+    }
+
+    // Find page entry across all collections
+    function _findPageEntry(url) {
+      for (const c of _wizardCollections) {
+        const p = (c.pages || []).find(p => p.url === url);
+        if (p) return {collection: c, page: p};
+      }
+      return null;
     }
 
     function _escHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    // Which collection owns a sitemap?
+    // Which collection owns a sitemap origin?
     function _smCollId(catId) {
-      const c = _wizardCollections.find(x => x.sitemapIds.has(catId));
+      const c = _wizardCollections.find(x => (x.pages || []).some(p => p.origin_id === catId));
       return c ? c._id : null;
     }
 
     // Effective state of a page url within catId
     function _pageState(url, catId) {
-      if (_wizardExcluded[url] === 'review') return 'review';
-      if (_wizardExcluded[url]) return 'excluded';
-      if (_wizardPageOverrides[url] !== undefined) return 'overridden';
-      const smColl = _smCollId(catId);
-      if (smColl !== null) return 'inherited';
+      // Check all collections for this page
+      for (const c of _wizardCollections) {
+        const p = (c.pages || []).find(p => p.url === url);
+        if (p) {
+          if (p.status === 'excluded') return 'excluded';
+          if (p.status === 'review') return 'review';
+          // Page is included — check if it's in a different collection than the sitemap's main collection
+          const smColl = _smCollId(catId);
+          if (smColl !== null && smColl !== c._id) return 'overridden';
+          return 'inherited';
+        }
+      }
       return 'unassigned';
     }
 
@@ -6202,8 +6268,6 @@ _INDEX_HTML = """
       _wizardNextCollId = 0;
       _wizardExpanded = {};
       _wizardPages = {};
-      _wizardPageOverrides = {};
-      _wizardExcluded = {};
       _wizardSearchQ = '';
       _wizardPreviews = {};
       _wizardShowAll = {};
@@ -6217,15 +6281,20 @@ _INDEX_HTML = """
           _wizardPages[cat.id] = null; // null = not fully loaded yet
         }
       }
-      _wizardCollections = (suggestions || []).map(s => ({
-        _id: _wizardNextCollId++,
-        display_name: s.display_name || s.collection_name,
-        doc_type: s.doc_type || 'general',
-        sitemapIds: new Set(s.categories || []),
-        excludedUrls: new Map(),  // catId → Set<url>
-        extraPages: new Set(),    // individual page URLs from other sitemaps
-        fileSources: [],          // [{path, label}] non-web sources (PDFs, CSVs, etc.)
-      }));
+      // Create collections from suggestions — pages will be added when sitemaps are loaded
+      _wizardCollections = (suggestions || []).map(s => {
+        const c = {
+          _id: _wizardNextCollId++,
+          display_name: s.display_name || s.collection_name,
+          doc_type: s.doc_type || 'general',
+          qdrant_name: null,       // auto-derived until manually edited
+          confirmed_collection_name: null,
+          pages: [],               // [{url, origin, origin_id, status}]
+          fileSources: [],         // [{path, label}] non-web sources (PDFs, CSVs, etc.)
+          _pendingSitemaps: s.categories || [],  // sitemaps to add pages from once loaded
+        };
+        return c;
+      });
       // Show chat section now that we have analysis context; hide the pre-analysis hint
       const chatHint = document.getElementById('wizardChatHint');
       if (chatHint) chatHint.style.display = 'none';
@@ -6241,16 +6310,10 @@ _INDEX_HTML = """
         onConfirm: async (btn) => {
           btn.textContent = 'Deleting…'; btn.disabled = true;
 
-          // Find Qdrant collection name for this catId
-          const collId = _smCollId(catId)
-            || (_wizardPageOverrides[url] !== undefined ? _wizardPageOverrides[url] : null);
-          const coll = _wizardCollections.find(c => c._id === collId);
-          const solId = document.getElementById('wizardSolName').value.trim()
-            .toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/,'');
-          const collSuffix = coll
-            ? coll.display_name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/,'')
-            : null;
-          const qdrantName = coll ? solId + '_' + collSuffix : null;
+          // Find Qdrant collection name for this page
+          const entry = _findPageEntry(url);
+          const coll = entry ? entry.collection : null;
+          const qdrantName = coll ? _collQdrantName(coll) : null;
 
           if (!qdrantName) {
             btn.textContent = '⚠ No collection'; btn.disabled = false;
@@ -6399,12 +6462,12 @@ _INDEX_HTML = """
 
       for (const url of shown) {
         const state = _pageState(url, catId);
+        const ownerColl = _pageCollection(url);
         const smColl = _wizardCollections.find(x => x._id === _smCollId(catId));
-        const ovColl = _wizardCollections.find(x => x._id === _wizardPageOverrides[url]);
         let badgeText, badgeCls;
         if (state === 'excluded') { badgeText = '✕ excluded'; badgeCls = 'excluded'; }
         else if (state === 'review') { badgeText = '📌 review'; badgeCls = 'review'; }
-        else if (state === 'overridden') { badgeText = '→ ' + (ovColl ? ovColl.display_name : '?'); badgeCls = 'overridden'; }
+        else if (state === 'overridden') { badgeText = '→ ' + (ownerColl ? ownerColl.display_name : '?'); badgeCls = 'overridden'; }
         else if (state === 'inherited') { badgeText = smColl ? smColl.display_name : ''; badgeCls = 'inherited'; }
         else { badgeText = '— unassigned'; badgeCls = 'unassigned'; }
 
@@ -6526,6 +6589,18 @@ _INDEX_HTML = """
       } catch(e) {
         _wizardPages[catId] = [];
       }
+
+      // Resolve any pending sitemap assignments now that pages are loaded
+      for (const c of _wizardCollections) {
+        if (c._pendingSitemaps && c._pendingSitemaps.includes(catId)) {
+          c._pendingSitemaps = c._pendingSitemaps.filter(id => id !== catId);
+          // Only add if no pages from this origin already exist
+          if (!(c.pages || []).some(p => p.origin_id === catId)) {
+            _addSitemapPages(c, catId, _wizardPages[catId]);
+          }
+        }
+      }
+
       _wizardRenderPageList(catId, _wizardSearchQ.toLowerCase());
       // If this catId's page panel is open in any collection, refresh it
       for (const key of _wizardCollPagesOpen) {
@@ -6535,41 +6610,35 @@ _INDEX_HTML = """
           const coll = _wizardCollections.find(x => x._id === collId);
           const panelId = 'wiz-pages-panel-' + collId + '-' + catId.replace(/[^a-z0-9]/gi,'_');
           const existing = document.getElementById(panelId);
-          if (existing && coll) _wizardBuildSitemapPagePanel(existing, coll, catId);
+          if (existing && coll) _wizardBuildOriginPagePanel(existing, coll, catId);
         }
       }
     }
 
-    // Returns pages belonging to collection `c` from sitemap `catId`, filtered by exclusions/overrides
-    function _collectionPagesForCat(c, catId) {
-      const pages = _wizardPages[catId];
-      if (!Array.isArray(pages)) return null; // not loaded yet
-      return pages.filter(url => {
-        if (_wizardExcluded[url]) return false; // excluded globally
-        const override = _wizardPageOverrides[url];
-        if (override !== undefined && override !== c._id) return false; // moved to another coll
-        return true;
-      });
+    // Returns included pages belonging to collection `c` from origin `originId`
+    function _collectionPagesForOrigin(c, originId) {
+      return (c.pages || []).filter(p => p.origin_id === originId && p.status === 'included');
     }
 
-    // Builds the content of a sitemap page panel into `container`
-    function _wizardBuildSitemapPagePanel(container, c, catId) {
+    // Returns all pages belonging to collection `c` from origin `originId` (any status)
+    function _collectionAllPagesForOrigin(c, originId) {
+      return (c.pages || []).filter(p => p.origin_id === originId);
+    }
+
+    // Builds the content of an origin page panel into `container`
+    function _wizardBuildOriginPagePanel(container, c, originId) {
       container.innerHTML = '';
-      const pages = _collectionPagesForCat(c, catId);
-      if (pages === null) {
-        // Not loaded yet — show spinner and trigger load
-        container.innerHTML = '<span style="font-size:0.8rem;color:#999;padding:0.3rem 0.5rem;">⏳ Loading pages…</span>';
-        _wizardLoadPages(catId); // will call back into here via the hook above
+      const allPages = _collectionAllPagesForOrigin(c, originId);
+      if (!allPages.length) {
+        container.innerHTML = '<span style="font-size:0.8rem;color:#aaa;padding:0.3rem 0.5rem;font-style:italic;">No pages from this source.</span>';
         return;
       }
-      if (!pages.length) {
-        container.innerHTML = '<span style="font-size:0.8rem;color:#aaa;padding:0.3rem 0.5rem;font-style:italic;">No pages in this sitemap.</span>';
-        return;
-      }
-      pages.forEach(url => {
+      allPages.forEach(pageEntry => {
+        const url = pageEntry.url;
+        const isExcluded = pageEntry.status === 'excluded';
         // Page row
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:0.35rem;padding:0.18rem 0.4rem;border-radius:4px;font-size:0.78rem;';
+        row.style.cssText = 'display:flex;align-items:center;gap:0.35rem;padding:0.18rem 0.4rem;border-radius:4px;font-size:0.78rem;' + (isExcluded ? 'opacity:0.5;' : '');
         row.onmouseenter = () => row.style.background = '#f5f8ff';
         row.onmouseleave = () => row.style.background = '';
 
@@ -6583,12 +6652,11 @@ _INDEX_HTML = """
         link.onmouseleave = () => link.style.textDecoration = 'none';
         row.appendChild(link);
 
-        // State badge (only show if overridden/extra)
-        const state = _pageState(url, catId);
-        if (state === 'overridden') {
+        // Status badge
+        if (isExcluded) {
           const badge = document.createElement('span');
-          badge.style.cssText = 'font-size:0.68rem;padding:0.05rem 0.35rem;border-radius:8px;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;white-space:nowrap;flex-shrink:0;';
-          badge.textContent = '→ extra';
+          badge.style.cssText = 'font-size:0.68rem;padding:0.05rem 0.35rem;border-radius:8px;background:#ffebee;color:#c62828;border:1px solid #ef9a9a;white-space:nowrap;flex-shrink:0;';
+          badge.textContent = '✕ excluded';
           row.appendChild(badge);
         }
 
@@ -6597,29 +6665,21 @@ _INDEX_HTML = """
         eyeBtn.type = 'button'; eyeBtn.textContent = '👁';
         eyeBtn.title = 'Preview content';
         eyeBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:0.8rem;padding:0.1rem 0.2rem;opacity:0.5;flex-shrink:0;';
-        eyeBtn.onclick = () => _wizardTogglePreview(url, catId, row, eyeBtn);
+        eyeBtn.onclick = () => _wizardTogglePreview(url, originId, row, eyeBtn);
         row.appendChild(eyeBtn);
 
-        // ✕ / action button — opens the existing dropdown
+        // Toggle exclude / include
         const actBtn = document.createElement('button');
-        actBtn.type = 'button'; actBtn.textContent = '✕';
-        actBtn.title = 'Exclude or move page';
-        actBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:0.75rem;padding:0.1rem 0.2rem;color:#c0392b;opacity:0.6;flex-shrink:0;';
+        actBtn.type = 'button';
+        actBtn.title = isExcluded ? 'Include this page' : 'Exclude this page';
+        actBtn.textContent = isExcluded ? '↩' : '✕';
+        actBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:0.75rem;padding:0.1rem 0.2rem;color:' + (isExcluded ? '#1a5276' : '#c0392b') + ';opacity:0.6;flex-shrink:0;';
         actBtn.onmouseenter = () => actBtn.style.opacity = '1';
         actBtn.onmouseleave = () => actBtn.style.opacity = '0.6';
         actBtn.onclick = (e) => {
           e.stopPropagation();
-          const dd = _wizardMakeDropdown(catId, url);
-          if (!dd) return;
-          dd.style.position = 'fixed';
-          dd.style.removeProperty('top');
-          document.body.appendChild(dd);
-          const r = actBtn.getBoundingClientRect();
-          // Position below button, flip up if too close to bottom
-          let top = r.bottom + 4;
-          if (top + 200 > window.innerHeight) top = r.top - 204;
-          dd.style.top = top + 'px';
-          dd.style.left = Math.min(r.left, window.innerWidth - 180) + 'px';
+          pageEntry.status = isExcluded ? 'included' : 'excluded';
+          _wizardRenderAll();
         };
         row.appendChild(actBtn);
 
@@ -6646,7 +6706,7 @@ _INDEX_HTML = """
       const panel = document.createElement('div');
       panel.id = panelId;
       panel.style.cssText = 'max-height:260px;overflow-y:auto;border-top:1px solid #e8eaf0;margin-top:0.25rem;padding:0.2rem 0;background:#fafbfd;border-radius:0 0 6px 6px;';
-      _wizardBuildSitemapPagePanel(panel, c, catId);
+      _wizardBuildOriginPagePanel(panel, c, catId);
       // Insert after the sitemap row
       if (insertAfter.nextSibling) insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
       else insertAfter.parentNode.appendChild(panel);
@@ -6726,18 +6786,15 @@ _INDEX_HTML = """
         if (state !== 'excluded') {
           items.push({label: '✕ Exclude this page', fn: () => { _wizardExcludePageFn(url); _wizardRenderAll(); }});
         }
-        if (state !== 'review') {
-          items.push({label: '📌 Flag for review', fn: () => { _wizardReviewPageFn(url); _wizardRenderAll(); }});
+        if (state === 'excluded' || state === 'overridden') {
+          items.push({label: '↩ Revert', fn: () => { _wizardRevertPage(url); _wizardRenderAll(); }});
         }
-        if (state === 'excluded' || state === 'review' || state === 'overridden') {
-          items.push({label: '↩ Revert to sitemap', fn: () => { _wizardRevertPage(url); _wizardRenderAll(); }});
-        }
-        items.push({label: '— unassign —', fn: () => { _wizardRevertPage(url); _wizardExcludePageFn(url); _wizardRenderAll(); }});
         items.push({type:'sep'});
       }
       // Collection options
       for (const c of _wizardCollections) {
-        const isCurrent = isPage ? _wizardPageOverrides[url] === c._id : _smCollId(catId) === c._id;
+        const ownerColl = _pageCollection(url);
+        const isCurrent = isPage ? (ownerColl && ownerColl._id === c._id) : _smCollId(catId) === c._id;
         items.push({label: (isCurrent ? '✓ ' : '') + c.display_name, fn: () => {
           if (isPage) wizardAssignPage(url, catId, c._id);
           else wizardAssignSitemap(catId, c._id);
@@ -6779,34 +6836,47 @@ _INDEX_HTML = """
     // ── Assignment functions ──────────────────────────────────────────────────
 
     function wizardAssignSitemap(catId, collId) {
-      // Remove from all collections
-      for (const c of _wizardCollections) c.sitemapIds.delete(catId);
+      // Remove all pages from this origin from all collections
+      for (const c of _wizardCollections) {
+        c.pages = (c.pages || []).filter(p => p.origin_id !== catId);
+      }
       if (collId !== null) {
         const c = _wizardCollections.find(x => x._id === collId);
-        if (c) c.sitemapIds.add(catId);
+        if (c) {
+          // Add all loaded pages from this sitemap
+          const urls = _wizardPages[catId];
+          if (Array.isArray(urls)) {
+            _addSitemapPages(c, catId, urls);
+          } else {
+            // Pages not loaded yet — store as pending and load
+            if (!c._pendingSitemaps) c._pendingSitemaps = [];
+            if (!c._pendingSitemaps.includes(catId)) c._pendingSitemaps.push(catId);
+            _wizardLoadPages(catId);
+          }
+        }
       }
       _wizardRenderAll();
     }
 
     function wizardAssignPage(url, catId, collId) {
-      delete _wizardExcluded[url];
-      // Remove from other collections' extraPages
-      for (const c of _wizardCollections) c.extraPages.delete(url);
-      // If same as sitemap collection, just revert
-      if (_smCollId(catId) === collId) {
-        delete _wizardPageOverrides[url];
-      } else {
-        _wizardPageOverrides[url] = collId;
-        const c = _wizardCollections.find(x => x._id === collId);
-        if (c) c.extraPages.add(url);
+      // Remove page from all collections
+      for (const c of _wizardCollections) {
+        c.pages = (c.pages || []).filter(p => p.url !== url);
+      }
+      // Add to target collection
+      const c = _wizardCollections.find(x => x._id === collId);
+      if (c) {
+        c.pages.push({url, origin: catId ? 'sitemap' : 'manual', origin_id: catId || null, status: 'included'});
       }
       _wizardRenderAll();
     }
 
     function _wizardExcludePageFn(url) {
-      delete _wizardPageOverrides[url];
-      for (const c of _wizardCollections) c.extraPages.delete(url);
-      _wizardExcluded[url] = 'excluded';
+      // Find the page in any collection and set status to excluded
+      for (const c of _wizardCollections) {
+        const p = (c.pages || []).find(p => p.url === url);
+        if (p) { p.status = 'excluded'; return; }
+      }
     }
 
     async function wizardAskChat() {
@@ -6829,12 +6899,18 @@ _INDEX_HTML = """
       history.appendChild(thinking);
       history.scrollTop = history.scrollHeight;
 
-      // Serialize collections (Set/Map → plain)
-      const collsSer = _wizardCollections.map(c => ({
-        display_name: c.display_name,
-        doc_type: c.doc_type || '',
-        sitemapIds: [...(c.sitemapIds || [])],
-      }));
+      // Serialize collections for chat context
+      const collsSer = _wizardCollections.map(c => {
+        const origins = _collectionOrigins(c);
+        const originIds = [];
+        for (const [k, info] of origins) { if (k !== '__manual__') originIds.push(info.origin_id); }
+        return {
+          display_name: c.display_name,
+          doc_type: c.doc_type || '',
+          sitemapIds: originIds,
+          page_count: _collectionPageCount(c),
+        };
+      });
 
       try {
         const res = await fetch('/api/wizard/chat', {
@@ -6879,15 +6955,11 @@ _INDEX_HTML = """
     }
 
     function _wizardRevertPage(url) {
-      delete _wizardExcluded[url];
-      delete _wizardPageOverrides[url];
-      for (const c of _wizardCollections) c.extraPages.delete(url);
-    }
-
-    function _wizardReviewPageFn(url) {
-      delete _wizardPageOverrides[url];
-      for (const c of _wizardCollections) c.extraPages.delete(url);
-      _wizardExcluded[url] = 'review';
+      // Set page status back to included
+      for (const c of _wizardCollections) {
+        const p = (c.pages || []).find(p => p.url === url);
+        if (p) { p.status = 'included'; return; }
+      }
     }
 
     // ── Collections panel ─────────────────────────────────────────────────────
@@ -6977,16 +7049,49 @@ _INDEX_HTML = """
           nameWrap.appendChild(nameSpan);
           nameWrap.appendChild(orphanBadge);
         } else {
+          // Display name input
           const nameIn = document.createElement('input');
           nameIn.type = 'text'; nameIn.value = c.display_name; nameIn.placeholder = 'Collection name';
           nameIn.style.cssText = 'width:100%;box-sizing:border-box;';
-          nameIn.title = 'Display name — Qdrant collection named: {solution_id}_{slugified_name}';
-          const qdrantHint = document.createElement('div');
-          qdrantHint.style.cssText = 'font-size:0.68rem;color:#aaa;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-          qdrantHint.textContent = _collQdrantName(c);
-          nameIn.oninput = () => { c.display_name = nameIn.value; qdrantHint.textContent = _collQdrantName(c); };
+          nameIn.title = 'Display name';
+
+          // Qdrant name row — editable until locked
+          const qdrantRow = document.createElement('div');
+          qdrantRow.style.cssText = 'display:flex;align-items:center;gap:0.3rem;margin-top:2px;';
+          const qdrantLabel = document.createElement('span');
+          qdrantLabel.style.cssText = 'font-size:0.68rem;color:#aaa;flex-shrink:0;';
+          qdrantLabel.textContent = '🗄';
+
+          const locked = _isQdrantNameLocked(c);
+          if (locked) {
+            const qdrantSpan = document.createElement('span');
+            qdrantSpan.style.cssText = 'font-size:0.68rem;color:#888;font-family:monospace;';
+            qdrantSpan.textContent = _collQdrantName(c) + ' 🔒';
+            qdrantSpan.title = 'Locked — data exists in Qdrant under this name';
+            qdrantRow.appendChild(qdrantLabel);
+            qdrantRow.appendChild(qdrantSpan);
+          } else {
+            const qdrantIn = document.createElement('input');
+            qdrantIn.type = 'text';
+            qdrantIn.value = _collQdrantName(c);
+            qdrantIn.placeholder = 'qdrant_name';
+            qdrantIn.style.cssText = 'font-size:0.68rem;color:#888;font-family:monospace;border:1px solid #e0e0e0;border-radius:3px;padding:0.05rem 0.25rem;flex:1;min-width:0;';
+            qdrantIn.title = 'Qdrant collection name (editable until data is pushed)';
+            qdrantIn.oninput = () => { c.qdrant_name = qdrantIn.value.trim() || null; };
+            qdrantRow.appendChild(qdrantLabel);
+            qdrantRow.appendChild(qdrantIn);
+          }
+
+          // Auto-derive qdrant name from display name when no custom qdrant_name is set
+          nameIn.oninput = () => {
+            c.display_name = nameIn.value;
+            if (!locked && !c.qdrant_name) {
+              const qdrantIn = qdrantRow.querySelector('input');
+              if (qdrantIn) qdrantIn.value = _collQdrantName(c);
+            }
+          };
           nameWrap.appendChild(nameIn);
-          nameWrap.appendChild(qdrantHint);
+          nameWrap.appendChild(qdrantRow);
         }
 
         top.appendChild(nameWrap);
@@ -7020,20 +7125,21 @@ _INDEX_HTML = """
         }
         block.appendChild(top);
 
-        // ── Body: sitemap assignments (local / both only) ──
+        // ── Body: pages grouped by origin (local / both only) ──
         if (source !== 'qdrant') {
           const body = document.createElement('div');
           body.className = 'wiz-coll-body';
-          if (!c.sitemapIds.size && !c.extraPages.size) {
+          const origins = _collectionOrigins(c);
+          const hasPages = origins.size > 0;
+          const hasFiles = (c.fileSources || []).length > 0;
+
+          if (!hasPages && !hasFiles) {
             body.innerHTML = '<span class="wiz-coll-empty">Drop a sitemap or page here</span>';
           } else {
-            for (const catId of c.sitemapIds) {
-              const cat = _wizardCategories.find(x => x.id === catId);
-              const totalPages = cat ? (cat.url_count || 0) : 0;
-              const exclCount = Object.entries(_wizardExcluded).filter(([url]) => {
-                const pages = _wizardPages[catId];
-                return pages && pages.includes(url);
-              }).length;
+            // Group pages by origin
+            for (const [originKey, info] of origins) {
+              if (originKey === '__manual__') continue; // render manual pages separately below
+              const cat = _wizardCategories.find(x => x.id === info.origin_id);
               const row = document.createElement('div');
               row.className = 'wiz-coll-sm-entry';
 
@@ -7042,42 +7148,47 @@ _INDEX_HTML = """
               dot.className = 'wiz-coll-sm-dot'; dot.textContent = '●';
               row.appendChild(dot);
 
-              // Sitemap name
+              // Origin name (sitemap name)
               const nameSpan = document.createElement('span');
-              nameSpan.className = 'wiz-coll-sm-name'; nameSpan.textContent = catId;
+              nameSpan.className = 'wiz-coll-sm-name';
+              nameSpan.textContent = cat ? cat.display_name : info.origin_id;
+              nameSpan.title = cat ? (cat.sitemap_url || info.origin_id) : info.origin_id;
               row.appendChild(nameSpan);
 
               // Clickable page count toggle
-              const key = c._id + '::' + catId;
+              const key = c._id + '::' + info.origin_id;
               const isOpen = _wizardCollPagesOpen.has(key);
+              const includedCount = info.total - info.excluded;
               const pgBtn = document.createElement('button');
               pgBtn.type = 'button';
               pgBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:0.75rem;color:#1a5276;padding:0 0.2rem;text-decoration:underline;flex-shrink:0;';
-              pgBtn.textContent = '📄 ' + totalPages + ' pages ' + (isOpen ? '▴' : '▾');
+              pgBtn.textContent = '📄 ' + includedCount + ' pages ' + (isOpen ? '▴' : '▾');
               pgBtn.title = 'Show / hide pages in this collection';
-              pgBtn.onclick = () => _wizardToggleSitemapPagePanel(c, catId, pgBtn, row);
+              pgBtn.onclick = () => _wizardToggleSitemapPagePanel(c, info.origin_id, pgBtn, row);
               row.appendChild(pgBtn);
 
-              // Excl count
-              if (exclCount) {
+              // Excluded count
+              if (info.excluded) {
                 const exclSpan = document.createElement('span');
-                exclSpan.className = 'wiz-coll-sm-excl'; exclSpan.textContent = '−' + exclCount + ' excl.';
+                exclSpan.className = 'wiz-coll-sm-excl'; exclSpan.textContent = '−' + info.excluded + ' excl.';
                 row.appendChild(exclSpan);
               }
 
               // Unassign button
               const rmBtn = document.createElement('button');
-              rmBtn.className = 'btn-wizard-rm'; rmBtn.title = 'Unassign sitemap'; rmBtn.textContent = '✕';
+              rmBtn.className = 'btn-wizard-rm'; rmBtn.title = 'Remove this source'; rmBtn.textContent = '✕';
               rmBtn.style.marginLeft = 'auto';
+              const capturedOriginId = info.origin_id;
               rmBtn.onclick = () => {
                 _inlineConfirm(rmBtn, {
-                  message: 'Unassign "' + catId + '" from this collection?',
-                  confirmLabel: 'Unassign',
+                  message: 'Remove all pages from "' + (cat ? cat.display_name : capturedOriginId) + '"?',
+                  confirmLabel: 'Remove',
                   onConfirm: () => {
-                    wizardAssignSitemap(catId, null);
+                    c.pages = (c.pages || []).filter(p => p.origin_id !== capturedOriginId);
                     if (source === 'both') {
-                      _wizardFlashWarning('Chunks from this sitemap are still in Qdrant. Use Work with RAG to remove them.');
+                      _wizardFlashWarning('Chunks from this source may still be in Qdrant. Use Work with RAG to remove them.');
                     }
+                    _wizardRenderAll();
                   }
                 });
               };
@@ -7087,18 +7198,22 @@ _INDEX_HTML = """
 
               // If panel was open before re-render, re-attach it
               if (isOpen) {
-                const panelId = 'wiz-pages-panel-' + c._id + '-' + catId.replace(/[^a-z0-9]/gi,'_');
+                const panelId = 'wiz-pages-panel-' + c._id + '-' + info.origin_id.replace(/[^a-z0-9]/gi,'_');
                 const panel = document.createElement('div');
                 panel.id = panelId;
                 panel.style.cssText = 'max-height:260px;overflow-y:auto;border-top:1px solid #e8eaf0;margin-top:0.25rem;padding:0.2rem 0;background:#fafbfd;border-radius:0 0 6px 6px;';
-                _wizardBuildSitemapPagePanel(panel, c, catId);
+                _wizardBuildOriginPagePanel(panel, c, info.origin_id);
                 body.appendChild(panel);
               }
             }
-            if (c.extraPages.size) {
+
+            // Manual pages
+            const manualInfo = origins.get('__manual__');
+            if (manualInfo && manualInfo.total > 0) {
+              const manualPages = (c.pages || []).filter(p => p.origin === 'manual');
               const ep = document.createElement('div');
               ep.className = 'wiz-coll-extras';
-              ep.textContent = '+ ' + c.extraPages.size + ' individual page(s)';
+              ep.textContent = '+ ' + manualPages.filter(p => p.status === 'included').length + ' individual page(s)';
               body.appendChild(ep);
             }
 
@@ -7176,7 +7291,7 @@ _INDEX_HTML = """
           const badge = document.createElement('span');
           if (pts > 0) {
             badge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.45rem;border-radius:10px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;';
-            const nSrc = (c.sitemapIds ? c.sitemapIds.size || 0 : 0) + (c.fileSources ? c.fileSources.length : 0);
+            const nSrc = _collectionOrigins(c).size + (c.fileSources ? c.fileSources.length : 0);
             badge.textContent = '✅ Live — ' + pts + ' chunks' + (nSrc > 1 ? ' · ' + nSrc + ' sources' : '');
           } else {
             badge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.45rem;border-radius:10px;background:#e3f0fd;color:#1a5276;border:1px solid #aed6f1;';
@@ -7189,16 +7304,12 @@ _INDEX_HTML = """
         // Action buttons — shown for ALL sources
         const btnWrap = document.createElement('div');
         btnWrap.style.cssText = 'display:flex;gap:0.35rem;align-items:center;flex-shrink:0;';
-        // Compute raw collection name (no display decorations)
-        // For local: derive expected Qdrant name directly from solId + slugified display_name
+        // Compute raw collection name using _collQdrantName
         let collName = null;
         if (apiColl) {
           collName = apiColl.name;
-        } else if (c && c.confirmed_collection_name) {
-          collName = c.confirmed_collection_name;
         } else if (c) {
-          const suffix = (c.display_name || '').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
-          collName = (solId || '') + '_' + suffix;
+          collName = _collQdrantName(c);
         }
         if (collName) {
           const buildBtn = document.createElement('button');
@@ -7241,10 +7352,9 @@ _INDEX_HTML = """
               _id: _wizardNextCollId++,
               display_name: displayName,
               doc_type: apiColl.doc_type || effectiveDocType || 'general',
+              qdrant_name: apiColl.name,
               confirmed_collection_name: apiColl.name,
-              sitemapIds: new Set(),
-              excludedUrls: new Map(),
-              extraPages: new Set(),
+              pages: [],
               fileSources: [],
             });
             _wizardAutoSave();
@@ -7300,9 +7410,9 @@ _INDEX_HTML = """
         _id: _wizardNextCollId++,
         display_name: 'New collection',
         doc_type: 'general',
-        sitemapIds: new Set(),
-        excludedUrls: new Map(),
-        extraPages: new Set(),
+        qdrant_name: null,
+        confirmed_collection_name: null,
+        pages: [],
         fileSources: [],
       });
       _wizardRenderCollections();
@@ -7335,32 +7445,38 @@ _INDEX_HTML = """
       log.textContent = 'Creating collections…\\n';
       log.classList.remove('hidden', 'error', 'success');
       if (!solName) { alert('Please select a solution from the top bar first.'); return; }
-      const activeColls = _wizardCollections.filter(c => c.sitemapIds.size > 0 || c.extraPages.size > 0);
-      if (!activeColls.length) { alert('Assign at least one sitemap or page to a collection.'); return; }
+      const activeColls = _wizardCollections.filter(c => _collectionIncludedPages(c).length > 0 || (c.fileSources || []).length > 0);
+      if (!activeColls.length) { alert('Assign at least one page or file source to a collection.'); return; }
 
       const collections = activeColls.map(c => {
-        const categories = Array.from(c.sitemapIds).map(catId => {
-          const cat = _wizardCategories.find(x => x.id === catId);
-          // Collect excluded URLs that belong to this sitemap
-          const pages = _wizardPages[catId] || [];
-          const excluded = pages.filter(u => _wizardExcluded[u]);
-          return {
-            id: catId,
+        // Group included pages by origin for the API
+        const origins = _collectionOrigins(c);
+        const categories = [];
+        for (const [originKey, info] of origins) {
+          if (originKey === '__manual__') continue;
+          const cat = _wizardCategories.find(x => x.id === info.origin_id);
+          const allOriginPages = (c.pages || []).filter(p => p.origin_id === info.origin_id);
+          const excluded = allOriginPages.filter(p => p.status === 'excluded').map(p => p.url);
+          categories.push({
+            id: info.origin_id,
             sitemap_url: cat ? cat.sitemap_url : null,
             url_filter: cat ? cat.url_filter : null,
             excluded_urls: excluded.length ? excluded : undefined,
-          };
-        });
+          });
+        }
+        const manualPages = (c.pages || []).filter(p => p.origin === 'manual' && p.status === 'included').map(p => p.url);
+        // Use qdrant_name if set, otherwise derive from display_name
+        const collName = c.qdrant_name || c.display_name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
         return {
           display_name: c.display_name,
-          collection_name: c.display_name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''),
+          collection_name: collName,
           doc_type: c.doc_type,
           categories,
-          extra_pages: c.extraPages.size ? Array.from(c.extraPages) : undefined,
+          extra_pages: manualPages.length ? manualPages : undefined,
         };
       });
 
-      const solId = solName.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+      const solId = _wizardSolId || _currentSolutionId || solName.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
       try {
         const res = await fetch('/api/wizard/confirm', {
           method: 'POST', headers: {'Content-Type':'application/json'},
@@ -7430,6 +7546,56 @@ _INDEX_HTML = """
       });
     }
 
+    async function _registerSingleCollection(c, solId) {
+      /* Register one wizard collection in solutions.yaml via the confirm endpoint. */
+      const solName = document.getElementById('wizardSolName')?.value?.trim() || solId;
+      const lang = document.getElementById('wizardLang')?.value || '';
+      const origins = _collectionOrigins(c);
+      const categories = [];
+      for (const [originKey, info] of origins) {
+        if (originKey === '__manual__') continue;
+        const cat = _wizardCategories.find(x => x.id === info.origin_id);
+        const allOriginPages = (c.pages || []).filter(p => p.origin_id === info.origin_id);
+        const excluded = allOriginPages.filter(p => p.status === 'excluded').map(p => p.url);
+        categories.push({
+          id: info.origin_id,
+          sitemap_url: cat ? cat.sitemap_url : null,
+          url_filter: cat ? cat.url_filter : null,
+          excluded_urls: excluded.length ? excluded : undefined,
+        });
+      }
+      const manualPages = (c.pages || []).filter(p => p.origin === 'manual' && p.status === 'included').map(p => p.url);
+      const collName = c.qdrant_name || c.display_name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+      const payload = {
+        solution_id: solId,
+        solution_name: solName,
+        language: lang,
+        domain: _wizardDomain,
+        collections: [{
+          display_name: c.display_name,
+          collection_name: collName,
+          doc_type: c.doc_type,
+          categories,
+          extra_pages: manualPages.length ? manualPages : undefined,
+        }]
+      };
+      try {
+        const res = await fetch('/api/wizard/confirm', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) { alert('Failed to register collection: ' + (data.detail || 'Error')); return false; }
+        // Update confirmed name on the wizard collection
+        if (data.collections && data.collections.length) {
+          c.confirmed_collection_name = data.collections[0].collection_name;
+        }
+        await _reloadSolutions(solId);
+        _wizardLoadConfirmedColls(solId);
+        return true;
+      } catch(e) { alert('Failed to register collection: ' + e); return false; }
+    }
+
     async function _openCollectionInBuildRag(solutionId, collectionName) {
       // Step 1: resolve canonical solution ID from the global dropdown.
       const solSel = document.getElementById('globalSolution');
@@ -7456,10 +7622,9 @@ _INDEX_HTML = """
         badge.textContent = lang ? `🌐 ${lang}` : '🌐 set language';
       }
 
-      showTab('build');
-
       if (canonicalSolId) {
         try {
+          // Load collections first WITHOUT switching tab — verify the collection exists before showing build tab
           await loadSolutionCollections(canonicalSolId, {autoSelect: false});
           const collSel = document.getElementById('collectionSelect');
           console.log('[Work with RAG] Looking for collection:', collectionName, '| Available:', Array.from(collSel.options).map(o => o.value).filter(v => v && v !== '__new__'));
@@ -7482,6 +7647,9 @@ _INDEX_HTML = """
               });
             }
             if (target) {
+              // Collection found — NOW switch to build tab and select it
+              _skipBuildAutoLoad = true;
+              showTab('build');
               collSel.value = target.value;
               onCollectionSelect();
               // Auto-select first source so pipeline is visible
@@ -7489,17 +7657,45 @@ _INDEX_HTML = """
               const sources = (coll && coll.sources) || [];
               if (sources.length) selectSource(sources[0].id);
             } else {
-              // No match — don't select a wrong collection
-              console.warn('[Work with RAG] No collection match for "' + collectionName + '" in dropdown:', opts.map(o => o.value));
-              alert('Collection "' + collectionName + '" is not yet registered.\\nConfirm the wizard plan first to register it in solutions.yaml.');
+              // Not registered yet — auto-register this single collection, then open it
+              console.log('[Work with RAG] Collection "' + collectionName + '" not registered — auto-registering…');
+              const wizColl = _wizardCollections.find(c => _collQdrantName(c) === collectionName);
+              if (wizColl) {
+                const registered = await _registerSingleCollection(wizColl, canonicalSolId);
+                if (registered) {
+                  // Use the confirmed name (set by _registerSingleCollection) for lookup
+                  const confirmedName = wizColl.confirmed_collection_name || collectionName;
+                  await loadSolutionCollections(canonicalSolId, {autoSelect: false});
+                  const freshOpts = Array.from(collSel.options).filter(o => o.value && o.value !== '__new__');
+                  const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                  const freshTarget = freshOpts.find(o => o.value === confirmedName) ||
+                    freshOpts.find(o => norm(o.value) === norm(confirmedName));
+                  if (freshTarget) {
+                    _skipBuildAutoLoad = true;
+                    showTab('build');
+                    collSel.value = freshTarget.value;
+                    onCollectionSelect();
+                    const fc = _currentCollections[freshTarget.value];
+                    if (fc && fc.sources && fc.sources.length) selectSource(fc.sources[0].id);
+                  } else {
+                    showTab('build');
+                  }
+                }
+              } else {
+                alert('Collection "' + collectionName + '" could not be found in the wizard state.');
+              }
             }
+          } else {
+            showTab('build');
           }
-        } catch(e) { /* ignore */ }
+        } catch(e) { showTab('build'); }
+      } else {
+        showTab('build');
       }
     }
 
     function _reloadSolutions(selectSolutionId) {
-      fetch('/api/solutions').then(r => r.json()).then(data => {
+      return fetch('/api/solutions').then(r => r.json()).then(data => {
         _allSolutions = data.solutions || [];
         _populateGlobalSolutionDropdown(selectSolutionId || _currentSolutionId);
         _wizardPopulateSolNameList();
@@ -7511,6 +7707,7 @@ _INDEX_HTML = """
     // Serialise JS state (Set/Map → plain objects) for JSON storage
     function _wizardSerialiseState() {
       return {
+        _version: 2,  // data model version for migration detection
         domain: _wizardDomain,
         sol_name: document.getElementById('wizardSolName').value.trim(),
         sol_lang: document.getElementById('wizardLang').value,
@@ -7520,18 +7717,12 @@ _INDEX_HTML = """
           _id: c._id,
           display_name: c.display_name,
           doc_type: c.doc_type,
+          qdrant_name: c.qdrant_name || null,
           confirmed_collection_name: c.confirmed_collection_name || null,
-          sitemapIds: Array.from(c.sitemapIds),
-          // excludedUrls: Map<catId, Set<url>> → {catId: [url, ...]}
-          excludedUrls: Object.fromEntries(
-            Array.from(c.excludedUrls.entries()).map(([k, v]) => [k, Array.from(v)])
-          ),
-          extraPages: Array.from(c.extraPages),
+          pages: (c.pages || []),  // [{url, origin, origin_id, status}]
           fileSources: c.fileSources || [],
         })),
         next_coll_id: _wizardNextCollId,
-        page_overrides: _wizardPageOverrides,  // url → collId (plain obj, already serialisable)
-        excluded: _wizardExcluded,              // url → catId  (plain obj)
         // pages: catId → string[] — only save loaded pages (non-null)
         pages: Object.fromEntries(
           Object.entries(_wizardPages).filter(([, v]) => Array.isArray(v))
@@ -7548,8 +7739,6 @@ _INDEX_HTML = """
       _wizardDomain = saved.domain || '';
       _wizardCategories = saved.categories || [];
       _wizardNextCollId = saved.next_coll_id || 0;
-      _wizardPageOverrides = saved.page_overrides || {};
-      _wizardExcluded = saved.excluded || {};
       _wizardPreviews = saved.previews || {};
       _wizardSearchQ = '';
       _wizardExpanded = {};
@@ -7566,19 +7755,57 @@ _INDEX_HTML = """
         }
       }
 
-      // Restore collections (convert plain objects back to Set/Map)
-      _wizardCollections = (saved.collections || []).map(c => ({
-        _id: c._id,
-        display_name: c.display_name,
-        doc_type: c.doc_type,
-        confirmed_collection_name: c.confirmed_collection_name || null,
-        sitemapIds: new Set(c.sitemapIds || []),
-        excludedUrls: new Map(
-          Object.entries(c.excludedUrls || {}).map(([k, v]) => [k, new Set(v)])
-        ),
-        extraPages: new Set(c.extraPages || []),
-        fileSources: c.fileSources || [],
-      }));
+      const isOldFormat = !saved._version || saved._version < 2;
+
+      if (isOldFormat) {
+        // ── Migration from v1 (sitemapIds/excludedUrls/extraPages) to v2 (pages[]) ──
+        const oldExcluded = saved.excluded || {};
+        const oldOverrides = saved.page_overrides || {};
+
+        _wizardCollections = (saved.collections || []).map(c => {
+          const pages = [];
+          // Add pages from assigned sitemaps
+          for (const catId of (c.sitemapIds || [])) {
+            const catPages = (saved.pages && saved.pages[catId]) || [];
+            const excludedSet = new Set((c.excludedUrls && c.excludedUrls[catId]) || []);
+            for (const url of catPages) {
+              const isExcludedGlobal = !!oldExcluded[url];
+              const isOverridden = oldOverrides[url] !== undefined && oldOverrides[url] !== c._id;
+              if (isOverridden) continue; // belongs to another collection
+              pages.push({
+                url,
+                origin: 'sitemap',
+                origin_id: catId,
+                status: (isExcludedGlobal || excludedSet.has(url)) ? 'excluded' : 'included'
+              });
+            }
+          }
+          // Add extra pages
+          for (const url of (c.extraPages || [])) {
+            pages.push({url, origin: 'manual', origin_id: null, status: 'included'});
+          }
+          return {
+            _id: c._id,
+            display_name: c.display_name,
+            doc_type: c.doc_type,
+            qdrant_name: null,
+            confirmed_collection_name: c.confirmed_collection_name || null,
+            pages,
+            fileSources: c.fileSources || [],
+          };
+        });
+      } else {
+        // v2 format — direct restore
+        _wizardCollections = (saved.collections || []).map(c => ({
+          _id: c._id,
+          display_name: c.display_name,
+          doc_type: c.doc_type,
+          qdrant_name: c.qdrant_name || null,
+          confirmed_collection_name: c.confirmed_collection_name || null,
+          pages: c.pages || [],
+          fileSources: c.fileSources || [],
+        }));
+      }
 
       // Restore input fields
       const urlInput = document.getElementById('wizardUrl');
@@ -7698,10 +7925,11 @@ _INDEX_HTML = """
         const data = await res.json();
         dd.innerHTML = '';
         let saves = data.saves || [];
-        // Filter by current solution if one is selected
+        // Filter by current solution if one is selected (strip underscores for fuzzy match)
         if (_currentSolutionId) {
-          const solKey = _currentSolutionId.trim().toLowerCase().replace(/\s+/g, '_');
-          saves = saves.filter(s => s.solution_id === solKey);
+          const norm = id => (id || '').trim().toLowerCase().replace(/[_\s]+/g, '');
+          const solNorm = norm(_currentSolutionId);
+          saves = saves.filter(s => norm(s.solution_id) === solNorm);
         }
         if (!saves.length) {
           const em = document.createElement('span');
