@@ -2086,6 +2086,17 @@ def wizard_list_saves():
     return {"saves": saves}
 
 
+@app.delete("/api/wizard/delete-save")
+def wizard_delete_save(solution_id: str):
+    """Delete a saved wizard state file."""
+    sid = solution_id.strip().lower().replace(" ", "_")
+    path = os.path.join(_DATA_ROOT, f".wizard_state_{sid}.json")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Config not found")
+    os.remove(path)
+    return {"deleted": True, "solution_id": sid}
+
+
 class WizardDiffRequest(BaseModel):
     url: str
     solution_id: str
@@ -8303,13 +8314,30 @@ _INDEX_HTML = """
         }
         saves.sort((a, b) => b.mtime - a.mtime); // newest first
         for (const s of saves) {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:0.3rem;padding:0 0.3rem 0 0;';
           const btn2 = document.createElement('button');
           btn2.className = 'wiz-load-item';
+          btn2.style.flex = '1';
           const date = new Date(s.mtime * 1000).toLocaleString();
           btn2.title = date;
           btn2.textContent = s.solution_id + '  (' + date + ')';
           btn2.onclick = () => wizardLoadSession(s.solution_id);
-          dd.appendChild(btn2);
+          const delBtn = document.createElement('button');
+          delBtn.style.cssText = 'background:none;border:none;color:#c62828;cursor:pointer;font-size:0.85rem;padding:0.2rem 0.3rem;flex-shrink:0;';
+          delBtn.title = 'Delete this config';
+          delBtn.textContent = '🗑';
+          delBtn.onclick = async (e) => {
+            e.stopPropagation();
+            if (!confirm('Delete collection config "' + s.solution_id + '"? This cannot be undone.')) return;
+            try {
+              const res = await fetch('/api/wizard/delete-save?solution_id=' + encodeURIComponent(s.solution_id), {method:'DELETE'});
+              if (res.ok) { row.remove(); } else { alert('Delete failed.'); }
+            } catch(err) { alert('Delete failed: ' + err.message); }
+          };
+          row.appendChild(btn2);
+          row.appendChild(delBtn);
+          dd.appendChild(row);
         }
       } catch(err) {
         dd.innerHTML = '<span class="wiz-load-empty">Error: ' + _escHtml(err.message) + '</span>';
