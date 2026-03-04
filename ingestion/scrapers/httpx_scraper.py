@@ -25,7 +25,7 @@ _HEADERS = {
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
-def run_httpx_scraper(config: dict) -> tuple:
+def run_httpx_scraper(config: dict, cancel_check=None) -> tuple:
     """
     Run an httpx+BS4 scrape according to config.
     Returns (raw_text: str, scraped_items: list[dict])
@@ -35,11 +35,11 @@ def run_httpx_scraper(config: dict) -> tuple:
 
     with httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=30) as client:
         if mode == "sitemap":
-            result = _sitemap_scrape(client, config)
+            result = _sitemap_scrape(client, config, cancel_check=cancel_check)
         elif mode == "single_page":
             result = _single_page_scrape(client, config)
         elif mode == "crawl":
-            result = _crawl_scrape(client, config)
+            result = _crawl_scrape(client, config, cancel_check=cancel_check)
         else:
             result = (f"Error: Unknown scrape_mode '{mode}'.", [])
 
@@ -48,7 +48,7 @@ def run_httpx_scraper(config: dict) -> tuple:
 
 # ── Scrape modes ──────────────────────────────────────────────────────────────
 
-def _sitemap_scrape(client: httpx.Client, config: dict) -> tuple:
+def _sitemap_scrape(client: httpx.Client, config: dict, cancel_check=None) -> tuple:
     sitemap_url = config.get("sitemap_url")
     if not sitemap_url:
         return "Error: sitemap_url required for scrape_mode=sitemap.", []
@@ -60,10 +60,10 @@ def _sitemap_scrape(client: httpx.Client, config: dict) -> tuple:
         return "Error: No URLs matched after filtering the sitemap.", []
 
     print(f"[httpx_scraper] Sitemap: {len(urls)} URLs to scrape.")
-    return _scrape_url_list(client, urls, config)
+    return _scrape_url_list(client, urls, config, cancel_check=cancel_check)
 
 
-def _crawl_scrape(client: httpx.Client, config: dict) -> tuple:
+def _crawl_scrape(client: httpx.Client, config: dict, cancel_check=None) -> tuple:
     start_url = config.get("start_url")
     if not start_url:
         return "Error: start_url required for scrape_mode=crawl.", []
@@ -76,6 +76,9 @@ def _crawl_scrape(client: httpx.Client, config: dict) -> tuple:
     items = []
 
     while stack and len(visited) < max_pages:
+        if cancel_check and cancel_check():
+            print(f"[httpx_scraper] ⛔ Cancelled after {len(visited)} pages.")
+            break
         url = stack.pop()
         if url in visited:
             continue
@@ -252,11 +255,14 @@ def _filter_urls(urls: list, config: dict) -> list:
     return urls
 
 
-def _scrape_url_list(client: httpx.Client, urls: list, config: dict) -> tuple:
+def _scrape_url_list(client: httpx.Client, urls: list, config: dict, cancel_check=None) -> tuple:
     """Fetch and extract from a list of URLs. Returns (joined_text, scraped_items)."""
     results = []
     items = []
     for i, url in enumerate(urls, 1):
+        if cancel_check and cancel_check():
+            print(f"[httpx_scraper] ⛔ Cancelled after {len(results)}/{len(urls)} pages.")
+            break
         print(f"[httpx_scraper] Scraping {i}/{len(urls)}: {url}")
         try:
             resp = client.get(url)

@@ -29,12 +29,13 @@ from playwright.sync_api import sync_playwright
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
-def run_playwright_scraper(config: dict) -> tuple:
+def run_playwright_scraper(config: dict, cancel_check=None) -> tuple:
     """
     Run a Playwright scrape according to config.
     Returns (raw_text: str, scraped_items: list[dict])
     where each item is {"url": str, "text": str}.
     Callers that only need the text can do: text, _ = run_playwright_scraper(config)
+    cancel_check: optional callable returning True when the user wants to stop.
     """
     mode = config.get("scrape_mode", "crawl")
 
@@ -49,11 +50,11 @@ def run_playwright_scraper(config: dict) -> tuple:
                 _perform_login(page, login_cfg)
 
             if mode == "sitemap":
-                result = _sitemap_scrape(page, config)
+                result = _sitemap_scrape(page, config, cancel_check=cancel_check)
             elif mode == "single_page":
                 result = _single_page_scrape(page, config)
             elif mode == "crawl":
-                result = _crawl_scrape(page, config)
+                result = _crawl_scrape(page, config, cancel_check=cancel_check)
             else:
                 result = (f"Error: Unknown scrape_mode '{mode}'.", [])
         finally:
@@ -94,7 +95,7 @@ def _perform_login(page, login_config: dict) -> bool:
 
 # ── Scrape modes ──────────────────────────────────────────────────────────────
 
-def _sitemap_scrape(page, config: dict) -> tuple:
+def _sitemap_scrape(page, config: dict, cancel_check=None) -> tuple:
     sitemap_url = config.get("sitemap_url")
     if not sitemap_url:
         return "Error: sitemap_url required for scrape_mode=sitemap.", []
@@ -106,10 +107,10 @@ def _sitemap_scrape(page, config: dict) -> tuple:
         return "Error: No URLs matched after filtering the sitemap.", []
 
     print(f"[playwright_scraper] Sitemap: {len(urls)} URLs to scrape.")
-    return _scrape_url_list(page, urls, config)
+    return _scrape_url_list(page, urls, config, cancel_check=cancel_check)
 
 
-def _crawl_scrape(page, config: dict) -> tuple:
+def _crawl_scrape(page, config: dict, cancel_check=None) -> tuple:
     start_url = config.get("start_url")
     if not start_url:
         return "Error: start_url required for scrape_mode=crawl.", []
@@ -122,6 +123,9 @@ def _crawl_scrape(page, config: dict) -> tuple:
     items = []
 
     while stack and len(visited) < max_pages:
+        if cancel_check and cancel_check():
+            print(f"[playwright_scraper] ⛔ Cancelled after {len(visited)} pages.")
+            break
         url = stack.pop()
         if url in visited:
             continue
@@ -331,11 +335,14 @@ def _filter_urls(urls: list, config: dict) -> list:
     return urls
 
 
-def _scrape_url_list(page, urls: list, config: dict) -> tuple:
+def _scrape_url_list(page, urls: list, config: dict, cancel_check=None) -> tuple:
     """Scrape a list of URLs. Returns (joined_text, scraped_items)."""
     results = []
     items = []
     for i, url in enumerate(urls, 1):
+        if cancel_check and cancel_check():
+            print(f"[playwright_scraper] ⛔ Cancelled after {len(results)}/{len(urls)} pages.")
+            break
         print(f"[playwright_scraper] Scraping {i}/{len(urls)}: {url}")
         text = _fetch_and_extract(page, url, config)
         if text:

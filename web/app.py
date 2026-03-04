@@ -26,6 +26,9 @@ _tracker: Optional[Any] = None
 # Progress reporting (used by long-running steps like translate)
 # thread-safe queue written to by background thread, read by async SSE endpoint
 _progress_queue: queue.Queue = queue.Queue()
+
+# Cancellation support for long-running steps (Ingest, Push)
+_cancel_event = threading.Event()
 _loop: asyncio.AbstractEventLoop = None
 
 
@@ -1411,6 +1414,14 @@ def get_workflow_state():
     return get_state().to_dict()
 
 
+@app.post("/api/workflow/cancel")
+def cancel_workflow():
+    """Signal the currently running background step (Ingest/Push) to stop."""
+    _cancel_event.set()
+    _progress_queue.put("LOG:⛔ Cancellation requested…")
+    return {"cancelled": True}
+
+
 @app.post("/api/workflow/fetch")
 def run_fetch_streaming(req: StepRequest):
     """Run FETCH in a background thread, streaming stdout lines via SSE progress queue."""
@@ -1435,14 +1446,22 @@ def run_fetch_streaming(req: StepRequest):
             return len(s)
         def flush(self): pass
 
+    _cancel_event.clear()
+
     def _run():
         old_stdout = sys.stdout
         sys.stdout = _QueueWriter()
         try:
-            msg = run_step(state, Step.FETCH)
-            _progress_queue.put(f"DONE:{msg}")
+            msg = run_step(state, Step.FETCH, cancel_check=_cancel_event.is_set)
+            if _cancel_event.is_set():
+                _progress_queue.put("CANCELLED:Ingest was stopped by user.")
+            else:
+                _progress_queue.put(f"DONE:{msg}")
         except Exception as e:
-            _progress_queue.put(f"ERROR:{e}")
+            if _cancel_event.is_set():
+                _progress_queue.put("CANCELLED:Ingest was stopped by user.")
+            else:
+                _progress_queue.put(f"ERROR:{e}")
         finally:
             sys.stdout = old_stdout
 
@@ -1471,14 +1490,22 @@ def run_push_streaming(req: StepRequest):
             return len(s)
         def flush(self): pass
 
+    _cancel_event.clear()
+
     def _run():
         old_stdout = sys.stdout
         sys.stdout = _QueueWriter()
         try:
-            msg = run_step(state, Step.PUSH_TO_QDRANT)
-            _progress_queue.put(f"DONE:{msg}")
+            msg = run_step(state, Step.PUSH_TO_QDRANT, cancel_check=_cancel_event.is_set)
+            if _cancel_event.is_set():
+                _progress_queue.put("CANCELLED:Push was stopped by user.")
+            else:
+                _progress_queue.put(f"DONE:{msg}")
         except Exception as e:
-            _progress_queue.put(f"ERROR:{e}")
+            if _cancel_event.is_set():
+                _progress_queue.put("CANCELLED:Push was stopped by user.")
+            else:
+                _progress_queue.put(f"ERROR:{e}")
         finally:
             sys.stdout = old_stdout
 
@@ -3019,6 +3046,7 @@ _INDEX_HTML = """
         </div>
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
           <button type="button" class="btn-primary" id="runFetch">1. Ingest</button>
+          <button type="button" id="btnStopIngest" style="display:none;background:#c62828;color:#fff;border:none;padding:0.35rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600;" onclick="_cancelWorkflow('ingest')">⛔ Stop</button>
           <span class="help-icon" onclick="toggleHelp('help-fetch')" title="Help">?</span>
         </div>
         <div id="help-fetch" class="help-tip">Extracts content from your sources: scrapes web pages or reads files (PDF, TXT, CSV). State is auto-saved to <code>.rag_state.json</code> after completion so you can resume later. <a href="/help#ingest" target="_blank">Learn more &rarr;</a></div>
@@ -3059,6 +3087,7 @@ _INDEX_HTML = """
         <div id="help-create" class="help-tip">Creates the Qdrant vector collection with the selected embedding model dimensions. Skipped if it already exists. Must be done before Push. <a href="/help#create-collection" target="_blank">Learn more &rarr;</a></div>
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
           <button type="button" class="btn-primary" id="runPush">4. Push to Qdrant</button>
+          <button type="button" id="btnStopPush" style="display:none;background:#c62828;color:#fff;border:none;padding:0.35rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600;" onclick="_cancelWorkflow('push')">⛔ Stop</button>
           <span class="help-icon" onclick="toggleHelp('help-push')" title="Help">?</span>
         </div>
         <div id="help-push" class="help-tip">Embeds all chunks using OpenAI and uploads them to Qdrant. New points are appended — existing data is not overwritten. <a href="/help#push" target="_blank">Learn more &rarr;</a></div>
@@ -5541,12 +5570,26 @@ _INDEX_HTML = """
       });
     }
 
+    // ── Stop / Cancel running workflow step ──
+    let _activeES = null;  // reference to current EventSource so Stop can close it
+    async function _cancelWorkflow(which) {
+      try {
+        await fetch('/api/workflow/cancel', { method: 'POST' });
+      } catch (_) {}
+      // EventSource handlers will process the CANCELLED message and reset UI
+    }
+    function _showStopBtn(id) { const b = document.getElementById(id); if (b) b.style.display = 'inline-block'; }
+    function _hideStopBtn(id) { const b = document.getElementById(id); if (b) b.style.display = 'none'; }
+
     async function runFetchWithProgress() {
       const btn = document.getElementById('runFetch');
       _btnRunning(btn);
       btn.textContent = '1. Ingesting…';
+      _showStopBtn('btnStopIngest');
       setLog(buildLog, 'Ingesting… (this may take a few minutes for large sites)', false);
       buildLog.style.maxHeight = '20rem';
+
+      const _resetIngest = () => { _hideStopBtn('btnStopIngest'); _btnDone(btn); btn.textContent = '1. Ingest'; };
 
       const es = new EventSource('/api/progress');
       es.onmessage = (e) => {
@@ -5561,19 +5604,26 @@ _INDEX_HTML = """
           buildLog.scrollTop = buildLog.scrollHeight;
           buildLog.className = 'log success';
           es.close();
+          _hideStopBtn('btnStopIngest');
           _btnSuccess(btn); btn.textContent = '1. Ingest';
           // Fetch updated state to render relevance report card (if check ran)
           api('/api/workflow/state').then(st => {
             if (st && st.relevance_report) renderRelevanceCard(st.relevance_report);
           }).catch(() => {});
+        } else if (data.startsWith('CANCELLED:')) {
+          const msg = data.replace('CANCELLED:', '');
+          buildLog.textContent += '\\n⛔ ' + msg;
+          buildLog.className = 'log error';
+          es.close();
+          _resetIngest();
         } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
           buildLog.textContent += '\\n❌ ' + data;
           buildLog.className = 'log error';
           es.close();
-          _btnDone(btn); btn.textContent = '1. Ingest';
+          _resetIngest();
         }
       };
-      es.onerror = () => { es.close(); _btnDone(btn); btn.textContent = '1. Ingest'; };
+      es.onerror = () => { es.close(); _resetIngest(); };
 
       try {
         const _lc = _buildLoginConfig();
@@ -5581,8 +5631,7 @@ _INDEX_HTML = """
       } catch (e) {
         setLog(buildLog, e.message || String(e), true);
         es.close();
-        btn.disabled = false;
-        btn.textContent = '1. Ingest';
+        _resetIngest();
       }
     }
 
@@ -5609,8 +5658,11 @@ _INDEX_HTML = """
       }
 
       _btnRunning(btn);
+      _showStopBtn('btnStopPush');
       setLog(buildLog, 'Pushing to Qdrant… (embedding each chunk with OpenAI)', false);
       buildLog.style.maxHeight = '20rem';
+
+      const _resetPush = () => { _hideStopBtn('btnStopPush'); _btnDone(btn); };
 
       const es = new EventSource('/api/progress');
       es.onmessage = (e) => {
@@ -5625,17 +5677,24 @@ _INDEX_HTML = """
           buildLog.scrollTop = buildLog.scrollHeight;
           buildLog.className = 'log success';
           es.close();
+          _hideStopBtn('btnStopPush');
           _btnSuccess(btn);
           // Refresh collection view to update status badges
           if (_currentSolutionId) loadSolutionCollections(_currentSolutionId);
+        } else if (data.startsWith('CANCELLED:')) {
+          const msg = data.replace('CANCELLED:', '');
+          buildLog.textContent += '\\n⛔ ' + msg;
+          buildLog.className = 'log error';
+          es.close();
+          _resetPush();
         } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
           buildLog.textContent += '\\n❌ ' + data;
           buildLog.className = 'log error';
           es.close();
-          _btnDone(btn);
+          _resetPush();
         }
       };
-      es.onerror = () => { es.close(); _btnDone(btn); };
+      es.onerror = () => { es.close(); _resetPush(); };
 
       try {
         const stateUpdate = getStateUpdate();
@@ -5644,7 +5703,7 @@ _INDEX_HTML = """
       } catch (e) {
         setLog(buildLog, e.message || String(e), true);
         es.close();
-        _btnDone(btn);
+        _resetPush();
       }
     }
 

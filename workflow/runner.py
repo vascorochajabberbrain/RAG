@@ -4,10 +4,11 @@ Workflow runner: executes one step at a time using existing ingestion, vectoriza
 from workflow.models import Step, WorkflowState, ChunkingConfig
 
 
-def run_step(state: WorkflowState, step: Step) -> str:
+def run_step(state: WorkflowState, step: Step, cancel_check=None) -> str:
     """
     Execute a single workflow step. Mutates state. Returns a short status message.
     Auto-saves state to disk after steps that produce significant output.
+    cancel_check: optional callable returning True when the user wants to stop.
     """
     if state.tracker is None and step != Step.ADD_SOURCE:
         return "Error: No Qdrant tracker set on state. Create tracker and set state.tracker first."
@@ -17,7 +18,7 @@ def run_step(state: WorkflowState, step: Step) -> str:
     elif step == Step.ADD_SOURCE:
         return "Source config set in state (no side effects)."
     elif step == Step.FETCH:
-        msg = _run_fetch(state)
+        msg = _run_fetch(state, cancel_check=cancel_check)
     elif step == Step.CLEAN:
         msg = _run_clean(state)
     elif step == Step.TRANSLATE_AND_CLEAN:
@@ -27,7 +28,7 @@ def run_step(state: WorkflowState, step: Step) -> str:
     elif step == Step.GROUP:
         msg = _run_group(state)
     elif step == Step.PUSH_TO_QDRANT:
-        msg = _run_push(state)
+        msg = _run_push(state, cancel_check=cancel_check)
     elif step == Step.TEST_QA:
         return _run_test_qa(state)
     else:
@@ -80,7 +81,7 @@ def _run_create_collection(state: WorkflowState) -> str:
     )
 
 
-def _run_fetch(state: WorkflowState) -> str:
+def _run_fetch(state: WorkflowState, cancel_check=None) -> str:
     stype = state.source_type or ""
     config = state.source_config or {}
 
@@ -109,7 +110,7 @@ def _run_fetch(state: WorkflowState) -> str:
         if not scraper_name:
             return "Error: source_config must contain 'scraper_name' or 'scraper' for url."
         inline_cfg = config.get("scraper_config")  # inline config from solutions.yaml
-        raw_text, scraped_items = run_scraper(scraper_name, config, inline_config=inline_cfg)
+        raw_text, scraped_items = run_scraper(scraper_name, config, inline_config=inline_cfg, cancel_check=cancel_check)
         state.raw_text = raw_text
         state.scraped_items = scraped_items
         state.source_label = config.get("source_label") or scraper_name
@@ -438,7 +439,7 @@ def _run_group(state: WorkflowState) -> str:
     return "Grouping completed."
 
 
-def _run_push(state: WorkflowState) -> str:
+def _run_push(state: WorkflowState, cancel_check=None) -> str:
     tracker = state.tracker
     name = state.collection_name
     coll = state.collection_object

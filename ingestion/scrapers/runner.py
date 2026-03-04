@@ -37,7 +37,7 @@ def _load_config(scraper_name: str, inline_config: dict = None) -> dict:
     return {"name": scraper_name}
 
 
-def run_scraper(scraper_name: str, options: dict = None, inline_config: dict = None) -> tuple:
+def run_scraper(scraper_name: str, options: dict = None, inline_config: dict = None, cancel_check=None) -> tuple:
     """
     Run a scraper by name. Returns (raw_text: str, scraped_items: list[dict]).
     scraped_items is a list of {"url": str, "text": str} — one entry per scraped page.
@@ -46,6 +46,7 @@ def run_scraper(scraper_name: str, options: dict = None, inline_config: dict = N
              options take priority over YAML config values.
     inline_config: fallback config dict from solutions.yaml scraper_config field.
                    Used when no named YAML file exists. Named YAML takes precedence.
+    cancel_check: optional callable returning True when the user wants to stop.
     """
     options = options or {}
     # Extract inline_config from options if passed that way (from workflow/runner.py)
@@ -65,11 +66,11 @@ def run_scraper(scraper_name: str, options: dict = None, inline_config: dict = N
 
     if engine == "playwright":
         from ingestion.scrapers.playwright_scraper import run_playwright_scraper
-        return run_playwright_scraper(config)
+        return run_playwright_scraper(config, cancel_check=cancel_check)
 
     if engine == "httpx":
         from ingestion.scrapers.httpx_scraper import run_httpx_scraper
-        return run_httpx_scraper(config)
+        return run_httpx_scraper(config, cancel_check=cancel_check)
 
     if engine == "shopify":
         from ingestion.scrapers.shopify_scraper import run_shopify_scraper
