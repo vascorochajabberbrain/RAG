@@ -7489,13 +7489,9 @@ _INDEX_HTML = """
               const sources = (coll && coll.sources) || [];
               if (sources.length) selectSource(sources[0].id);
             } else {
-              // No match found — fall back to auto-selecting first collection
+              // No match — don't select a wrong collection
               console.warn('[Work with RAG] No collection match for "' + collectionName + '" in dropdown:', opts.map(o => o.value));
-              const first = opts[0];
-              if (first) {
-                collSel.value = first.value;
-                onCollectionSelect();
-              }
+              alert('Collection "' + collectionName + '" is not yet registered.\\nConfirm the wizard plan first to register it in solutions.yaml.');
             }
           }
         } catch(e) { /* ignore */ }
