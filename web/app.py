@@ -2792,7 +2792,7 @@ _INDEX_HTML = """
           <label>Collection <span style="font-weight:400;color:#888;font-size:0.85rem;">— which index to build or update</span></label>
           <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem;">
             <select id="collectionSelect" onchange="onCollectionSelect()" style="margin-bottom:0;flex:1;"></select>
-            <button type="button" id="btnDeleteCollection" onclick="deleteCollection(this)" title="Delete this collection from Qdrant"
+            <button type="button" id="btnDeleteCollection" onclick="deleteCollection(this)" title="Delete this collection (Qdrant + solutions.yaml)"
               style="padding:0.4rem 0.6rem;background:#d32f2f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem;display:none;">🗑</button>
           </div>
           <div id="newCollectionRow" style="display:none;margin-top:0.4rem;">
@@ -4453,7 +4453,7 @@ _INDEX_HTML = """
             info.appendChild(oval);
           });
         }
-        delBtn.style.display = exists ? 'block' : 'none';
+        delBtn.style.display = 'block';  // always show — can delete from Qdrant and/or solutions.yaml
         renderSourcesList(sources);
         // Update routing metadata panel for this collection
         if (coll && _currentSolutionId) {
@@ -4703,7 +4703,7 @@ _INDEX_HTML = """
       const name = document.getElementById('collectionSelect').value;
       if (!name || name === '__new__') return;
       _inlineConfirm(btn, {
-        message: 'Delete collection "' + name + '" from Qdrant? This cannot be undone.',
+        message: 'Delete collection "' + name + '"? This removes it from Qdrant (if exists) and unregisters it from solutions.yaml.',
         confirmLabel: 'Delete',
         onConfirm: async () => {
           try {
