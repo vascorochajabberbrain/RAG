@@ -1808,6 +1808,7 @@ class WizardConfirmRequest(BaseModel):
     language: str
     domain: str
     collections: list  # [{collection_name, display_name, doc_type, categories:[{id,sitemap_url,url_filter}]}]
+    retain_only: Optional[list] = None  # full collection names to keep; others are removed from solutions.yaml
 
 
 @app.post("/api/wizard/analyse")
@@ -1918,6 +1919,15 @@ def wizard_confirm(req: WizardConfirmRequest):
             sol["language"] = req.language
 
     existing_coll_names = {c["collection_name"] for c in sol.get("collections", []) if isinstance(c, dict)}
+
+    # Remove collections no longer in the wizard (deleted by user)
+    if req.retain_only is not None:
+        retain_set = set(req.retain_only)
+        sol["collections"] = [
+            c for c in sol.get("collections", [])
+            if not isinstance(c, dict) or c.get("collection_name") in retain_set
+        ]
+
     for c in created:
         if c["collection_name"] not in existing_coll_names:
             sol.setdefault("collections", []).append({
@@ -7745,7 +7755,12 @@ _INDEX_HTML = """
       try {
         const res = await fetch('/api/wizard/confirm', {
           method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({solution_id: solId, solution_name: solName, language: lang, domain: _wizardDomain, collections})
+          body: JSON.stringify({solution_id: solId, solution_name: solName, language: lang, domain: _wizardDomain, collections,
+            retain_only: _wizardCollections.filter(c => c != null).map(c => {
+              const n = c.qdrant_name || c.confirmed_collection_name || c.display_name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+              return n.startsWith(solId + '_') ? n : solId + '_' + n;
+            })
+          })
         });
         const data = await res.json();
         if (!res.ok) { log.textContent += '❌ ' + (data.detail||'Error') + '\\n'; log.classList.add('error'); return; }
