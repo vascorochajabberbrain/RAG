@@ -7462,6 +7462,7 @@ _INDEX_HTML = """
         try {
           await loadSolutionCollections(canonicalSolId, {autoSelect: false});
           const collSel = document.getElementById('collectionSelect');
+          console.log('[Work with RAG] Looking for collection:', collectionName, '| Available:', Array.from(collSel.options).map(o => o.value).filter(v => v && v !== '__new__'));
           if (collSel && collectionName) {
             const opts = Array.from(collSel.options).filter(o => o.value && o.value !== '__new__');
             // Try exact match first
