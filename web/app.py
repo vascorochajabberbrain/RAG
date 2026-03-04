@@ -2402,10 +2402,10 @@ _HELP_HTML = """<!DOCTYPE html>
       <a href="#sources">Sources</a>
       <a href="#source-config">Source Config (Files &amp; Scrapers)</a>
       <a href="#pipeline">Pipeline Steps</a>
-      <a href="#create-collection">1. Create Collection</a>
-      <a href="#ingest">2. Ingest</a>
-      <a href="#translate-clean">2b. Translate &amp; Clean</a>
-      <a href="#chunk">3. Chunk (Modes)</a>
+      <a href="#ingest">1. Ingest</a>
+      <a href="#translate-clean">1b. Translate &amp; Clean</a>
+      <a href="#chunk">2. Chunk (Modes)</a>
+      <a href="#create-collection">3. Create Qdrant Collection</a>
       <a href="#push">4. Push to Qdrant</a>
       <a href="#embedding-model">Embedding Model</a>
       <a href="#saved-state">Saved State &amp; Resume</a>
@@ -2463,7 +2463,7 @@ _HELP_HTML = """<!DOCTYPE html>
 
     <h2 id="overview">RAG Builder Overview</h2>
     <p>This tool is where you build and maintain those RAG collections. It ingests content from files (PDF, TXT, CSV) or websites, splits it into chunks, embeds the chunks as vectors, and stores them in Qdrant. You can then test retrieval quality in the Chat tab.</p>
-    <p>The typical workflow is: <strong>Create collection &rarr; Ingest &rarr; Chunk &rarr; Push to Qdrant</strong>.</p>
+    <p>The typical workflow is: <strong>Ingest &rarr; Chunk &rarr; Create Qdrant Collection &rarr; Push to Qdrant</strong>.</p>
 
     <h2 id="solutions">Solutions &amp; Collections</h2>
     <p>A <strong>solution</strong> represents a client or project (e.g. "Peixe Fresco"). Each solution has one or more <strong>collections</strong> — separate Qdrant indexes for different content types (products, recipes, FAQ, etc.).</p>
@@ -2483,22 +2483,18 @@ _HELP_HTML = """<!DOCTYPE html>
     <p>For websites, choose a <strong>scraping engine</strong> (see <a href="#scraper-engines">Scraper Engines</a> below).</p>
 
     <h2 id="pipeline">Pipeline Steps</h2>
-    <p>The pipeline runs in order: Create &rarr; Ingest &rarr; (Translate) &rarr; Chunk &rarr; Push. Each step builds on the previous one. State is auto-saved after key steps so you can resume later.</p>
+    <p>The pipeline runs in order: Ingest &rarr; (Translate) &rarr; Chunk &rarr; Create Qdrant Collection &rarr; Push. Each step builds on the previous one. State is auto-saved after key steps so you can resume later.</p>
 
-    <h3 id="create-collection">1. Create Collection</h3>
-    <p>Creates a new Qdrant collection with the selected embedding model dimensions. If the collection already exists, this step is skipped.</p>
-    <div class="warn">The embedding model is locked at creation time. All sources pushed to the same collection must use the same model.</div>
-
-    <h3 id="ingest">2. Ingest</h3>
+    <h3 id="ingest">1. Ingest</h3>
     <p>Extracts content from your sources: scrapes web pages (using the scraper config from Analyse Site) or reads uploaded files (PDF, TXT, CSV).</p>
     <p>After ingesting, the raw text is stored in the workflow state and auto-saved to disk.</p>
 
-    <h3 id="translate-clean">2b. Translate &amp; Clean</h3>
+    <h3 id="translate-clean">1b. Translate &amp; Clean</h3>
     <p>Optional step for bilingual or foreign-language documents. Uses an LLM to translate content to the solution's base language and clean up formatting artifacts.</p>
     <p>Useful for bilingual PDFs (e.g. Portuguese + Spanish) where you want a clean single-language output.</p>
 
-    <h3 id="chunk">3. Chunk (Modes)</h3>
-    <p>Splits the fetched text into smaller pieces for embedding. Three modes available:</p>
+    <h3 id="chunk">2. Chunk (Modes)</h3>
+    <p>Splits the ingested text into smaller pieces for embedding. Three modes available:</p>
     <table>
       <tr><th>Mode</th><th>Speed</th><th>Cost</th><th>How it works</th><th>Best for</th></tr>
       <tr><td><strong>Simple</strong></td><td>Fast</td><td>Free</td><td>Splits by character count with overlap</td><td>Quick tests, most content</td></tr>
@@ -2506,6 +2502,10 @@ _HELP_HTML = """<!DOCTYPE html>
       <tr><td><strong>Proposition</strong></td><td>Slow</td><td>$$</td><td>LLM rewrites each chunk into atomic self-contained facts</td><td>Dense academic text, precision-critical content</td></tr>
     </table>
     <div class="tip">Start with <strong>Simple</strong> for testing. Use <strong>Hierarchical</strong> for production — it gives the best quality-to-cost ratio. Use <strong>Proposition</strong> only when maximum retrieval precision is needed and cost is acceptable.</div>
+
+    <h3 id="create-collection">3. Create Qdrant Collection</h3>
+    <p>Creates the Qdrant vector collection with the selected embedding model dimensions. Skipped if it already exists. Must be done before Push.</p>
+    <div class="warn">The embedding model is locked at creation time. All sources pushed to the same collection must use the same model.</div>
 
     <h3 id="push">4. Push to Qdrant</h3>
     <p>Embeds all chunks using the selected OpenAI model and uploads them to the Qdrant collection. Each chunk becomes a vector point with metadata (source, text, position).</p>
@@ -2805,6 +2805,7 @@ _INDEX_HTML = """
     </div>
 
     <div id="panel-build" class="panel hidden">
+      <div id="buildCollBanner" style="display:none;position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#1a5276,#2980b9);color:#fff;padding:0.45rem 1rem;border-radius:0 0 8px 8px;font-size:0.88rem;font-weight:600;margin-bottom:0.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.15);"></div>
       <div class="card">
         <h2>1. Collection <span class="help-icon" onclick="toggleHelp('help-collection')" title="Help">?</span></h2>
         <div id="help-collection" class="help-tip">A <strong>solution</strong> is a client or project. Each solution has one or more <strong>collections</strong> — separate Qdrant indexes for different content types. <a href="/help#solutions" target="_blank">Learn more &rarr;</a></div>
@@ -3017,17 +3018,12 @@ _INDEX_HTML = """
           </p>
         </div>
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
-          <button type="button" class="btn-primary" id="runCreate">1. Create collection</button>
-          <span class="help-icon" onclick="toggleHelp('help-create')" title="Help">?</span>
-        </div>
-        <div id="help-create" class="help-tip">Creates a new Qdrant collection with the selected embedding model dimensions. Skipped if the collection already exists. <a href="/help#create-collection" target="_blank">Learn more &rarr;</a></div>
-        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
-          <button type="button" class="btn-primary" id="runFetch">2. Ingest</button>
+          <button type="button" class="btn-primary" id="runFetch">1. Ingest</button>
           <span class="help-icon" onclick="toggleHelp('help-fetch')" title="Help">?</span>
         </div>
         <div id="help-fetch" class="help-tip">Extracts content from your sources: scrapes web pages or reads files (PDF, TXT, CSV). Auto-saves state after completion. <a href="/help#ingest" target="_blank">Learn more &rarr;</a></div>
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
-          <button type="button" class="btn-translate" id="runTranslate">2b. Translate &amp; Clean (PT) 🇵🇹</button>
+          <button type="button" class="btn-translate" id="runTranslate">1b. Translate &amp; Clean (PT) 🇵🇹</button>
           <span class="help-icon" onclick="toggleHelp('help-translate')" title="Help">?</span>
         </div>
         <div id="help-translate" class="help-tip">Optional. Uses an LLM to translate bilingual or foreign-language content to the solution's base language and clean up artifacts. <a href="/help#translate-clean" target="_blank">Learn more &rarr;</a></div>
@@ -3037,7 +3033,7 @@ _INDEX_HTML = """
         </div>
         <div style="margin-top:0.75rem;margin-bottom:0.5rem;border:1px solid #ccc;border-radius:8px;padding:0.75rem 1rem;background:#fafafa;">
           <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem;">
-            <button type="button" class="btn-primary" id="runChunk">3. Chunk</button>
+            <button type="button" class="btn-primary" id="runChunk">2. Chunk</button>
             <span style="font-size:0.9rem;font-weight:500;color:#333;">Mode: <span class="help-icon" onclick="toggleHelp('help-chunk')" title="Help">?</span></span>
           </div>
           <div id="help-chunk" class="help-tip">Start with <strong>Simple</strong> for testing. Use <strong>Hierarchical</strong> for production (best quality-to-cost ratio). Use <strong>Proposition</strong> only when maximum precision is needed (LLM cost applies). <a href="/help#chunk" target="_blank">Learn more &rarr;</a></div>
@@ -3056,6 +3052,11 @@ _INDEX_HTML = """
             </label>
           </div>
         </div>
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+          <button type="button" class="btn-primary" id="runCreate">3. Create Qdrant Collection</button>
+          <span class="help-icon" onclick="toggleHelp('help-create')" title="Help">?</span>
+        </div>
+        <div id="help-create" class="help-tip">Creates the Qdrant vector collection with the selected embedding model dimensions. Skipped if it already exists. Must be done before Push. <a href="/help#create-collection" target="_blank">Learn more &rarr;</a></div>
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
           <button type="button" class="btn-primary" id="runPush">4. Push to Qdrant</button>
           <span class="help-icon" onclick="toggleHelp('help-push')" title="Help">?</span>
@@ -4484,6 +4485,20 @@ _INDEX_HTML = """
       const info = document.getElementById('existingCollectionInfo');
       const delBtn = document.getElementById('btnDeleteCollection');
       _selectedSourceId = null;
+      // Update sticky collection banner
+      const banner = document.getElementById('buildCollBanner');
+      if (banner) {
+        if (val && val !== '__new__') {
+          const coll = _currentCollections[val];
+          const displayName = (coll && coll.display_name) || val;
+          const exists = coll && coll.exists;
+          const pts = (coll && coll.points_count) || 0;
+          banner.textContent = '📦 ' + displayName + (exists ? ' · ' + pts + ' points in Qdrant' : ' · not yet in Qdrant');
+          banner.style.display = 'block';
+        } else {
+          banner.style.display = 'none';
+        }
+      }
       if (val === '__new__') {
         newRow.style.display = 'block';
         info.style.display = 'none';
@@ -5315,7 +5330,7 @@ _INDEX_HTML = """
 
     const runStep = async (step) => {
       const stepBtnMap = { chunk: 'runChunk', push_to_qdrant: 'runPush', create_collection: 'runCreate' };
-      const stepLabelMap = { chunk: 'Chunking…', push_to_qdrant: 'Pushing to Qdrant…', create_collection: 'Creating collection…' };
+      const stepLabelMap = { chunk: 'Chunking…', push_to_qdrant: 'Pushing to Qdrant…', create_collection: 'Creating Qdrant collection…' };
       const stepBtn = stepBtnMap[step] ? document.getElementById(stepBtnMap[step]) : null;
       if (stepBtn) _btnRunning(stepBtn);
       setLog(buildLog, stepLabelMap[step] || 'Running…', false);
@@ -5523,7 +5538,7 @@ _INDEX_HTML = """
     async function runFetchWithProgress() {
       const btn = document.getElementById('runFetch');
       _btnRunning(btn);
-      btn.textContent = '2. Ingesting…';
+      btn.textContent = '1. Ingesting…';
       setLog(buildLog, 'Ingesting… (this may take a few minutes for large sites)', false);
       buildLog.style.maxHeight = '20rem';
 
@@ -5540,7 +5555,7 @@ _INDEX_HTML = """
           buildLog.scrollTop = buildLog.scrollHeight;
           buildLog.className = 'log success';
           es.close();
-          _btnSuccess(btn); btn.textContent = '2. Ingest';
+          _btnSuccess(btn); btn.textContent = '1. Ingest';
           // Fetch updated state to render relevance report card (if check ran)
           api('/api/workflow/state').then(st => {
             if (st && st.relevance_report) renderRelevanceCard(st.relevance_report);
@@ -5549,10 +5564,10 @@ _INDEX_HTML = """
           buildLog.textContent += '\\n❌ ' + data;
           buildLog.className = 'log error';
           es.close();
-          _btnDone(btn); btn.textContent = '2. Ingest';
+          _btnDone(btn); btn.textContent = '1. Ingest';
         }
       };
-      es.onerror = () => { es.close(); _btnDone(btn); btn.textContent = '2. Ingest'; };
+      es.onerror = () => { es.close(); _btnDone(btn); btn.textContent = '1. Ingest'; };
 
       try {
         const _lc = _buildLoginConfig();
@@ -5561,7 +5576,7 @@ _INDEX_HTML = """
         setLog(buildLog, e.message || String(e), true);
         es.close();
         btn.disabled = false;
-        btn.textContent = '2. Ingest';
+        btn.textContent = '1. Ingest';
       }
     }
 
