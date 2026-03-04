@@ -4719,7 +4719,15 @@ _INDEX_HTML = """
               body: JSON.stringify({ solution_id: solId, collection_name: name })
             }).then(r => r.json());
             setLog(buildLog, res.message || res.detail, !!res.detail);
-            await loadSolutionCollections(solId);
+            // Reload collections without auto-selecting, then reset UI to clean state
+            await loadSolutionCollections(solId, {autoSelect: false});
+            document.getElementById('collectionSelect').value = '';
+            document.getElementById('existingCollectionInfo').style.display = 'none';
+            document.getElementById('btnDeleteCollection').style.display = 'none';
+            renderSourcesList([]);
+            document.getElementById('sourceConfigCard').style.display = 'none';
+            document.getElementById('pipelineCard').style.display = 'none';
+            document.getElementById('routingMetadataPanel').style.display = 'none';
           } catch(e) {
             setLog(buildLog, 'Delete failed: ' + e.message, true);
           }
