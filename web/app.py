@@ -4093,7 +4093,7 @@ _INDEX_HTML = """
         const d = await r.json();
         if (!r.ok) { alert(d.detail || 'Delete failed'); return; }
         _currentSolutionId = null;
-        await _loadSolutions();
+        await _reloadSolutions();
         document.getElementById('globalSolution').value = '';
         await onGlobalSolutionChange();
       } catch(e) { alert('Error: ' + e.message); }
