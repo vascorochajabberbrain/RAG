@@ -3215,7 +3215,7 @@ _INDEX_HTML = """
 
           <!-- Card: Confirm -->
           <div class="card" style="padding:1rem;">
-            <button type="button" class="btn-wizard" style="width:100%;" onclick="runWizardConfirm()">📋 Register All Collections</button>
+            <button type="button" id="btnWizardSave" class="btn-wizard" style="width:100%;" onclick="runWizardConfirm()">💾 Save & Register</button>
             <div id="wizardConfirmLog" class="log hidden" style="margin-top:0.6rem;max-height:8rem;overflow-y:auto;"></div>
             <div id="wizardConfirmResult" style="margin-top:0.5rem;"></div>
             <div id="wizardAutoSaveStatus" style="display:none;font-size:0.75rem;color:#888;margin-top:0.5rem;text-align:right;"></div>
@@ -5990,6 +5990,28 @@ _INDEX_HTML = """
     let _wizardRemovedUrls = {};  // url → true  (pages gone from sitemap since last save)
     let _wizardPendingMode = null; // {type:'fresh'|'update', url, solId, solName, lang} — mode chosen but not yet launched
     let _wizardConfirmedColls = {}; // fullCollName → {points_count, exists} — populated from API
+    let _wizardDirty = false;      // true when user has unsaved changes
+
+    function _wizardMarkDirty() {
+      _wizardDirty = true;
+      const btn = document.getElementById('btnWizardSave');
+      if (btn) {
+        btn.style.background = '#e65100';
+        btn.style.borderColor = '#e65100';
+        btn.textContent = '💾 Save & Register (changes pending)';
+      }
+      _wizardAutoSave();  // auto-save wizard state to disk (1.5s debounce)
+    }
+
+    function _wizardMarkClean() {
+      _wizardDirty = false;
+      const btn = document.getElementById('btnWizardSave');
+      if (btn) {
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.textContent = '💾 Save & Register';
+      }
+    }
     let _wizardSolId = '';          // cached solution id — avoids DOM read timing issues
     let _wizardCollPagesOpen = new Set(); // keys: "{collId}::{originId}" — which origin page groups are expanded
 
@@ -6998,6 +7020,7 @@ _INDEX_HTML = """
     // ── Assignment functions ──────────────────────────────────────────────────
 
     function wizardAssignSitemap(catId, collId) {
+      _wizardMarkDirty();
       // Remove all pages from this origin from all collections
       for (const c of _wizardCollections) {
         c.pages = (c.pages || []).filter(p => p.origin_id !== catId);
@@ -7021,6 +7044,7 @@ _INDEX_HTML = """
     }
 
     function wizardAssignPage(url, catId, collId) {
+      _wizardMarkDirty();
       // Remove page from all collections
       for (const c of _wizardCollections) {
         c.pages = (c.pages || []).filter(p => p.url !== url);
@@ -7034,6 +7058,7 @@ _INDEX_HTML = """
     }
 
     function _wizardExcludePageFn(url) {
+      _wizardMarkDirty();
       // Find the page in any collection and set status to excluded
       for (const c of _wizardCollections) {
         const p = (c.pages || []).find(p => p.url === url);
@@ -7239,7 +7264,7 @@ _INDEX_HTML = """
             qdrantIn.placeholder = 'qdrant_name';
             qdrantIn.style.cssText = 'font-size:0.68rem;color:#888;font-family:monospace;border:1px solid #e0e0e0;border-radius:3px;padding:0.05rem 0.25rem;flex:1;min-width:0;';
             qdrantIn.title = 'Qdrant collection name (editable until data is pushed)';
-            qdrantIn.oninput = () => { c.qdrant_name = qdrantIn.value.trim() || null; };
+            qdrantIn.oninput = () => { c.qdrant_name = qdrantIn.value.trim() || null; _wizardMarkDirty(); };
             qdrantRow.appendChild(qdrantLabel);
             qdrantRow.appendChild(qdrantIn);
           }
@@ -7247,6 +7272,7 @@ _INDEX_HTML = """
           // Auto-derive qdrant name from display name when no custom qdrant_name is set
           nameIn.oninput = () => {
             c.display_name = nameIn.value;
+            _wizardMarkDirty();
             if (!locked && !c.qdrant_name) {
               const qdrantIn = qdrantRow.querySelector('input');
               if (qdrantIn) qdrantIn.value = _collQdrantName(c);
@@ -7265,7 +7291,7 @@ _INDEX_HTML = """
         dtSel.disabled = (source === 'qdrant');
         const dtOpts = docTypes.map(dt => '<option value="' + dt + '"' + (effectiveDocType===dt?' selected':'') + '>' + dt + '</option>').join('');
         dtSel.innerHTML = dtOpts;
-        if (source !== 'qdrant') dtSel.onchange = () => { c.doc_type = dtSel.value; _wizardRenderCollections(); };
+        if (source !== 'qdrant') dtSel.onchange = () => { c.doc_type = dtSel.value; _wizardMarkDirty(); _wizardRenderCollections(); };
         top.appendChild(dtSel);
 
         // Remove button (local/both only)
@@ -7280,7 +7306,7 @@ _INDEX_HTML = """
             _inlineConfirm(rmBtn, {
               message: 'Remove "' + (c.label || c.display_name) + '" from plan?',
               confirmLabel: 'Remove',
-              onConfirm: () => { _wizardCollections = _wizardCollections.filter(x=>x._id!==c._id); _wizardRenderAll(); }
+              onConfirm: () => { _wizardCollections = _wizardCollections.filter(x=>x._id!==c._id); _wizardMarkDirty(); _wizardRenderAll(); }
             });
           };
           top.appendChild(rmBtn);
@@ -7659,6 +7685,7 @@ _INDEX_HTML = """
         _wizardRenderConfirmResult(data, solId);
         _reloadSolutions(solId);
         _wizardLoadConfirmedColls(solId);
+        _wizardMarkClean();
       } catch(err) { log.textContent += 'Error: ' + err + '\\n'; log.classList.add('error'); }
     }
 
