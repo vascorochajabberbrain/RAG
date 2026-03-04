@@ -123,6 +123,113 @@ def list_collections():
     return {"open": s.tracker.open_collections(), "all": s.tracker.all_collections()}
 
 
+# ── Qdrant Overview ──────────────────────────────────────────────────────────
+
+_qdrant_lite = None  # lightweight client for overview tab (avoids heavy import chain)
+
+def _get_qdrant_lite():
+    """Lightweight Qdrant client — only needs qdrant_client + dotenv."""
+    global _qdrant_lite
+    if _qdrant_lite is None:
+        from qdrant_client import QdrantClient
+        from dotenv import load_dotenv
+        load_dotenv()
+        _qdrant_lite = QdrantClient(
+            url=os.environ.get("QDRANT_URL"),
+            api_key=os.environ.get("QDRANT_API_KEY"),
+        )
+    return _qdrant_lite
+
+@app.get("/api/qdrant/overview")
+def qdrant_overview():
+    """Cross-reference all Qdrant collections with solutions.yaml registry."""
+    from solution_specs import list_solutions as _ls
+
+    try:
+        client = _get_qdrant_lite()
+    except Exception as e:
+        return {"collections": [], "error": f"Failed to connect to Qdrant: {e}"}
+
+    # All Qdrant collections
+    qdrant_colls = {}
+    try:
+        for c in client.get_collections().collections:
+            try:
+                info = client.get_collection(c.name)
+                vec_cfg = info.config.params.vectors
+                size = vec_cfg.size if hasattr(vec_cfg, 'size') else 1536
+                qdrant_colls[c.name] = {
+                    "points_count": info.points_count,
+                    "vectors_size": size,
+                }
+            except Exception:
+                qdrant_colls[c.name] = {"points_count": 0, "vectors_size": None}
+    except Exception as e:
+        return {"collections": [], "error": f"Failed to connect to Qdrant: {e}"}
+
+    # All registered collections from solutions.yaml
+    registered = {}
+    for sol in _ls():
+        for coll in sol.get("collections", []):
+            cname = coll.get("collection_name") or coll.get("id")
+            registered[cname] = {
+                "solution_id": sol["id"],
+                "solution_name": sol.get("display_name", sol["id"]),
+                "display_name": coll.get("display_name", cname),
+                "doc_type": coll.get("collection_type", "scs"),
+            }
+
+    # Merge
+    all_names = sorted(set(qdrant_colls.keys()) | set(registered.keys()))
+    result = []
+    for name in all_names:
+        q = qdrant_colls.get(name)
+        r = registered.get(name)
+        if q and r:
+            status = "live"
+        elif not q and r:
+            status = "not_pushed"
+        else:
+            status = "orphaned"
+        result.append({
+            "name": name,
+            "points_count": q["points_count"] if q else 0,
+            "vectors_size": q["vectors_size"] if q else None,
+            "in_qdrant": bool(q),
+            "registered": bool(r),
+            "status": status,
+            "solution_id": r["solution_id"] if r else None,
+            "solution_name": r["solution_name"] if r else None,
+            "display_name": r["display_name"] if r else name,
+        })
+    return {"collections": result}
+
+
+@app.get("/api/qdrant/{collection_name}/sample")
+def qdrant_sample(collection_name: str):
+    """Return 5 sample points from a Qdrant collection for inspection."""
+    try:
+        client = _get_qdrant_lite()
+        points, _ = client.scroll(collection_name, limit=5, with_payload=True, with_vectors=False)
+        return {"points": [{"id": str(p.id), "payload": p.payload} for p in points]}
+    except Exception as e:
+        raise HTTPException(404, f"Collection not found or error: {e}")
+
+
+@app.delete("/api/qdrant/{collection_name}")
+def qdrant_delete(collection_name: str):
+    """Delete an orphaned Qdrant collection (must not be registered in solutions.yaml)."""
+    from solution_specs import list_solutions as _ls
+    registered = set()
+    for sol in _ls():
+        for c in sol.get("collections", []):
+            registered.add(c.get("collection_name") or c.get("id"))
+    if collection_name in registered:
+        raise HTTPException(400, "Cannot delete a registered collection. Remove it from solutions.yaml first.")
+    _get_qdrant_lite().delete_collection(collection_name)
+    return {"deleted": collection_name}
+
+
 @app.get("/api/solutions")
 def list_solutions_api():
     try:
@@ -2623,6 +2730,7 @@ _INDEX_HTML = """
       <button type="button" class="tab" data-tab="chat">Chat / Test Q&A</button>
       <button type="button" class="tab" data-tab="shopify">🛍 Shopify Stores</button>
       <button type="button" class="tab" data-tab="sites">🕵️ Prospect Sites</button>
+      <button type="button" class="tab" data-tab="qdrant" onclick="showTab('qdrant')">🗄 Qdrant</button>
       <button type="button" class="tab" data-tab="settings" onclick="showTab('settings')">⚙️ Settings</button>
     </div>
 
@@ -3194,6 +3302,19 @@ _INDEX_HTML = """
       </div>
     </div>
     <!-- ── end Prospect Sites panel ── -->
+
+    <!-- ── Qdrant panel ── -->
+    <div id="panel-qdrant" class="panel hidden">
+      <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1rem;">
+        <h2 style="margin:0;">🗄 Qdrant Collections</h2>
+        <button type="button" onclick="loadQdrantOverview()" style="font-size:0.8rem;padding:0.25rem 0.6rem;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff;">🔄 Refresh</button>
+      </div>
+      <div id="qdrantSummary" style="font-size:0.85rem;color:#666;margin-bottom:0.8rem;"></div>
+      <div id="qdrantTableWrap" style="overflow-x:auto;">
+        <p style="color:#999;">Click the 🗄 Qdrant tab to load collections.</p>
+      </div>
+    </div>
+    <!-- ── end Qdrant panel ── -->
 
     <!-- ── Settings panel ── -->
     <div id="panel-settings" class="panel hidden">
@@ -4626,6 +4747,7 @@ _INDEX_HTML = """
       if (name === 'wizard') _wizardPopulateSolNameList();
       if (name === 'shopify') { if (typeof loadShopifyStores === 'function') loadShopifyStores(); }
       if (name === 'sites') { if (typeof _loadDomcopStatus === 'function') _loadDomcopStatus(); }
+      if (name === 'qdrant') loadQdrantOverview();
       if (name === 'settings') _settingsLoad();
     }
 
@@ -8033,6 +8155,137 @@ _INDEX_HTML = """
         }
       };
       sse.onerror = () => { sse.close(); btnUpd.disabled = false; };
+    }
+
+    // ── Qdrant Overview ─────────────────────────────────────────────────────
+
+    let _qdrantData = [];
+
+    async function loadQdrantOverview() {
+      const wrap = document.getElementById('qdrantTableWrap');
+      const summary = document.getElementById('qdrantSummary');
+      wrap.innerHTML = '<p style="color:#999;">Loading…</p>';
+      summary.textContent = '';
+      try {
+        const res = await fetch('/api/qdrant/overview');
+        const data = await res.json();
+        if (data.error) { wrap.innerHTML = '<p style="color:#c00;">' + data.error + '</p>'; return; }
+        _qdrantData = data.collections || [];
+        _renderQdrantTable();
+      } catch(e) { wrap.innerHTML = '<p style="color:#c00;">Error: ' + e + '</p>'; }
+    }
+
+    function _renderQdrantTable() {
+      const wrap = document.getElementById('qdrantTableWrap');
+      const summary = document.getElementById('qdrantSummary');
+      const colls = _qdrantData;
+      if (!colls.length) { wrap.innerHTML = '<p style="color:#999;">No collections found.</p>'; return; }
+
+      const live = colls.filter(c => c.status === 'live').length;
+      const empty = colls.filter(c => c.status === 'not_pushed').length;
+      const orphaned = colls.filter(c => c.status === 'orphaned').length;
+      summary.innerHTML = '<strong>' + colls.length + '</strong> collections total · '
+        + '<span style="color:#2e7d32;">✅ ' + live + ' live</span> · '
+        + '<span style="color:#e65100;">⚠️ ' + empty + ' registered (empty)</span> · '
+        + '<span style="color:#c62828;">🔴 ' + orphaned + ' orphaned</span>';
+
+      let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+      html += '<thead><tr style="background:#f5f5f5;text-align:left;">'
+        + '<th style="padding:0.5rem;">Status</th>'
+        + '<th style="padding:0.5rem;">Collection</th>'
+        + '<th style="padding:0.5rem;text-align:right;">Points</th>'
+        + '<th style="padding:0.5rem;text-align:right;">Dims</th>'
+        + '<th style="padding:0.5rem;">Solution</th>'
+        + '<th style="padding:0.5rem;">Actions</th>'
+        + '</tr></thead><tbody>';
+
+      for (const c of colls) {
+        const badge = c.status === 'live' ? '<span style="color:#2e7d32;" title="Registered & has data">✅</span>'
+          : c.status === 'not_pushed' ? '<span style="color:#e65100;" title="Registered but empty">⚠️</span>'
+          : '<span style="color:#c62828;" title="In Qdrant but not registered">🔴</span>';
+        const solLabel = c.solution_name ? c.solution_name + ' <span style="color:#999;font-size:0.75rem;">(' + c.solution_id + ')</span>' : '<span style="color:#999;">—</span>';
+        const nameLabel = c.display_name !== c.name ? c.display_name + ' <span style="color:#999;font-size:0.75rem;">' + c.name + '</span>' : c.name;
+
+        let actions = '';
+        if (c.in_qdrant) {
+          actions += '<button type="button" onclick="inspectQdrantCollection(\'' + c.name + '\', this)" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:#fff;" title="Show sample points">🔍</button> ';
+        }
+        if (c.registered && c.solution_id) {
+          actions += '<button type="button" onclick="_openCollectionInBuildRag(\'' + c.solution_id + '\', \'' + c.name + '\')" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #1a5276;border-radius:3px;cursor:pointer;background:#1a5276;color:#fff;" title="Open in Work with RAG">🛠</button> ';
+        }
+        if (c.status === 'orphaned') {
+          actions += '<button type="button" onclick="deleteOrphanedCollection(\'' + c.name + '\')" style="font-size:0.72rem;padding:0.15rem 0.4rem;border:1px solid #c62828;border-radius:3px;cursor:pointer;background:#fff;color:#c62828;" title="Delete orphaned collection">🗑</button>';
+        }
+
+        html += '<tr style="border-bottom:1px solid #eee;" id="qdrant-row-' + c.name.replace(/[^a-z0-9_]/g,'') + '">'
+          + '<td style="padding:0.5rem;text-align:center;">' + badge + '</td>'
+          + '<td style="padding:0.5rem;">' + nameLabel + '</td>'
+          + '<td style="padding:0.5rem;text-align:right;font-family:monospace;">' + (c.points_count || 0).toLocaleString() + '</td>'
+          + '<td style="padding:0.5rem;text-align:right;font-family:monospace;">' + (c.vectors_size || '—') + '</td>'
+          + '<td style="padding:0.5rem;">' + solLabel + '</td>'
+          + '<td style="padding:0.5rem;white-space:nowrap;">' + actions + '</td>'
+          + '</tr>';
+      }
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    }
+
+    async function inspectQdrantCollection(name, btn) {
+      // Toggle: if detail row already exists, remove it
+      const detailId = 'qdrant-detail-' + name.replace(/[^a-z0-9_]/g,'');
+      const existing = document.getElementById(detailId);
+      if (existing) { existing.remove(); return; }
+
+      btn.disabled = true;
+      btn.textContent = '⏳';
+      try {
+        const res = await fetch('/api/qdrant/' + encodeURIComponent(name) + '/sample');
+        const data = await res.json();
+        const points = data.points || [];
+
+        const rowId = 'qdrant-row-' + name.replace(/[^a-z0-9_]/g,'');
+        const parentRow = document.getElementById(rowId);
+        if (!parentRow) return;
+
+        const detailRow = document.createElement('tr');
+        detailRow.id = detailId;
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.style.cssText = 'padding:0.5rem 1rem;background:#fafafa;border-bottom:2px solid #ddd;';
+
+        if (!points.length) {
+          td.innerHTML = '<p style="color:#999;">No points found.</p>';
+        } else {
+          let html = '<div style="font-size:0.8rem;"><strong>Sample points (' + points.length + '):</strong></div>';
+          for (const p of points) {
+            const text = p.payload?.point?.text || p.payload?.text || JSON.stringify(p.payload).substring(0, 300);
+            const source = p.payload?.point?.source_url || p.payload?.source_url || '';
+            html += '<div style="margin:0.4rem 0;padding:0.5rem;background:#fff;border:1px solid #e0e0e0;border-radius:4px;font-size:0.78rem;">'
+              + '<div style="color:#999;font-size:0.7rem;">ID: ' + p.id + (source ? ' · ' + source : '') + '</div>'
+              + '<div style="margin-top:0.2rem;max-height:4rem;overflow:hidden;color:#333;">' + _escHtml(text.substring(0, 500)) + '</div>'
+              + '</div>';
+          }
+          td.innerHTML = html;
+        }
+        detailRow.appendChild(td);
+        parentRow.after(detailRow);
+      } catch(e) {
+        alert('Error inspecting collection: ' + e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔍';
+      }
+    }
+
+    async function deleteOrphanedCollection(name) {
+      if (!confirm('Delete orphaned collection "' + name + '" from Qdrant?\\n\\nThis cannot be undone.')) return;
+      try {
+        const res = await fetch('/api/qdrant/' + encodeURIComponent(name), {method: 'DELETE'});
+        const data = await res.json();
+        if (!res.ok) { alert('Error: ' + (data.detail || 'Failed')); return; }
+        // Refresh
+        loadQdrantOverview();
+      } catch(e) { alert('Error: ' + e); }
     }
 
     // ── Prospect Sites Analyzer ──────────────────────────────────────────────
