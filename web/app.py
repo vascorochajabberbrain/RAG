@@ -7711,7 +7711,7 @@ _INDEX_HTML = """
       log.classList.remove('hidden', 'error', 'success');
       if (!solName) { alert('Please select a solution from the top bar first.'); return; }
       const activeColls = _wizardCollections.filter(c => _collectionIncludedPages(c).length > 0 || (c.fileSources || []).length > 0);
-      if (!activeColls.length) { alert('Assign at least one page or file source to a collection.'); return; }
+      if (!activeColls.length && !_wizardStructureDirty) { alert('Assign at least one page or file source to a collection.'); return; }
 
       const collections = activeColls.map(c => {
         // Group included pages by origin for the API
