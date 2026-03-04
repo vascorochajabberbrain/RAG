@@ -6563,6 +6563,7 @@ _INDEX_HTML = """
     // ── Render ────────────────────────────────────────────────────────────────
 
     function _wizardRenderAll() {
+      _wizardCollections = _wizardCollections.filter(c => c != null);
       _wizardRenderSitemapList();
       _wizardRenderCollections();
       _wizardAutoSave();
@@ -8010,6 +8011,8 @@ _INDEX_HTML = """
     // Restore JS state from a saved JSON object and re-render
     function _wizardRestoreState(saved) {
       if (!saved || typeof saved !== 'object') throw new Error('Invalid saved state');
+      // Reset collections to prevent stale references during reload
+      _wizardCollections = [];
       _wizardDomain = saved.domain || '';
       _wizardCategories = saved.categories || [];
       _wizardNextCollId = saved.next_coll_id || 0;
