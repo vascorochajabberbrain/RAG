@@ -120,9 +120,10 @@ def get_answer(history, retrieved_info, query, company):
     else:
         context_text = retrieved_info or ""
     messages = history.copy()
-    messages.append({"role": "system", "content": f"""You are the virtual assistant of `{company}`, an e-commerce store specializing in jewelry and clothing.
+    messages.append({"role": "system", "content": f"""You are the virtual assistant of `{company}`.
 You will receive context before answering user questions. However, this context may not always be relevant.
 Use it **only if it clearly provides helpful information**.
+If the context contains product links or URLs, include them in your answer so the user can access the relevant pages.
 
 The available information for this answer is: `{context_text}`.
 Answer the user's query based on this data when applicable."""
