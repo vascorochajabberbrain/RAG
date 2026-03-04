@@ -8329,7 +8329,8 @@ _INDEX_HTML = """
           delBtn.textContent = '🗑';
           delBtn.onclick = async (e) => {
             e.stopPropagation();
-            if (!confirm('Delete collection config "' + s.solution_id + '"? This cannot be undone.')) return;
+            if (!confirm('Delete collection config "' + s.solution_id + '"?')) return;
+            if (!confirm('Are you sure? This cannot be undone.')) return;
             try {
               const res = await fetch('/api/wizard/delete-save?solution_id=' + encodeURIComponent(s.solution_id), {method:'DELETE'});
               if (res.ok) { row.remove(); } else { alert('Delete failed.'); }
