@@ -5991,14 +5991,20 @@ _INDEX_HTML = """
     let _wizardPendingMode = null; // {type:'fresh'|'update', url, solId, solName, lang} — mode chosen but not yet launched
     let _wizardConfirmedColls = {}; // fullCollName → {points_count, exists} — populated from API
     let _wizardDirty = false;      // true when user has unsaved changes
-    let _wizardRegisteredAt = null; // ISO timestamp of last successful Save & Register
-    let _wizardCollFingerprints = {}; // collId → fingerprint string at last registration
 
-    function _collFingerprint(c) {
-      const incl = (c.pages || []).filter(p => p.status === 'included').length;
-      const excl = (c.pages || []).filter(p => p.status === 'excluded').length;
-      const files = (c.fileSources || []).map(f => f.path || f.label).sort().join(',');
-      return [c.display_name, c.doc_type || 'general', c.qdrant_name || '', incl, excl, files].join('|');
+    function _collIsUnsaved(c) {
+      if (!c) return false;
+      if (!c._lastRegistered) return true;  // never saved to solutions.yaml
+      if (!c._lastModified) return false;   // never modified since creation
+      return c._lastModified > c._lastRegistered;
+    }
+
+    function _collMarkModified(c) {
+      if (c) c._lastModified = new Date().toISOString();
+    }
+
+    function _collMarkRegistered(c) {
+      if (c) c._lastRegistered = new Date().toISOString();
     }
 
     function _wizardMarkDirty() {
@@ -6008,11 +6014,8 @@ _INDEX_HTML = """
 
     function _wizardMarkClean() {
       _wizardDirty = false;
-      _wizardRegisteredAt = new Date().toISOString();
-      // Snapshot fingerprints for all collections
-      _wizardCollFingerprints = {};
       for (const c of _wizardCollections) {
-        if (c) _wizardCollFingerprints[c._id] = _collFingerprint(c);
+        if (c) _collMarkRegistered(c);
       }
       const btn = document.getElementById('btnWizardSave');
       if (btn) {
@@ -6020,12 +6023,10 @@ _INDEX_HTML = """
         btn.style.borderColor = '';
         btn.textContent = '💾 Save Solution Data';
       }
-      _wizardAutoSave(); // persist the updated registered_at + fingerprints
+      _wizardAutoSave(); // persist the updated timestamps
     }
     function _wizardSyncDirtyState() {
-      const hasUnsaved = _wizardCollections.some(c =>
-        c && (!_wizardCollFingerprints[c._id] || _wizardCollFingerprints[c._id] !== _collFingerprint(c))
-      );
+      const hasUnsaved = _wizardCollections.some(c => c && _collIsUnsaved(c));
       _wizardDirty = hasUnsaved;
       const btn = document.getElementById('btnWizardSave');
       if (btn) {
@@ -7047,7 +7048,14 @@ _INDEX_HTML = """
     // ── Assignment functions ──────────────────────────────────────────────────
 
     function wizardAssignSitemap(catId, collId) {
-      _wizardMarkDirty();
+      // Mark affected collections as modified
+      for (const c of _wizardCollections) {
+        if ((c.pages || []).some(p => p.origin_id === catId)) _collMarkModified(c);
+      }
+      if (collId !== null) {
+        const tc = _wizardCollections.find(x => x._id === collId);
+        if (tc) _collMarkModified(tc);
+      }
       // Remove all pages from this origin from all collections
       for (const c of _wizardCollections) {
         c.pages = (c.pages || []).filter(p => p.origin_id !== catId);
@@ -7067,29 +7075,34 @@ _INDEX_HTML = """
           }
         }
       }
+      _wizardMarkDirty();
       _wizardRenderAll();
     }
 
     function wizardAssignPage(url, catId, collId) {
-      _wizardMarkDirty();
+      // Mark affected collections
+      for (const c of _wizardCollections) {
+        if ((c.pages || []).some(p => p.url === url)) _collMarkModified(c);
+      }
+      const target = _wizardCollections.find(x => x._id === collId);
+      if (target) _collMarkModified(target);
       // Remove page from all collections
       for (const c of _wizardCollections) {
         c.pages = (c.pages || []).filter(p => p.url !== url);
       }
       // Add to target collection
-      const c = _wizardCollections.find(x => x._id === collId);
-      if (c) {
-        c.pages.push({url, origin: catId ? 'sitemap' : 'manual', origin_id: catId || null, status: 'included'});
+      if (target) {
+        target.pages.push({url, origin: catId ? 'sitemap' : 'manual', origin_id: catId || null, status: 'included'});
       }
+      _wizardMarkDirty();
       _wizardRenderAll();
     }
 
     function _wizardExcludePageFn(url) {
-      _wizardMarkDirty();
       // Find the page in any collection and set status to excluded
       for (const c of _wizardCollections) {
         const p = (c.pages || []).find(p => p.url === url);
-        if (p) { p.status = 'excluded'; return; }
+        if (p) { p.status = 'excluded'; _collMarkModified(c); _wizardMarkDirty(); return; }
       }
     }
 
@@ -7292,7 +7305,7 @@ _INDEX_HTML = """
             qdrantIn.placeholder = 'qdrant_name';
             qdrantIn.style.cssText = 'font-size:0.68rem;color:#888;font-family:monospace;border:1px solid #e0e0e0;border-radius:3px;padding:0.05rem 0.25rem;flex:1;min-width:0;';
             qdrantIn.title = 'Qdrant collection name (editable until data is pushed)';
-            qdrantIn.oninput = () => { c.qdrant_name = qdrantIn.value.trim() || null; _wizardMarkDirty(); };
+            qdrantIn.oninput = () => { c.qdrant_name = qdrantIn.value.trim() || null; _collMarkModified(c); _wizardMarkDirty(); };
             qdrantRow.appendChild(qdrantLabel);
             qdrantRow.appendChild(qdrantIn);
           }
@@ -7300,7 +7313,7 @@ _INDEX_HTML = """
           // Auto-derive qdrant name from display name when no custom qdrant_name is set
           nameIn.oninput = () => {
             c.display_name = nameIn.value;
-            _wizardMarkDirty();
+            _collMarkModified(c); _wizardMarkDirty();
             if (!locked && !c.qdrant_name) {
               const qdrantIn = qdrantRow.querySelector('input');
               if (qdrantIn) qdrantIn.value = _collQdrantName(c);
@@ -7311,7 +7324,7 @@ _INDEX_HTML = """
         }
 
         // Track if collection has unsaved changes (used to style save button)
-        const collUnsaved = c && source !== 'qdrant' && (!_wizardCollFingerprints[c._id] || _wizardCollFingerprints[c._id] !== _collFingerprint(c));
+        const collUnsaved = c && source !== 'qdrant' && _collIsUnsaved(c);
         top.appendChild(nameWrap);
 
         // doc_type selector (editable for local/both, readonly display for qdrant)
@@ -7321,7 +7334,7 @@ _INDEX_HTML = """
         dtSel.disabled = (source === 'qdrant');
         const dtOpts = docTypes.map(dt => '<option value="' + dt + '"' + (effectiveDocType===dt?' selected':'') + '>' + dt + '</option>').join('');
         dtSel.innerHTML = dtOpts;
-        if (source !== 'qdrant') dtSel.onchange = () => { c.doc_type = dtSel.value; _wizardMarkDirty(); _wizardRenderCollections(); };
+        if (source !== 'qdrant') dtSel.onchange = () => { c.doc_type = dtSel.value; _collMarkModified(c); _wizardMarkDirty(); _wizardRenderCollections(); };
         top.appendChild(dtSel);
 
         // Save + Remove buttons (local/both only)
@@ -7826,12 +7839,11 @@ _INDEX_HTML = """
         if (data.collections && data.collections.length) {
           c.confirmed_collection_name = data.collections[0].collection_name;
         }
-        // Snapshot fingerprint for this collection
-        _wizardCollFingerprints[c._id] = _collFingerprint(c);
+        _collMarkRegistered(c);
         _wizardSyncDirtyState(); // update main button immediately
         await _reloadSolutions(solId);
         _wizardLoadConfirmedColls(solId);
-        _wizardAutoSave(); // persist updated fingerprint
+        _wizardAutoSave(); // persist updated timestamps
         return true;
       } catch(e) { alert('Failed to register collection: ' + e); return false; }
     }
@@ -7959,8 +7971,6 @@ _INDEX_HTML = """
         sol_name: document.getElementById('wizardSolName').value.trim(),
         sol_lang: document.getElementById('wizardLang').value,
         saved_at: new Date().toISOString(),
-        registered_at: _wizardRegisteredAt,
-        coll_fingerprints: _wizardCollFingerprints,
         categories: _wizardCategories,
         collections: _wizardCollections.filter(c => c != null).map(c => ({
           _id: c._id,
@@ -7970,6 +7980,8 @@ _INDEX_HTML = """
           confirmed_collection_name: c.confirmed_collection_name || null,
           pages: (c.pages || []),  // [{url, origin, origin_id, status}]
           fileSources: c.fileSources || [],
+          _lastModified: c._lastModified || null,
+          _lastRegistered: c._lastRegistered || null,
         })),
         next_coll_id: _wizardNextCollId,
         // pages: catId → string[] — only save loaded pages (non-null)
@@ -7990,8 +8002,6 @@ _INDEX_HTML = """
       _wizardCategories = saved.categories || [];
       _wizardNextCollId = saved.next_coll_id || 0;
       _wizardPreviews = saved.previews || {};
-      _wizardRegisteredAt = saved.registered_at || null;
-      _wizardCollFingerprints = saved.coll_fingerprints || {};
       _wizardSearchQ = '';
       _wizardExpanded = {};
 
@@ -8056,6 +8066,8 @@ _INDEX_HTML = """
           confirmed_collection_name: c.confirmed_collection_name || null,
           pages: c.pages || [],
           fileSources: c.fileSources || [],
+          _lastModified: c._lastModified || null,
+          _lastRegistered: c._lastRegistered || null,
         }));
       }
 
