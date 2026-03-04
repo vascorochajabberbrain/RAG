@@ -5991,6 +5991,7 @@ _INDEX_HTML = """
     let _wizardPendingMode = null; // {type:'fresh'|'update', url, solId, solName, lang} — mode chosen but not yet launched
     let _wizardConfirmedColls = {}; // fullCollName → {points_count, exists} — populated from API
     let _wizardDirty = false;      // true when user has unsaved changes
+    let _wizardStructureDirty = false; // true when collections added/removed (not tracked per-collection)
 
     function _collIsUnsaved(c) {
       if (!c) return false;
@@ -6014,6 +6015,7 @@ _INDEX_HTML = """
 
     function _wizardMarkClean() {
       _wizardDirty = false;
+      _wizardStructureDirty = false;
       for (const c of _wizardCollections) {
         if (c) _collMarkRegistered(c);
       }
@@ -6026,7 +6028,7 @@ _INDEX_HTML = """
       _wizardAutoSave(); // persist the updated timestamps
     }
     function _wizardSyncDirtyState() {
-      const hasUnsaved = _wizardCollections.some(c => c && _collIsUnsaved(c));
+      const hasUnsaved = _wizardStructureDirty || _wizardCollections.some(c => c && _collIsUnsaved(c));
       _wizardDirty = hasUnsaved;
       const btn = document.getElementById('btnWizardSave');
       if (btn) {
@@ -7375,7 +7377,7 @@ _INDEX_HTML = """
             _inlineConfirm(rmBtn, {
               message: 'Remove "' + (c.label || c.display_name) + '" from plan?',
               confirmLabel: 'Remove',
-              onConfirm: () => { _wizardCollections = _wizardCollections.filter(x=>x._id!==c._id); _wizardMarkDirty(); _wizardRenderAll(); }
+              onConfirm: () => { _wizardCollections = _wizardCollections.filter(x=>x._id!==c._id); _wizardStructureDirty = true; _wizardMarkDirty(); _wizardRenderAll(); }
             });
           };
           top.appendChild(rmBtn);
@@ -7984,6 +7986,7 @@ _INDEX_HTML = """
         sol_name: document.getElementById('wizardSolName').value.trim(),
         sol_lang: document.getElementById('wizardLang').value,
         saved_at: new Date().toISOString(),
+        structure_dirty: _wizardStructureDirty,
         categories: _wizardCategories,
         collections: _wizardCollections.filter(c => c != null).map(c => ({
           _id: c._id,
@@ -8013,6 +8016,7 @@ _INDEX_HTML = """
       if (!saved || typeof saved !== 'object') throw new Error('Invalid saved state');
       // Reset collections to prevent stale references during reload
       _wizardCollections = [];
+      _wizardStructureDirty = saved.structure_dirty || false;
       _wizardDomain = saved.domain || '';
       _wizardCategories = saved.categories || [];
       _wizardNextCollId = saved.next_coll_id || 0;
