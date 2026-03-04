@@ -2487,7 +2487,7 @@ _HELP_HTML = """<!DOCTYPE html>
 
     <h3 id="ingest">1. Ingest</h3>
     <p>Extracts content from your sources: scrapes web pages (using the scraper config from Analyse Site) or reads uploaded files (PDF, TXT, CSV).</p>
-    <p>After ingesting, the raw text is stored in the workflow state and auto-saved to disk.</p>
+    <p>After ingesting, the raw text is stored in the workflow state and auto-saved to <code>.rag_state.json</code> so you can resume later.</p>
 
     <h3 id="translate-clean">1b. Translate &amp; Clean</h3>
     <p>Optional step for bilingual or foreign-language documents. Uses an LLM to translate content to the solution's base language and clean up formatting artifacts.</p>
@@ -3021,7 +3021,7 @@ _INDEX_HTML = """
           <button type="button" class="btn-primary" id="runFetch">1. Ingest</button>
           <span class="help-icon" onclick="toggleHelp('help-fetch')" title="Help">?</span>
         </div>
-        <div id="help-fetch" class="help-tip">Extracts content from your sources: scrapes web pages or reads files (PDF, TXT, CSV). Auto-saves state after completion. <a href="/help#ingest" target="_blank">Learn more &rarr;</a></div>
+        <div id="help-fetch" class="help-tip">Extracts content from your sources: scrapes web pages or reads files (PDF, TXT, CSV). State is auto-saved to <code>.rag_state.json</code> after completion so you can resume later. <a href="/help#ingest" target="_blank">Learn more &rarr;</a></div>
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
           <button type="button" class="btn-translate" id="runTranslate">1b. Translate &amp; Clean (PT) 🇵🇹</button>
           <span class="help-icon" onclick="toggleHelp('help-translate')" title="Help">?</span>
