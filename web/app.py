@@ -4550,6 +4550,12 @@ _INDEX_HTML = """
         }
         delBtn.style.display = 'block';
         renderSourcesList(sources);
+        // Sync active scraper config to match selected collection
+        if (coll && coll.scraper_config) window._activeScraperConfig = coll.scraper_config;
+        else window._activeScraperConfig = null;
+        // Also update scraper name input
+        const scraperIn = document.getElementById('scraperName');
+        if (scraperIn && coll && coll.scraper_name) scraperIn.value = coll.scraper_name;
         // Update routing metadata panel for newly selected collection
         if (coll && _currentSolutionId) {
           renderRoutingMetadataPanel(coll, _currentSolutionId);
