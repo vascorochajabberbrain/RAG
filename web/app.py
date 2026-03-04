@@ -2792,7 +2792,7 @@ _INDEX_HTML = """
           <label>Collection <span style="font-weight:400;color:#888;font-size:0.85rem;">— which index to build or update</span></label>
           <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem;">
             <select id="collectionSelect" onchange="onCollectionSelect()" style="margin-bottom:0;flex:1;"></select>
-            <button type="button" id="btnDeleteCollection" onclick="deleteCollection(this)" title="Delete this collection from Qdrant"
+            <button type="button" id="btnDeleteCollection" onclick="deleteCollection(this)" title="Delete this collection"
               style="padding:0.4rem 0.6rem;background:#d32f2f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem;display:none;">🗑</button>
           </div>
           <div id="newCollectionRow" style="display:none;margin-top:0.4rem;">
@@ -4700,11 +4700,17 @@ _INDEX_HTML = """
 
     function deleteCollection(btn) {
       const solId = _currentSolutionId;
-      const name = document.getElementById('collectionSelect').value;
+      const sel = document.getElementById('collectionSelect');
+      const name = sel.value;
       if (!name || name === '__new__') return;
+      const opt = sel.options[sel.selectedIndex];
+      const inQdrant = opt && opt.dataset.exists === '1';
+      const msg = inQdrant
+        ? 'Delete collection "' + name + '" from Qdrant AND solutions.yaml? This cannot be undone.'
+        : 'Remove collection "' + name + '" from solutions.yaml? (Not in Qdrant — nothing to delete there.)';
       _inlineConfirm(btn, {
-        message: 'Delete collection "' + name + '" from Qdrant? This cannot be undone.',
-        confirmLabel: 'Delete',
+        message: msg,
+        confirmLabel: inQdrant ? 'Delete' : 'Remove',
         onConfirm: async () => {
           try {
             const res = await fetch('/api/solutions/delete-collection', {
