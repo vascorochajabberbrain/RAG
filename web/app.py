@@ -6002,13 +6002,7 @@ _INDEX_HTML = """
     }
 
     function _wizardMarkDirty() {
-      _wizardDirty = true;
-      const btn = document.getElementById('btnWizardSave');
-      if (btn) {
-        btn.style.background = '#e65100';
-        btn.style.borderColor = '#e65100';
-        btn.textContent = '💾 Save Solution Data (changes pending)';
-      }
+      _wizardSyncDirtyState();
       _wizardAutoSave();  // auto-save wizard state to disk (1.5s debounce)
     }
 
@@ -6028,6 +6022,25 @@ _INDEX_HTML = """
       }
       _wizardAutoSave(); // persist the updated registered_at + fingerprints
     }
+    function _wizardSyncDirtyState() {
+      const hasUnsaved = _wizardCollections.some(c =>
+        c && (!_wizardCollFingerprints[c._id] || _wizardCollFingerprints[c._id] !== _collFingerprint(c))
+      );
+      _wizardDirty = hasUnsaved;
+      const btn = document.getElementById('btnWizardSave');
+      if (btn) {
+        if (hasUnsaved) {
+          btn.style.background = '#e65100';
+          btn.style.borderColor = '#e65100';
+          btn.textContent = '💾 Save Solution Data (changes pending)';
+        } else {
+          btn.style.background = '';
+          btn.style.borderColor = '';
+          btn.textContent = '💾 Save Solution Data';
+        }
+      }
+    }
+
     let _wizardSolId = '';          // cached solution id — avoids DOM read timing issues
     let _wizardCollPagesOpen = new Set(); // keys: "{collId}::{originId}" — which origin page groups are expanded
 
@@ -7621,6 +7634,8 @@ _INDEX_HTML = """
 
         list.appendChild(block);
       }
+      // Sync main "Save Solution Data" button state with collection fingerprints
+      _wizardSyncDirtyState();
     }
 
     function wizardAddCollection() {
@@ -7812,6 +7827,7 @@ _INDEX_HTML = """
         }
         // Snapshot fingerprint for this collection
         _wizardCollFingerprints[c._id] = _collFingerprint(c);
+        _wizardSyncDirtyState(); // update main button immediately
         await _reloadSolutions(solId);
         _wizardLoadConfirmedColls(solId);
         _wizardAutoSave(); // persist updated fingerprint
@@ -8073,28 +8089,8 @@ _INDEX_HTML = """
       // Load confirmed collection statuses from the API
       _wizardLoadConfirmedColls(_wizardCurrentSolId());
 
-      // Check if any collection has unsaved changes vs solutions.yaml (fingerprint-based)
-      const hasUnsaved = _wizardCollections.some(c => {
-        if (!c) return false;
-        return !_wizardCollFingerprints[c._id] || _wizardCollFingerprints[c._id] !== _collFingerprint(c);
-      });
-      if (hasUnsaved) {
-        _wizardDirty = true;
-        const btn = document.getElementById('btnWizardSave');
-        if (btn) {
-          btn.style.background = '#e65100';
-          btn.style.borderColor = '#e65100';
-          btn.textContent = '💾 Save Solution Data (changes pending)';
-        }
-      } else {
-        _wizardDirty = false;
-        const btn = document.getElementById('btnWizardSave');
-        if (btn) {
-          btn.style.background = '';
-          btn.style.borderColor = '';
-          btn.textContent = '💾 Save Solution Data';
-        }
-      }
+      // Sync main button state (already handled by _wizardRenderCollections → _wizardSyncDirtyState)
+      _wizardSyncDirtyState();
     }
 
     function _wizardShowConfigLabel(solId) {
