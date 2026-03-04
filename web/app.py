@@ -3001,7 +3001,7 @@ _INDEX_HTML = """
       <div class="card" id="pipelineCard" style="display:none;">
         <h2>4. Run pipeline <span class="help-icon" onclick="toggleHelp('help-pipeline')" title="Help">?</span></h2>
         <div id="help-pipeline" class="help-tip">Run each step in order. State is auto-saved after Fetch, Translate, and Chunk so you can resume later. <a href="/help#pipeline" target="_blank">Learn more &rarr;</a></div>
-        <p class="status">Create collection → Fetch → (Translate &amp; Clean) → Chunk → Push to Qdrant</p>
+        <p class="status">Ingest → (Translate &amp; Clean) → Chunk → Create Qdrant Collection → Push to Qdrant</p>
         <div style="margin-bottom:0.85rem;">
           <label title="The OpenAI embedding model used to vectorize text chunks. The vector dimension is fixed at collection creation and cannot be changed afterwards. Default: text-embedding-ada-002 (1536 dims).">
             Embedding model <span class="help-icon" onclick="toggleHelp('help-embedding')" title="Help">?</span>
