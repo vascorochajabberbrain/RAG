@@ -7218,6 +7218,7 @@ _INDEX_HTML = """
 
       if (!merged.length) {
         list.innerHTML = '<p class="wiz-coll-empty">No collections yet. Drag a sitemap here or click + New.</p>';
+        _wizardSyncDirtyState();
         return;
       }
 
