@@ -3216,7 +3216,10 @@ _INDEX_HTML = """
 
           <!-- Card: Confirm -->
           <div class="card" style="padding:1rem;">
-            <button type="button" id="btnWizardSave" class="btn-wizard" style="width:100%;" onclick="runWizardConfirm()">💾 Save Solution Data</button>
+            <div style="display:flex;gap:0.5rem;align-items:stretch;">
+              <button type="button" id="btnWizardSave" class="btn-wizard" style="flex:1;" onclick="runWizardConfirm()">💾 Save Solution Data</button>
+              <button type="button" class="btn-wizard" style="width:auto;padding:0 0.7rem;background:#f0f4fa;color:#1a5276;border:1px solid #c8d8f0;font-size:1rem;" onclick="_wizardShowRegistered()" title="Show collections registered in solutions.yaml">👁</button>
+            </div>
             <div id="wizardConfirmLog" class="log hidden" style="margin-top:0.6rem;max-height:8rem;overflow-y:auto;"></div>
             <div id="wizardConfirmResult" style="margin-top:0.5rem;"></div>
           </div>
@@ -7761,6 +7764,52 @@ _INDEX_HTML = """
         _wizardLoadConfirmedColls(solId);
         _wizardMarkClean();
       } catch(err) { log.textContent += 'Error: ' + err + '\\n'; log.classList.add('error'); }
+    }
+
+    async function _wizardShowRegistered() {
+      const solId = _wizardSolId || _wizardCurrentSolId();
+      if (!solId) { alert('Select a solution first.'); return; }
+      const container = document.getElementById('wizardConfirmResult');
+      if (!container) return;
+      container.innerHTML = '<span style="color:#888;font-size:0.82rem;">Loading…</span>';
+      try {
+        const res = await fetch('/api/solutions/' + encodeURIComponent(solId) + '/collections');
+        const data = res.ok ? await res.json() : {};
+        const colls = data.collections || [];
+        container.innerHTML = '';
+        if (!colls.length) {
+          container.innerHTML = '<span style="color:#888;font-size:0.82rem;">No collections registered for "' + solId + '" in solutions.yaml.</span>';
+          return;
+        }
+        const header = document.createElement('div');
+        header.style.cssText = 'font-weight:600;color:#1a5276;margin-bottom:0.6rem;font-size:0.85rem;';
+        header.textContent = '📋 ' + colls.length + ' collection' + (colls.length !== 1 ? 's' : '') + ' registered in solutions.yaml for "' + solId + '"';
+        container.appendChild(header);
+        colls.forEach(c => {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.45rem 0.65rem;margin-bottom:0.4rem;background:#f5f8ff;border:1px solid #c8d8f0;border-radius:7px;';
+          const left = document.createElement('div');
+          left.style.cssText = 'display:flex;align-items:center;gap:0.5rem;min-width:0;';
+          const name = document.createElement('span');
+          name.style.cssText = 'font-size:0.85rem;font-weight:500;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+          name.textContent = c.display_name || c.name;
+          const qdName = document.createElement('span');
+          qdName.style.cssText = 'font-size:0.7rem;color:#888;font-family:monospace;';
+          qdName.textContent = c.name;
+          left.appendChild(name);
+          left.appendChild(qdName);
+          const openBtn = document.createElement('button');
+          openBtn.type = 'button';
+          openBtn.style.cssText = 'font-size:0.78rem;padding:0.2rem 0.55rem;white-space:nowrap;background:#fff;color:#1a5276;border:1px solid #1a5276;border-radius:5px;cursor:pointer;flex-shrink:0;';
+          openBtn.textContent = '🛠 Work with RAG';
+          openBtn.onclick = () => _openCollectionInBuildRag(solId, c.name);
+          row.appendChild(left);
+          row.appendChild(openBtn);
+          container.appendChild(row);
+        });
+      } catch(e) {
+        container.innerHTML = '<span style="color:#c62828;font-size:0.82rem;">Failed to load: ' + e.message + '</span>';
+      }
     }
 
     function _wizardRenderConfirmResult(data, solId) {
