@@ -1289,7 +1289,8 @@ def state_load(req: StateLoadRequest):
 @app.get("/api/state/check-by-collection")
 def state_check_by_collection(collection_name: str, source_id: Optional[str] = None):
     """Check if a .rag_state_{collection_name}[_{source_id}].json exists in project root.
-    When source_id is given, checks source-scoped file first, falls back to collection-level."""
+    When source_id is given, checks source-scoped file first, falls back to collection-level.
+    Also checks for staleness by comparing source_config against current solutions.yaml."""
     import os, json
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     candidates = []
@@ -1301,7 +1302,7 @@ def state_check_by_collection(collection_name: str, source_id: Optional[str] = N
             try:
                 with open(save_path, "r", encoding="utf-8") as f:
                     d = json.load(f)
-                return {
+                result = {
                     "found": True,
                     "save_path": save_path,
                     "completed_steps": d.get("completed_steps", []),
@@ -1309,10 +1310,116 @@ def state_check_by_collection(collection_name: str, source_id: Optional[str] = N
                     "source_id": d.get("source_id"),
                     "chunks_count": len(d.get("chunks", [])),
                     "scraped_items_count": len(d.get("scraped_items", [])),
+                    "saved_at": d.get("saved_at"),
+                    "source_config": d.get("source_config"),
                 }
+                # ── Staleness check: compare state config vs current solutions.yaml ──
+                result.update(_check_staleness(d, collection_name))
+                return result
             except Exception as e:
                 return {"found": False, "error": str(e)}
     return {"found": False}
+
+
+def _check_staleness(state_data: dict, collection_name: str) -> dict:
+    """Compare state file's source_config against current solutions.yaml config.
+    Returns {stale: bool, stale_reason: str} if mismatched."""
+    try:
+        from solution_specs.loader import load_solutions
+        solutions = load_solutions()
+        state_cfg = state_data.get("source_config") or {}
+
+        # Find the matching collection in solutions.yaml
+        for sol in solutions:
+            for coll in sol.get("collections", []):
+                if coll.get("collection_name") == collection_name:
+                    current_cfg = coll.get("scraper_config") or {}
+                    reasons = []
+
+                    # Compare sitemap_url
+                    state_sitemap = (state_cfg.get("scraper_config") or {}).get("sitemap_url") or state_cfg.get("sitemap_url")
+                    current_sitemap = current_cfg.get("sitemap_url")
+                    if state_sitemap and current_sitemap and state_sitemap != current_sitemap:
+                        reasons.append(f"Sitemap changed: {state_sitemap} → {current_sitemap}")
+
+                    # Compare engine
+                    state_engine = state_cfg.get("engine")
+                    current_engine = current_cfg.get("engine")
+                    if state_engine and current_engine and state_engine != current_engine:
+                        reasons.append(f"Engine changed: {state_engine} → {current_engine}")
+
+                    # Compare scraper_name
+                    state_scraper = state_cfg.get("scraper_name")
+                    current_scraper = coll.get("scraper_name")
+                    if state_scraper and current_scraper and state_scraper != current_scraper:
+                        reasons.append(f"Scraper changed: {state_scraper} → {current_scraper}")
+
+                    # Compare collection_name in state vs what we expected
+                    state_coll = state_data.get("collection_name")
+                    if state_coll and state_coll != collection_name:
+                        reasons.append(f"Collection name mismatch: state has '{state_coll}', expected '{collection_name}'")
+
+                    if reasons:
+                        return {"stale": True, "stale_reason": "; ".join(reasons)}
+                    return {"stale": False}
+        return {"stale": False}
+    except Exception:
+        return {"stale": False}
+
+
+@app.get("/api/state/list")
+def state_list(collection_name: str):
+    """List all .rag_state_*.json files for a collection. Returns metadata for each."""
+    import os, json, glob as _glob
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pattern = os.path.join(root, f".rag_state_{collection_name}*.json")
+    files = _glob.glob(pattern)
+    result = []
+    for path in sorted(files):
+        fname = os.path.basename(path)
+        try:
+            stat = os.stat(path)
+            with open(path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            result.append({
+                "path": path,
+                "filename": fname,
+                "size_kb": round(stat.st_size / 1024, 1),
+                "modified": stat.st_mtime,
+                "saved_at": d.get("saved_at"),
+                "completed_steps": d.get("completed_steps", []),
+                "chunks_count": len(d.get("chunks", [])),
+                "scraped_items_count": len(d.get("scraped_items", [])),
+                "source_config": d.get("source_config"),
+                "collection_name": d.get("collection_name"),
+                "source_id": d.get("source_id"),
+            })
+        except Exception:
+            result.append({"path": path, "filename": fname, "error": True})
+    return {"files": result}
+
+
+class StateDeleteRequest(BaseModel):
+    path: str
+
+
+@app.delete("/api/state/file")
+def state_delete(req: StateDeleteRequest):
+    """Delete a .rag_state_*.json file. Path must be in project root and match naming pattern."""
+    import os, re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Safety: must be in project root and match .rag_state_*.json
+    real_path = os.path.realpath(req.path)
+    real_root = os.path.realpath(root)
+    fname = os.path.basename(real_path)
+    if not real_path.startswith(real_root + os.sep):
+        raise HTTPException(status_code=403, detail="Path outside project root.")
+    if not re.match(r"^\.rag_state_.+\.json$", fname):
+        raise HTTPException(status_code=400, detail="Not a valid state file name.")
+    if not os.path.exists(real_path):
+        raise HTTPException(status_code=404, detail="File not found.")
+    os.remove(real_path)
+    return {"deleted": True, "filename": fname}
 
 
 def _clear_progress_queue():
@@ -1436,6 +1543,17 @@ def run_fetch_streaming(req: StepRequest):
         state.source_config = state.source_config or {}
         state.source_config["login_config"] = req.login_config
     _clear_progress_queue()
+
+    # ── Auto-cleanup: delete old state files for this collection before fresh ingest ──
+    if state.collection_name:
+        import glob as _glob
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for old_f in _glob.glob(os.path.join(_root, f".rag_state_{state.collection_name}*.json")):
+            try:
+                os.remove(old_f)
+                _progress_queue.put(f"LOG:🗑 Deleted old state file: {os.path.basename(old_f)}")
+            except Exception:
+                pass
 
     class _QueueWriter(io.TextIOBase):
         """Intercepts print() calls and forwards them to the SSE progress queue."""
@@ -2833,6 +2951,7 @@ _INDEX_HTML = """
 
     <div id="panel-build" class="panel hidden">
       <div id="buildCollBanner" style="display:none;position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#1a5276,#2980b9);color:#fff;padding:0.45rem 1rem;border-radius:0 0 8px 8px;font-size:0.88rem;font-weight:600;margin-bottom:0.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.15);"></div>
+      <div id="stateFilesCard" style="display:none;margin-bottom:0.5rem;border:1px solid #e0e0e0;border-radius:8px;padding:0.5rem 0.75rem;background:#fafafa;font-size:0.8rem;"></div>
       <div class="card">
         <h2>1. Collection <span class="help-icon" onclick="toggleHelp('help-collection')" title="Help">?</span></h2>
         <div id="help-collection" class="help-tip">A <strong>solution</strong> is a client or project. Each solution has one or more <strong>collections</strong> — separate Qdrant indexes for different content types. <a href="/help#solutions" target="_blank">Learn more &rarr;</a></div>
@@ -4508,6 +4627,48 @@ _INDEX_HTML = """
       } catch(e) { /* silent — auto-save failure is non-critical */ }
     }
 
+    // ── State files card ──
+    function _hideStateFiles() {
+      const card = document.getElementById('stateFilesCard');
+      if (card) { card.style.display = 'none'; card.innerHTML = ''; }
+    }
+    async function _loadStateFiles(collectionName) {
+      const card = document.getElementById('stateFilesCard');
+      if (!card || !collectionName) { _hideStateFiles(); return; }
+      try {
+        const data = await api('/api/state/list?collection_name=' + encodeURIComponent(collectionName));
+        if (!data.files || data.files.length === 0) { _hideStateFiles(); return; }
+        let html = '<div style="font-weight:600;margin-bottom:0.3rem;">💾 Saved state files</div>';
+        data.files.forEach(f => {
+          const steps = (f.completed_steps || []).join(' → ') || '—';
+          const items = f.scraped_items_count ? f.scraped_items_count + ' items' : '';
+          const chunks = f.chunks_count ? f.chunks_count + ' chunks' : '';
+          const info = [items, chunks].filter(Boolean).join(', ') || 'empty';
+          const date = f.modified ? new Date(f.modified * 1000).toLocaleDateString() + ' ' + new Date(f.modified * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+          const cfg = f.source_config || {};
+          const sitemap = (cfg.scraper_config || cfg).sitemap_url || '';
+          const sitemapBadge = sitemap ? ' <span style="color:#888;font-size:0.72rem;">(' + sitemap.split('/').pop() + ')</span>' : '';
+          html += '<div style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0;border-top:1px solid #eee;">';
+          html += '<span style="flex:1;font-family:monospace;font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + f.filename + '">' + f.filename + sitemapBadge + '</span>';
+          html += '<span style="color:#555;font-size:0.72rem;white-space:nowrap;">' + info + '</span>';
+          html += '<span style="color:#888;font-size:0.72rem;white-space:nowrap;">' + date + '</span>';
+          html += '<span style="font-size:0.68rem;padding:0.08rem 0.35rem;border-radius:8px;background:#e3f2fd;color:#1565c0;white-space:nowrap;">' + steps + '</span>';
+          html += '<button onclick="_deleteStateFile(\\'' + f.path.replace(/'/g, "\\\\'") + '\\', \\'' + collectionName + '\\')" style="background:transparent;border:1px solid #e57373;color:#c62828;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:5px;cursor:pointer;" title="Delete this state file">🗑</button>';
+          html += '</div>';
+        });
+        card.innerHTML = html;
+        card.style.display = 'block';
+      } catch(_) { _hideStateFiles(); }
+    }
+    window._deleteStateFile = async function(path, collectionName) {
+      if (!confirm('Delete state file? This cannot be undone.')) return;
+      try {
+        const r = await fetch('/api/state/file', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path}) });
+        if (!r.ok) { const d = await r.json(); alert(d.detail || 'Delete failed'); return; }
+        await _loadStateFiles(collectionName);
+      } catch(e) { alert('Error: ' + e.message); }
+    };
+
     function onCollectionSelect() {
       const val = document.getElementById('collectionSelect').value;
       const newRow = document.getElementById('newCollectionRow');
@@ -4589,7 +4750,10 @@ _INDEX_HTML = """
         if (coll && _currentSolutionId) {
           renderRoutingMetadataPanel(coll, _currentSolutionId);
         }
+        // Load state files for this collection
+        _loadStateFiles(val);
       }
+      if (!val || val === '__new__') _hideStateFiles();
       // Hide source config and pipeline until a source is selected
       document.getElementById('sourceConfigCard').style.display = 'none';
       document.getElementById('pipelineCard').style.display = 'none';
@@ -5040,8 +5204,18 @@ _INDEX_HTML = """
           const steps = res.completed_steps.join(', ') || 'none';
           const chunks = res.chunks_count ? ` ${res.chunks_count} chunks ready.` : '';
           const items = res.scraped_items_count ? ` ${res.scraped_items_count} scraped pages.` : '';
-          document.getElementById('urlResumeInfo').textContent = `Steps done: ${steps}.${items}${chunks}`;
-          document.getElementById('urlResumeBanner').style.display = 'block';
+          const staleWarning = res.stale ? `\n⚠️ Stale: ${res.stale_reason}` : '';
+          document.getElementById('urlResumeInfo').textContent = `Steps done: ${steps}.${items}${chunks}${staleWarning}`;
+          const bannerEl = document.getElementById('urlResumeBanner');
+          bannerEl.style.display = 'block';
+          // Amber warning if stale, green if fresh
+          if (res.stale) {
+            bannerEl.style.borderColor = '#ff9800';
+            bannerEl.style.background = '#fff8e1';
+          } else {
+            bannerEl.style.borderColor = '';
+            bannerEl.style.background = '';
+          }
           document.getElementById('urlStartFreshConfirm').style.display = 'none';
           // Hide pipeline until user chooses Resume or Start fresh
           document.getElementById('pipelineCard').style.display = 'none';

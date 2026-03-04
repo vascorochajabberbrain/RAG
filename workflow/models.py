@@ -133,7 +133,9 @@ class WorkflowState:
 
     def to_full_dict(self) -> dict:
         """Full serialization including all text and chunks — for saving to disk."""
+        from datetime import datetime, timezone
         return {
+            "saved_at": datetime.now(timezone.utc).isoformat(),
             "collection_name": self.collection_name,
             "collection_type": self.collection_type,
             "embedding_model": self.embedding_model,
