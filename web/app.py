@@ -4993,12 +4993,11 @@ _INDEX_HTML = """
           ? 'background:#ffebee;color:#c62828;border:1px solid #ef9a9a;'
           : 'background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;');
       flash.textContent = msg;
-      // Insert after the routing header bar
+      // Insert ABOVE the Routing Metadata panel so it's visible even when collapsed
       const panel = document.getElementById('routingMetadataPanel');
-      const body = document.getElementById('routingBody');
-      if (body) body.insertBefore(flash, body.firstChild);
-      else if (panel) panel.appendChild(flash);
-      setTimeout(() => flash.remove(), 6000);
+      if (panel) panel.parentNode.insertBefore(flash, panel);
+      else if (anchorEl) anchorEl.parentNode.insertBefore(flash, anchorEl.nextSibling);
+      setTimeout(() => flash.remove(), 8000);
     }
 
     async function pushToJBKE(solId, collId) {
