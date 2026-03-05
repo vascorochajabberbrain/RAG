@@ -1600,10 +1600,23 @@ def run_fetch_streaming(req: StepRequest):
     from llms.token_tracker import get_tracker as _get_tracker
     _get_tracker().reset_task()
 
+    # ── Clear stale downstream data when re-ingesting ──
+    old_chunks_count = len(state.chunks) if state.chunks else 0
+    was_pushed = "push_to_qdrant" in (state.completed_steps or [])
+    if state.chunks:
+        state.chunks = []
+    # Remove downstream steps from completed_steps
+    downstream = {"chunk", "create_collection", "push_to_qdrant", "group"}
+    state.completed_steps = [s for s in (state.completed_steps or []) if s not in downstream]
+
     def _run():
         old_stdout = sys.stdout
         sys.stdout = _QueueWriter()
         try:
+            if old_chunks_count:
+                _progress_queue.put(f"LOG:⚠️ Cleared {old_chunks_count} old chunks — you will need to Chunk again after ingesting.")
+            if was_pushed:
+                _progress_queue.put("LOG:⚠️ Previous data was pushed to Qdrant — remember to Push again after Chunking.")
             msg = run_step(state, Step.FETCH, cancel_check=_cancel_event.is_set)
             if _cancel_event.is_set():
                 _progress_queue.put("CANCELLED:Ingest was stopped by user.")
@@ -5891,10 +5904,14 @@ _INDEX_HTML = """
     function _hideStopBtn(id) { const b = document.getElementById(id); if (b) b.style.display = 'none'; }
 
     async function runFetchWithProgress() {
-      // Warn if chunks already exist (re-ingest will require re-chunking)
-      const chunkStatus = document.getElementById('stepStatus-chunk');
-      if (chunkStatus && chunkStatus.textContent === '✅') {
-        if (!confirm('You have already chunked this data. Re-ingesting will require you to chunk again. Continue?')) return;
+      // Warn if chunks or push already exist (re-ingest will require re-chunking + re-pushing)
+      const chunkDone = document.getElementById('stepStatus-chunk')?.textContent === '✅';
+      const pushDone = document.getElementById('stepStatus-push_to_qdrant')?.textContent === '✅';
+      if (chunkDone || pushDone) {
+        let warn = 'Re-ingesting will clear existing chunks and require you to Chunk again.';
+        if (pushDone) warn += '\nPrevious data was already pushed to Qdrant — you will also need to Push again.';
+        warn += '\n\nContinue?';
+        if (!confirm(warn)) return;
       }
       const btn = document.getElementById('runFetch');
       _btnRunning(btn);
