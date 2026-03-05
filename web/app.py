@@ -4751,13 +4751,22 @@ _INDEX_HTML = """
         // Render sub-collection pills
         renderSubCollectionPicker(res.collections, solId);
 
-        // Auto-select first existing, or first option (skip when caller will select)
+        // Auto-select: restore last selected, or show placeholder on fresh session
         if (autoSelect) {
-          const first = res.collections.find(c => c.exists) || res.collections[0];
-          if (first) {
-            collSelect.value = first.name;
+          const lastColl = localStorage.getItem('rag_last_coll_' + solId);
+          const match = lastColl && res.collections.find(c => c.name === lastColl);
+          if (match) {
+            collSelect.value = match.name;
             onCollectionSelect();
           } else {
+            // No previous selection — show placeholder, don't auto-select
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Select a collection\u2026';
+            placeholder.disabled = true;
+            placeholder.selected = true;
+            collSelect.insertBefore(placeholder, collSelect.firstChild);
+            collSelect.value = '';
             onCollectionSelect();
           }
         }
@@ -4955,7 +4964,15 @@ _INDEX_HTML = """
     };
 
     function onCollectionSelect() {
-      const val = document.getElementById('collectionSelect').value;
+      const collSelect = document.getElementById('collectionSelect');
+      // Remove placeholder if present
+      const ph = collSelect.querySelector('option[disabled][value=""]');
+      if (ph && collSelect.value !== '') ph.remove();
+      const val = collSelect.value;
+      // Remember last selected collection per solution
+      if (val && val !== '__new__' && _currentSolutionId) {
+        try { localStorage.setItem('rag_last_coll_' + _currentSolutionId, val); } catch(e) {}
+      }
       const newRow = document.getElementById('newCollectionRow');
       const info = document.getElementById('existingCollectionInfo');
       const delBtn = document.getElementById('btnDeleteCollection');
