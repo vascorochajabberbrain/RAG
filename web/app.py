@@ -3231,6 +3231,7 @@ _INDEX_HTML = """
       <div class="card" id="pipelineCard" style="display:none;">
         <h2>4. Run pipeline <span class="help-icon" onclick="toggleHelp('help-pipeline')" title="Help">?</span></h2>
         <div id="help-pipeline" class="help-tip">Run each step in order. State is auto-saved after Fetch, Translate, and Chunk so you can resume later. <a href="/help#pipeline" target="_blank">Learn more &rarr;</a></div>
+        <div id="pipelineWarning" style="display:none;background:#fff3e0;border:1px solid #ff9800;border-left:4px solid #ff9800;border-radius:5px;padding:0.5rem 0.8rem;margin-bottom:0.7rem;font-size:0.85rem;color:#e65100;"></div>
         <p class="status">Ingest → (Translate &amp; Clean) → Chunk → Create Qdrant Collection → Push to Qdrant</p>
         <div style="margin-bottom:0.85rem;">
           <label title="The OpenAI embedding model used to vectorize text chunks. The vector dimension is fixed at collection creation and cannot be changed afterwards. Default: text-embedding-ada-002 (1536 dims).">
@@ -5710,6 +5711,9 @@ _INDEX_HTML = """
     function _setStepStatus(stepName, done) {
       const el = document.getElementById('stepStatus-' + stepName);
       if (el) { el.textContent = done ? '✅' : '⬜'; el.title = done ? 'Completed' : 'Not started'; }
+      // Debounce warning update to avoid multiple calls during batch updates
+      clearTimeout(_setStepStatus._timer);
+      _setStepStatus._timer = setTimeout(_updatePipelineWarning, 50);
     }
     function _resetAllStepStatus() {
       Object.keys(_stepBtnMap).forEach(s => _setStepStatus(s, false));
@@ -5717,6 +5721,29 @@ _INDEX_HTML = """
     function _markStepsFromList(completedSteps) {
       _resetAllStepStatus();
       (completedSteps || []).forEach(s => _setStepStatus(s, true));
+      _updatePipelineWarning();
+    }
+
+    function _updatePipelineWarning() {
+      const warn = document.getElementById('pipelineWarning');
+      if (!warn) return;
+      const fetchDone = document.getElementById('stepStatus-fetch')?.textContent === '✅';
+      const chunkDone = document.getElementById('stepStatus-chunk')?.textContent === '✅';
+      const pushDone = document.getElementById('stepStatus-push_to_qdrant')?.textContent === '✅';
+      const createDone = document.getElementById('stepStatus-create_collection')?.textContent === '✅';
+
+      if (fetchDone && !chunkDone) {
+        warn.textContent = '⚠️ Data ingested but not yet chunked. Run Chunk to continue.';
+        warn.style.display = 'block';
+      } else if (chunkDone && !createDone) {
+        warn.textContent = '⚠️ Data chunked but Qdrant collection not yet created. Run Create Qdrant Collection to continue.';
+        warn.style.display = 'block';
+      } else if (chunkDone && createDone && !pushDone) {
+        warn.textContent = '⚠️ Chunks ready but not yet pushed to Qdrant. Run Push to Qdrant to finish.';
+        warn.style.display = 'block';
+      } else {
+        warn.style.display = 'none';
+      }
     }
 
     const _pipelineBtns = () => ['runCreate','runFetch','runTranslate','runChunk','runPush','runSync'].map(id => document.getElementById(id)).filter(Boolean);
