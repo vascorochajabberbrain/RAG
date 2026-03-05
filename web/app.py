@@ -3104,22 +3104,16 @@ _INDEX_HTML = """
                 <input id="loginSubmitSel" type="text" placeholder="Submit selector" style="flex:1;min-width:140px;padding:0.22rem 0.4rem;border:1px solid #ddd;border-radius:5px;font-size:0.77rem;" />
               </div>
             </div>
-          <label style="margin-top:0.6rem;">Scraping engine <span class="help-icon" onclick="toggleHelp('help-scraper-engine')" title="Help">?</span></label>
-          <div id="help-scraper-engine" class="help-tip">Playwright is the safe default for all sites. Use httpx only for confirmed SSR-only sites (much faster). Shopify API is best for Shopify stores. <a href="/help#scraper-engines" target="_blank">Learn more &rarr;</a></div>
-          <div style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.9rem;margin-top:0.2rem;">
-            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
-              <input type="radio" name="scraperEngine" value="playwright" checked onchange="onScraperEngineChange()" style="width:auto;margin-top:2px;">
-              <span><strong>Playwright</strong> <span style="color:#888;font-size:0.82rem;">— default. Handles JS, dynamic content, SPAs.</span></span>
-            </label>
-            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
-              <input type="radio" name="scraperEngine" value="httpx" onchange="onScraperEngineChange()" style="width:auto;margin-top:2px;">
-              <span><strong>httpx (fast)</strong> <span style="color:#888;font-size:0.82rem;">— SSR-only sites. ~10x faster, no browser needed.</span></span>
-            </label>
-            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
-              <input type="radio" name="scraperEngine" value="shopify" onchange="onScraperEngineChange()" style="width:auto;margin-top:2px;">
-              <span><strong>Shopify API</strong> <span style="color:#888;font-size:0.82rem;">— Shopify stores. Uses /products.json directly.</span></span>
-            </label>
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;">
+            <label style="margin:0;white-space:nowrap;">Scraping engine</label>
+            <select id="scraperEngine" onchange="onScraperEngineChange()" style="flex:1;max-width:320px;">
+              <option value="playwright">Playwright — JS, dynamic content, SPAs (default)</option>
+              <option value="httpx">httpx — SSR-only sites, ~10x faster</option>
+              <option value="shopify">Shopify API — /products.json directly</option>
+            </select>
+            <span class="help-icon" onclick="toggleHelp('help-scraper-engine')" title="Help">?</span>
           </div>
+          <div id="help-scraper-engine" class="help-tip">Playwright is the safe default for all sites. Use httpx only for confirmed SSR-only sites (much faster). Shopify API is best for Shopify stores. <a href="/help#scraper-engines" target="_blank">Learn more &rarr;</a></div>
           <div id="shopifyUrlRow" class="hidden" style="margin-top:0.5rem;">
             <label>Shop URL</label>
             <input type="text" id="shopUrl" placeholder="https://mystore.myshopify.com">
@@ -5260,8 +5254,17 @@ _INDEX_HTML = """
     }
 
     // Show/hide Shopify URL field based on engine selection
+    let _prevEngine = 'playwright';
     function onScraperEngineChange() {
-      const engine = document.querySelector('input[name="scraperEngine"]:checked').value;
+      const sel = document.getElementById('scraperEngine');
+      const engine = sel.value;
+      if (engine !== _prevEngine) {
+        if (!confirm('Change scraping engine to "' + sel.options[sel.selectedIndex].text.split(' —')[0] + '"?')) {
+          sel.value = _prevEngine;
+          return;
+        }
+        _prevEngine = engine;
+      }
       document.getElementById('shopifyUrlRow').classList.toggle('hidden', engine !== 'shopify');
     }
 
@@ -5509,7 +5512,7 @@ _INDEX_HTML = """
       const chunkMode = document.querySelector('input[name="chunkMode"]:checked').value;
       let source_config = {};
       if (st === 'url') {
-        const engine = (document.querySelector('input[name="scraperEngine"]:checked') || {}).value || 'playwright';
+        const engine = (document.getElementById('scraperEngine') || {}).value || 'playwright';
         source_config = { scraper_name: scraper || 'peixefresco', source_label: scraper || scraper, engine };
         if (engine === 'shopify') {
           source_config.shop_url = (document.getElementById('shopUrl') || {}).value?.trim() || '';
