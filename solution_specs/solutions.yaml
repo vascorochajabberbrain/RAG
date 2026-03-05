@@ -1,50 +1,10 @@
 solutions:
-- id: hey_harper
-  display_name: Hey Harper
-  company_name: Hey Harper
-  language: en
-  aliases:
-  - hh
-  collections:
-  - id: hey_harper_1
-    display_name: Hey Harper (main)
-    collection_name: hey_harper_1
-    collection_type: scs
-    routing: {}
-  - id: hey_harper_ps
-    display_name: Hey Harper (product subscription)
-    collection_name: hey_harper_product_subscriptio_alpha
-    collection_type: scs
-    routing: {}
-  - id: hey_harper_ps_grouped
-    display_name: Hey Harper (PS with grouping)
-    collection_name: hh_ps_w_grouping
-    collection_type: group
-    routing: {}
-- id: first_shopify_test_store
-  display_name: First Shopify Test Store
-  company_name: First Shopify Test Store
-  language: en
-  aliases:
-  - fsts
-  collections:
-  - id: first_shopify_test_store
-    display_name: Products
-    collection_name: first_shopify_test_store
-    collection_type: scs
-    scraper_name: first_shopify_test_store
-    sources:
-    - id: shopify_products
-      type: url
-      label: Shopify products
-      scraper_name: first_shopify_test_store
-    routing: {}
 - id: peixe_fresco
   display_name: Peixe Fresco
   company_name: Peixe Fresco
   language: pt
-  jbke_version_id: null
-  jbke_cbva_id: null
+  jbke_version_id: 35
+  jbke_cbva_id: 12
   aliases:
   - pf
   collections:
@@ -52,6 +12,7 @@ solutions:
     display_name: Products
     collection_name: peixe_fresco_products
     collection_type: scs
+    jbke_rcm_id: 8
     scraper_name: peixe_fresco_products
     sources:
     - id: product_sitemap
@@ -93,6 +54,14 @@ solutions:
       - ações de sustentabilidade
       language: pt
       doc_type: product_catalog
+    scraper_config:
+      name: peixe_fresco_products
+      engine: playwright
+      scrape_mode: sitemap
+      sitemap_url: https://store.peixefresco.com.pt/product-sitemap.xml
+      excluded_urls:
+      - https://store.peixefresco.com.pt/loja/
+      text_selector: main, article, .entry-content, body
   - id: peixe_fresco_recipes
     display_name: Recipes
     collection_name: peixe_fresco_recipes
@@ -139,48 +108,12 @@ solutions:
       - comida rápida
       language: pt
       doc_type: recipe_book
-  - id: peixe_fresco_pages
-    display_name: Pages
-    collection_name: peixe_fresco_pages
-    collection_type: scs
-    scraper_name: peixe_fresco_pages
-    sources:
-    - id: page_sitemap
-      type: url
-      label: Static pages (23 pages)
-      scraper_name: peixe_fresco_pages
-    routing:
-      description: Esta coleção contém informações sobre a venda de peixe fresco,
-        incluindo opções de aquicultura e promoções especiais.
-      keywords:
-      - peixe do mar
-      - postas de peixe
-      - filetes
-      - bivalves
-      - aquicultura BIO
-      - marisco cozido
-      - refeições
-      - salgados
-      - fumeiro
-      - preparado com água do mar
-      - desconto primeira compra
-      - entregas grátis
-      - sustentabilidade
-      - avaliações 5 estrelas
-      typical_questions:
-      - Quais tipos de peixe estão disponíveis?
-      - Como funciona a entrega gratuita?
-      - O que é aquicultura BIO?
-      - Quais são os descontos para a primeira compra?
-      - O peixe é sustentável?
-      not_covered:
-      - Receitas de peixe
-      - História da aquicultura
-      - Informações sobre outros tipos de alimentos
-      - Técnicas de pesca
-      - Informações sobre restaurantes
-      language: pt
-      doc_type: product_catalog
+    scraper_config:
+      name: peixe_fresco_recipes
+      engine: playwright
+      scrape_mode: sitemap
+      sitemap_url: https://store.peixefresco.com.pt/receitas-sitemap.xml
+      text_selector: main, article, .entry-content, body
   - id: peixe_fresco_faq
     display_name: faq
     collection_name: peixe_fresco_faq
@@ -188,10 +121,10 @@ solutions:
     scraper_name: peixe_fresco_faq
     scraper_config:
       name: peixe_fresco_faq
-      engine: playwright
-      scrape_mode: url_list
-      urls:
-      - https://store.peixefresco.com.pt/perguntas-frequentes/
+      engine: httpx
+      scrape_mode: sitemap
+      sitemap_url: https://store.peixefresco.com.pt/page-sitemap.xml
+      text_selector: main, article, .entry-content, body
     routing:
       description: Esta coleção contém informações sobre a política de privacidade
         e serviços de entrega relacionados a produtos de peixe fresco.

@@ -8174,7 +8174,7 @@ _INDEX_HTML = """
           } else {
             exclBtn.title = 'Exclude this page';
             exclBtn.textContent = '✕';
-            exclBtn.onclick = e => { e.stopPropagation(); _wizardExcludePageFn(url); _wizardRenderAll(); };
+            exclBtn.onclick = e => { e.stopPropagation(); _wizardExcludePageFn(url, catId); _wizardRenderAll(); };
           }
           row.appendChild(exclBtn);
         }
@@ -8300,6 +8300,8 @@ _INDEX_HTML = """
         actBtn.onclick = (e) => {
           e.stopPropagation();
           pageEntry.status = isExcluded ? 'included' : 'excluded';
+          _collMarkModified(c);
+          _wizardMarkDirty();
           _wizardRenderAll();
         };
         row.appendChild(actBtn);
@@ -8405,7 +8407,7 @@ _INDEX_HTML = """
       if (isPage) {
         const state = _pageState(url, catId);
         if (state !== 'excluded') {
-          items.push({label: '✕ Exclude this page', fn: () => { _wizardExcludePageFn(url); _wizardRenderAll(); }});
+          items.push({label: '✕ Exclude this page', fn: () => { _wizardExcludePageFn(url, catId); _wizardRenderAll(); }});
         }
         if (state === 'excluded' || state === 'overridden') {
           items.push({label: '↩ Revert', fn: () => { _wizardRevertPage(url); _wizardRenderAll(); }});
@@ -8507,11 +8509,23 @@ _INDEX_HTML = """
       _wizardRenderAll();
     }
 
-    function _wizardExcludePageFn(url) {
+    function _wizardExcludePageFn(url, catId) {
       // Find the page in any collection and set status to excluded
       for (const c of _wizardCollections) {
         const p = (c.pages || []).find(p => p.url === url);
         if (p) { p.status = 'excluded'; _collMarkModified(c); _wizardMarkDirty(); return; }
+      }
+      // Page not found in any collection — find the collection that owns this sitemap category
+      // and add the page directly as excluded
+      if (catId) {
+        const ownerCollId = _smCollId(catId);
+        const ownerColl = ownerCollId !== null ? _wizardCollections.find(x => x._id === ownerCollId) : null;
+        if (ownerColl) {
+          if (!ownerColl.pages) ownerColl.pages = [];
+          ownerColl.pages.push({url, origin: 'sitemap', origin_id: catId, status: 'excluded'});
+          _collMarkModified(ownerColl);
+          _wizardMarkDirty();
+        }
       }
     }
 
@@ -8594,7 +8608,7 @@ _INDEX_HTML = """
       // Set page status back to included
       for (const c of _wizardCollections) {
         const p = (c.pages || []).find(p => p.url === url);
-        if (p) { p.status = 'included'; _collMarkModified(c); return; }
+        if (p) { p.status = 'included'; _collMarkModified(c); _wizardMarkDirty(); return; }
       }
     }
 

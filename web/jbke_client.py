@@ -36,7 +36,24 @@ class JBKEClient:
                 "Set JBKE_BASE_URL and JBKE_AUTH_TOKEN in your .env file."
             )
 
+        # Cache language code → id mapping (loaded on first use)
+        self._language_map: dict[str, int] | None = None
+
     # ── low-level helpers ──────────────────────────────────────────
+
+    @staticmethod
+    def _parse_response(resp) -> dict:
+        """Parse jBKE response, handling PHP errors that return HTML instead of JSON."""
+        try:
+            return resp.json()
+        except Exception:
+            body = resp.text.strip()
+            # PHP fatal errors come back as HTML
+            if "Fatal error" in body or "<b>" in body:
+                import re
+                msg = re.sub(r"<[^>]+>", "", body).strip()
+                raise RuntimeError(f"jBKE PHP error: {msg[:300]}")
+            raise RuntimeError(f"jBKE returned non-JSON response: {body[:300]}")
 
     def _auth_params(self, version_id: int) -> dict:
         return {
@@ -47,6 +64,48 @@ class JBKEClient:
 
     def _endpoint(self, php_file: str) -> str:
         return f"{self.base_url}/{php_file}"
+
+    # ── Language lookup ──────────────────────────────────────────
+
+    def _load_languages(self, version_id: int) -> dict[str, int]:
+        """Fetch language code → id mapping from jBKE's languages table."""
+        url = self._endpoint("bo_language_process.php")
+        params = {
+            **self._auth_params(version_id),
+            "UserAction": "GetLanguages",
+        }
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        result = self._parse_response(resp)
+        mapping = {}
+        for lang in result.get("data", []):
+            # Map language name to id; also build code→id from known names
+            name = lang.get("name", "").strip()
+            lid = int(lang.get("value", 0))
+            if name and lid:
+                mapping[name.upper()] = lid
+        # Build a code→id lookup from common language names
+        name_to_code = {
+            "PORTUGUESE": "PT", "ENGLISH": "EN", "SPANISH": "ES",
+            "FRENCH": "FR", "GERMAN": "DE", "ITALIAN": "IT",
+            "DUTCH": "NL", "SWEDISH": "SV", "DANISH": "DA",
+            "FINNISH": "FI", "NORWEGIAN": "NO", "POLISH": "PL",
+            "ROMANIAN": "RO", "RUSSIAN": "RU", "HUNGARIAN": "HU",
+            "JAPANESE": "JA", "SLOVAK": "SK", "SLOVENE": "SL",
+            "GENERAL": "XX", "ALL": "ALL",
+        }
+        code_map = {}
+        for name_upper, lid in mapping.items():
+            code = name_to_code.get(name_upper)
+            if code:
+                code_map[code] = lid
+        return code_map
+
+    def get_language_id(self, lang_code: str, version_id: int) -> int | None:
+        """Resolve a 2-letter language code (e.g. 'pt') to a jBKE language_id."""
+        if self._language_map is None:
+            self._language_map = self._load_languages(version_id)
+        return self._language_map.get(lang_code.upper())
 
     # ── CRUD operations ────────────────────────────────────────────
 
@@ -60,7 +119,7 @@ class JBKEClient:
         }
         resp = requests.get(url, params=params, timeout=30)
         resp.raise_for_status()
-        result = resp.json()
+        result = self._parse_response(resp)
         if result.get("success") and result.get("data"):
             return result["data"]
         return None
@@ -81,7 +140,7 @@ class JBKEClient:
         }
         resp = requests.post(url, data=payload, timeout=30)
         resp.raise_for_status()
-        return resp.json()
+        return self._parse_response(resp)
 
     def update_collection(
         self, version_id: int, rcm_id: int, fields: dict
@@ -96,9 +155,22 @@ class JBKEClient:
         }
         resp = requests.post(url, data=payload, timeout=30)
         resp.raise_for_status()
-        return resp.json()
+        return self._parse_response(resp)
 
     # ── high-level: push routing metadata ──────────────────────────
+
+    @staticmethod
+    def _doc_type_to_rcd_type(doc_type: str) -> str:
+        """Map solutions.yaml doc_type to jBKE rcd_type values."""
+        mapping = {
+            "product_catalog": "Product",
+            "recipe_book": "Recipe",
+            "faq": "FAQ",
+            "manual": "Manual",
+            "legal": "Legal",
+            "general": "General",
+        }
+        return mapping.get(doc_type, "Other")
 
     def build_routing_payload(
         self,
@@ -107,44 +179,53 @@ class JBKEClient:
         routing: dict,
         settings: dict,
         cbva_id: int | None = None,
+        version_id: int | None = None,
     ) -> dict:
         """
         Transform solutions.yaml routing + settings into jBKE POST fields.
 
         Array fields (keywords, typical_questions, not_covered) are joined
-        with newlines — jBKE stores them as text blobs.
+        with comma or pipe separators to match jBKE's expected format.
         """
-        def _join(val):
+        def _join_comma(val):
+            """Join list items with ', ' — for keywords and not_covered."""
             if isinstance(val, list):
-                return "\n".join(str(v) for v in val)
+                return ", ".join(str(v) for v in val)
+            return str(val) if val else ""
+
+        def _join_pipe(val):
+            """Join list items with ' | ' — for typical_questions."""
+            if isinstance(val, list):
+                return " | ".join(str(v) for v in val)
             return str(val) if val else ""
 
         fields = {
             "rcd_name": collection_name,
-            "rcd_type": collection_type or "scs",
+            # rcd_type = content type (Product, FAQ, General, etc.)
+            "rcd_type": self._doc_type_to_rcd_type(routing.get("doc_type", "")),
             "rcd_status": "enabled",
             # Routing metadata
             "rcd_routing_description": routing.get("description", ""),
-            "rcd_routing_keywords": _join(routing.get("keywords")),
-            "rcd_routing_typical_questions": _join(
+            "rcd_routing_keywords": _join_comma(routing.get("keywords")),
+            "rcd_routing_typical_questions": _join_pipe(
                 routing.get("typical_questions")
             ),
-            "rcd_routing_not_covered": _join(routing.get("not_covered")),
+            "rcd_routing_not_covered": _join_comma(routing.get("not_covered")),
             "rcd_routing_doc_type": routing.get("doc_type", ""),
-            # LLM / vector config from settings
-            "rcd_vector_store_url": settings.get("qdrant_url", ""),
-            "rcd_llm_model_answer": settings.get("llm_chat_model", ""),
-            "rcd_llm_model_query_rewrite": settings.get(
-                "llm_processing_model", ""
-            ),
+            # Embedding config (crucial — always populate)
             "rcd_llm_model_embedding": settings.get("embedding_model", ""),
             "rcd_embedding_dimensions": "1536",
+            # Leave these empty so jBKE uses its defaults:
+            # rcd_vector_store_url, rcd_llm_model_answer,
+            # rcd_llm_model_query_rewrite, rcd_qdrant_collection_name
         }
-        # Language: pass as-is (jBKE stores language_id as a number,
-        # but the field accepts the value directly)
+
+        # Language: look up the numeric language_id from jBKE's languages table
         lang = routing.get("language", "")
-        if lang:
-            fields["rcd_routing_language_id"] = lang
+        if lang and version_id:
+            lang_id = self.get_language_id(lang, version_id)
+            if lang_id:
+                fields["rcd_routing_language_id"] = str(lang_id)
 
         if cbva_id:
             fields["rcd_cbva_id"] = str(cbva_id)
@@ -168,7 +249,8 @@ class JBKEClient:
                  "rcm_id": int|None, "message": str}
         """
         fields = self.build_routing_payload(
-            collection_name, collection_type, routing, settings, cbva_id
+            collection_name, collection_type, routing, settings, cbva_id,
+            version_id=version_id,
         )
 
         if rcm_id:
