@@ -74,7 +74,12 @@ def _run_create_collection(state: WorkflowState) -> str:
         tracker._delete_collection(state.collection_name)
     # Create with correct vector size for the chosen embedding model
     tracker._create_collection(state.collection_name, vector_size=vector_size)
-    state.collection_object = tracker.new(state.collection_name, coll_type)
+    # Instantiate the collection object directly (avoid tracker.new/open which have
+    # interactive input() prompts designed for CLI use)
+    from QdrantTracker import COLLECTIONS_TYPES_MAP
+    coll_cls = COLLECTIONS_TYPES_MAP[coll_type]
+    state.collection_object = coll_cls(state.collection_name)
+    tracker._open_collections.add(state.collection_object)
     return (
         f"Created and opened collection '{state.collection_name}' "
         f"(type={coll_type}, model={state.embedding_model}, dims={vector_size})."
