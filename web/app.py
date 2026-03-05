@@ -6546,7 +6546,7 @@ _INDEX_HTML = """
           sourcesDiv.id = 'qaSources';
           sourcesDiv.style.cssText = 'margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;';
           const label = document.createElement('span');
-          label.textContent = 'Sources:';
+          label.textContent = 'Retrieved chunks:';
           label.style.cssText = 'font-size:0.8rem;color:#888;font-weight:600;';
           sourcesDiv.appendChild(label);
           sources.forEach(src => {
