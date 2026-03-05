@@ -2950,7 +2950,7 @@ _INDEX_HTML = """
     </div>
 
     <div id="panel-build" class="panel hidden">
-      <div id="buildCollBanner" style="display:none;position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#1a5276,#2980b9);color:#fff;padding:0.45rem 1rem;border-radius:0 0 8px 8px;font-size:0.88rem;font-weight:600;margin-bottom:0.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.15);"></div>
+      <div id="buildCollBanner" style="display:none;position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#1a5276,#2980b9);color:#fff;padding:0.45rem 1rem;border-radius:8px;font-size:0.88rem;font-weight:600;margin-top:0.5rem;margin-bottom:0.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.15);"></div>
       <div id="stateFilesCard" style="display:none;margin-bottom:0.5rem;border:1px solid #e0e0e0;border-radius:8px;padding:0.5rem 0.75rem;background:#fafafa;font-size:0.8rem;"></div>
       <div class="card">
         <h2>1. Collection <span class="help-icon" onclick="toggleHelp('help-collection')" title="Help">?</span></h2>
@@ -4830,7 +4830,7 @@ _INDEX_HTML = """
           chunkDelBtn.type = 'button';
           chunkDelBtn.style.cssText = 'font-size:0.75rem;padding:0.1rem 0.45rem;background:none;border:1px solid #c0392b;border-radius:4px;color:#c0392b;cursor:pointer;flex-shrink:0;';
           chunkDelBtn.textContent = '🗑';
-          chunkDelBtn.title = 'Delete this source\\'s chunks from Qdrant';
+          chunkDelBtn.title = 'Delete this source\\'s points from Qdrant';
           chunkDelBtn.onclick = (e) => {
             e.stopPropagation();
             _inlineConfirm(chunkDelBtn, {
@@ -4848,7 +4848,7 @@ _INDEX_HTML = """
                   await loadSolutionCollections(solId);
                 } catch(err) {
                   btn.textContent = '🗑'; btn.disabled = false;
-                  setLog(buildLog, 'Delete chunks failed: ' + err.message, true);
+                  setLog(buildLog, 'Delete points failed: ' + err.message, true);
                 }
               }
             });
@@ -4860,7 +4860,7 @@ _INDEX_HTML = """
           viewBtn.type = 'button';
           viewBtn.style.cssText = 'font-size:0.75rem;padding:0.1rem 0.45rem;background:none;border:1px solid #2980b9;border-radius:4px;color:#2980b9;cursor:pointer;flex-shrink:0;';
           viewBtn.textContent = '👁';
-          viewBtn.title = 'View chunks in Qdrant';
+          viewBtn.title = 'View points in Qdrant';
           viewBtn.onclick = (e) => {
             e.stopPropagation();
             _toggleChunkViewer(src, row);
@@ -6870,7 +6870,7 @@ _INDEX_HTML = """
     // Confirm and execute Qdrant chunk deletion for a removed URL
     function _wizardConfirmDeletePage(url, catId, delBtn, row) {
       _inlineConfirm(delBtn, {
-        message: 'Delete chunks for this page from Qdrant?',
+        message: 'Delete points for this page from Qdrant?',
         confirmLabel: 'Delete',
         onConfirm: async (btn) => {
           btn.textContent = 'Deleting…'; btn.disabled = true;
@@ -7095,7 +7095,7 @@ _INDEX_HTML = """
           // Delete from Qdrant button
           const delBtn = document.createElement('button');
           delBtn.className = 'wiz-del-btn';
-          delBtn.title = 'Delete chunks for this URL from Qdrant';
+          delBtn.title = 'Delete points for this URL from Qdrant';
           delBtn.textContent = '🗑 delete';
           delBtn.onclick = e => { e.stopPropagation(); _wizardConfirmDeletePage(url, catId, delBtn, row); };
           row.appendChild(delBtn);
@@ -7894,10 +7894,10 @@ _INDEX_HTML = """
           if (pts > 0) {
             badge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.45rem;border-radius:10px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;';
             const nSrc = _collectionOrigins(c).size + (c.fileSources ? c.fileSources.length : 0);
-            badge.textContent = '✅ Live — ' + pts + ' chunks' + (nSrc > 1 ? ' · ' + nSrc + ' sources' : '');
+            badge.textContent = '✅ Live — ' + pts + ' points' + (nSrc > 1 ? ' · ' + nSrc + ' sources' : '');
           } else {
             badge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.45rem;border-radius:10px;background:#e3f0fd;color:#1a5276;border:1px solid #aed6f1;';
-            badge.textContent = '📥 Ingested (0 chunks)';
+            badge.textContent = '📥 Ingested (0 points)';
           }
           badgeWrap.appendChild(badge);
         }
@@ -8813,7 +8813,7 @@ _INDEX_HTML = """
       html += '<thead><tr style="background:#f5f5f5;text-align:left;">'
         + '<th style="' + thStyle + '" onclick="_qdrantSetSort(&apos;status&apos;)">Status <span class="help-icon" onclick="event.stopPropagation();toggleHelp(&apos;help-qdrant-status&apos;)">?</span>' + arrow('status') + '</th>'
         + '<th style="' + thStyle + '" onclick="_qdrantSetSort(&apos;name&apos;)">Collection' + arrow('name') + '</th>'
-        + '<th style="' + thStyle + 'text-align:right;" onclick="_qdrantSetSort(&apos;chunks&apos;)">Chunks' + arrow('chunks') + '</th>'
+        + '<th style="' + thStyle + 'text-align:right;" onclick="_qdrantSetSort(&apos;chunks&apos;)">Points' + arrow('chunks') + '</th>'
         + '<th style="' + thStyle + '" onclick="_qdrantSetSort(&apos;solution&apos;)">Solution' + arrow('solution') + '</th>'
         + '<th style="' + thStyle + '" onclick="_qdrantSetSort(&apos;last_updated&apos;)">Last Updated' + arrow('last_updated') + '</th>'
         + '<th style="padding:0.5rem;">Actions</th>'

@@ -497,7 +497,7 @@ def _run_push(state: WorkflowState, cancel_check=None) -> str:
         points = temp_coll.points_to_save(model_id=embedding_model)
         tracker.append_points_to_collection(name, points)
         state.skip_urls = []  # clear after push
-        return f"Appended {len(points)} chunks to existing '{name}' in Qdrant (model={embedding_model}).{skip_msg}"
+        return f"Appended {len(points)} points to existing '{name}' in Qdrant (model={embedding_model}).{skip_msg}"
 
     # Fresh push: collection doesn't exist yet — create + save all at once.
     if coll is None:
@@ -512,7 +512,7 @@ def _run_push(state: WorkflowState, cancel_check=None) -> str:
     points = coll.points_to_save(model_id=embedding_model)
     tracker._upsert_points(name, points)
     state.skip_urls = []  # clear after push
-    return f"Pushed {len(points)} chunks to '{name}' in Qdrant (model={embedding_model}).{skip_msg}"
+    return f"Pushed {len(points)} points to '{name}' in Qdrant (model={embedding_model}).{skip_msg}"
 
 
 def _get_collection_routing(state: WorkflowState) -> dict | None:
