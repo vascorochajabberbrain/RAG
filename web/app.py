@@ -681,6 +681,45 @@ def update_solution_language(solution_id: str, req: UpdateLanguageRequest):
     return {"message": f"Base language for '{solution_id}' set to '{language}'"}
 
 
+class UpdateSolutionSettingsRequest(BaseModel):
+    jbke_version_id: int | None = None
+    jbke_cbva_id: int | None = None
+    company_name: str | None = None
+
+
+@app.put("/api/solutions/{solution_id}/settings")
+def update_solution_settings(solution_id: str, req: UpdateSolutionSettingsRequest):
+    """Update solution-level settings (jBKE IDs, company name)."""
+    import yaml
+    specs_path = _specs_file()
+    with open(specs_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    sol = None
+    for s in data.get("solutions", []):
+        if s.get("id") == solution_id:
+            sol = s
+            break
+    if not sol:
+        raise HTTPException(status_code=404, detail=f"Solution '{solution_id}' not found")
+
+    # Update fields — remove key if value is None/empty to keep YAML clean
+    for field, val in [
+        ("jbke_version_id", req.jbke_version_id),
+        ("jbke_cbva_id", req.jbke_cbva_id),
+        ("company_name", req.company_name),
+    ]:
+        if val is not None:
+            sol[field] = val
+        else:
+            sol.pop(field, None)
+
+    with open(specs_path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    from solution_specs.loader import reload
+    reload()
+    return {"success": True, "message": f"Settings saved for '{solution_id}'"}
+
+
 @app.post("/api/solutions/{solution_id}/collections/{collection_id}/routing/suggest")
 def suggest_collection_routing(solution_id: str, collection_id: str):
     """
@@ -3244,6 +3283,7 @@ _INDEX_HTML = """
       </select>
       <span id="globalSolLang" class="global-sol-lang" style="display:none;" title="Click to change base language" onclick="showLangEditor()"></span>
       <button type="button" id="btnDeleteSolution" style="display:none;background:transparent;border:1px solid #e57373;color:#c62828;font-size:0.78rem;padding:0.15rem 0.5rem;border-radius:6px;cursor:pointer;margin-left:0.3rem;" title="Delete this solution" onclick="_deleteSolution()">🗑</button>
+      <button type="button" id="btnSolSettings" style="display:none;background:transparent;border:1px solid #bbb;color:#555;font-size:0.78rem;padding:0.15rem 0.5rem;border-radius:6px;cursor:pointer;margin-left:0.2rem;" title="Solution settings" onclick="_toggleSolSettings()">⚙️</button>
       <div style="position:relative;display:inline-block;">
         <button type="button" id="btnWizardLoad" class="btn-sm" onclick="_wizardShowLoadDropdown(this)" title="Load saved collection config" style="background:#f0f4fa;color:#555;border:1px solid #c8d8f0;font-size:0.78rem;cursor:pointer;">📂 Load Collection Config</button>
         <div id="wizardLoadDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #c8d8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);min-width:220px;padding:0.4rem 0;margin-top:2px;"></div>
@@ -3253,6 +3293,23 @@ _INDEX_HTML = """
       <input id="globalSolNewName" type="text" placeholder="New solution name…" style="display:none;">
       <button id="globalSolNewBtn" class="btn-sm" style="display:none;background:#0066cc;color:#fff;" onclick="_globalCreateNewSolution()">Create</button>
       <button id="globalSolNewCancel" class="btn-sm" style="display:none;background:#e9ecef;color:#333;" onclick="_globalCancelNewSolution()">Cancel</button>
+    </div>
+
+    <!-- Solution Settings Panel (hidden by default) -->
+    <div id="solSettingsPanel" style="display:none;background:#f8f9fa;border:1px solid #dde;border-radius:8px;padding:0.7rem 1rem;margin-bottom:0.7rem;">
+      <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem;">⚙️ Solution Settings</div>
+      <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;font-size:0.82rem;">
+        <label style="display:flex;align-items:center;gap:0.3rem;">jBKE Environment (version_id):
+          <input id="solSettingsVersionId" type="number" min="0" style="width:70px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
+        </label>
+        <label style="display:flex;align-items:center;gap:0.3rem;">jBKE Virtual Assistant (cbva_id):
+          <input id="solSettingsCbvaId" type="number" min="0" style="width:70px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
+        </label>
+        <label style="display:flex;align-items:center;gap:0.3rem;">Company name:
+          <input id="solSettingsCompany" type="text" style="width:160px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
+        </label>
+        <span id="solSettingsSaved" style="color:#2e7d32;font-size:0.75rem;display:none;">✓ Saved</span>
+      </div>
     </div>
 
     <div class="tabs">
@@ -4600,9 +4657,11 @@ _INDEX_HTML = """
 
       _currentSolutionId = val || null;
 
-      // Update language badge + delete button
+      // Update language badge + delete button + settings button
       const langBadge = document.getElementById('globalSolLang');
       const delBtn = document.getElementById('btnDeleteSolution');
+      const settingsBtn = document.getElementById('btnSolSettings');
+      const settingsPanel = document.getElementById('solSettingsPanel');
       if (_currentSolutionId) {
         const sol = _allSolutions.find(s => s.id === _currentSolutionId);
         const lang = sol && sol.language ? sol.language : null;
@@ -4612,9 +4671,12 @@ _INDEX_HTML = """
           ? `Base language: ${lang} — click to change`
           : 'No base language set — click to set';
         delBtn.style.display = 'inline-block';
+        settingsBtn.style.display = 'inline-block';
       } else {
         langBadge.style.display = 'none';
         delBtn.style.display = 'none';
+        settingsBtn.style.display = 'none';
+        if (settingsPanel) settingsPanel.style.display = 'none';
       }
 
       await _applyGlobalSolution();
@@ -4634,6 +4696,56 @@ _INDEX_HTML = """
         document.getElementById('globalSolution').value = '';
         await onGlobalSolutionChange();
       } catch(e) { alert('Error: ' + e.message); }
+    }
+
+    function _toggleSolSettings() {
+      const panel = document.getElementById('solSettingsPanel');
+      if (panel.style.display === 'none') {
+        // Populate fields from current solution data
+        const sol = (_allSolutions || []).find(s => s.id === _currentSolutionId);
+        if (sol) {
+          document.getElementById('solSettingsVersionId').value = sol.jbke_version_id || '';
+          document.getElementById('solSettingsCbvaId').value = sol.jbke_cbva_id || '';
+          document.getElementById('solSettingsCompany').value = sol.company_name || '';
+        }
+        panel.style.display = '';
+        // Attach save handlers (debounced)
+        for (const inputId of ['solSettingsVersionId', 'solSettingsCbvaId', 'solSettingsCompany']) {
+          const el = document.getElementById(inputId);
+          el.onchange = () => _saveSolSettings();
+        }
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+
+    let _solSettingsTimer = null;
+    async function _saveSolSettings() {
+      if (!_currentSolutionId) return;
+      clearTimeout(_solSettingsTimer);
+      _solSettingsTimer = setTimeout(async () => {
+        const versionId = document.getElementById('solSettingsVersionId').value.trim();
+        const cbvaId = document.getElementById('solSettingsCbvaId').value.trim();
+        const company = document.getElementById('solSettingsCompany').value.trim();
+        try {
+          const res = await fetch(`/api/solutions/${encodeURIComponent(_currentSolutionId)}/settings`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              jbke_version_id: versionId ? parseInt(versionId) : null,
+              jbke_cbva_id: cbvaId ? parseInt(cbvaId) : null,
+              company_name: company || null,
+            }),
+          });
+          if (res.ok) {
+            const badge = document.getElementById('solSettingsSaved');
+            badge.style.display = 'inline';
+            setTimeout(() => badge.style.display = 'none', 2000);
+            // Refresh solution data
+            await _reloadSolutions(_currentSolutionId);
+          }
+        } catch(e) { console.error('Save settings failed:', e); }
+      }, 500);
     }
 
     async function _applyGlobalSolution() {
