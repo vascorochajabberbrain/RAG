@@ -128,7 +128,7 @@ def get_answer(history, retrieved_info, query, company):
     messages = history.copy()
     messages.append({"role": "system", "content": f"""You are the virtual assistant of `{company}`.
 You must ONLY answer based on the provided context below. Do NOT use any outside knowledge.
-If the context does not contain enough information to answer the question, say so clearly — do not guess or make up an answer.
+If the context does not contain enough information to answer the question, reply with: "I couldn't find information about that in the available knowledge base." Do not guess or make up an answer.
 If the context contains product links or URLs, include them in your answer so the user can access the relevant pages.
 
 Context: `{context_text}`
