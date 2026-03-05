@@ -3349,33 +3349,32 @@ _INDEX_HTML = """
               <option value="shopify">Shopify — JSON API</option>
             </select>
           </div>
-          <!-- Config viewer (read-only) -->
-          <div id="configViewerPanel" style="display:none;margin-top:0.6rem;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:0.6rem 0.75rem;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-              <span style="font-weight:600;font-size:0.82rem;color:#555;">Effective config</span>
-              <div style="display:flex;align-items:center;gap:0.4rem;">
-                <span id="configSourceTag" style="font-size:0.7rem;padding:0.1rem 0.35rem;border-radius:8px;background:#fff3e0;color:#e65100;"></span>
-                <button type="button" onclick="openRawConfigEditor()" style="font-size:0.76rem;padding:0.15rem 0.5rem;background:none;border:1px solid #999;border-radius:4px;color:#555;cursor:pointer;">Edit raw config</button>
-              </div>
-            </div>
-            <pre id="configViewerContent" style="font-size:0.78rem;font-family:monospace;white-space:pre-wrap;max-height:280px;overflow-y:auto;color:#333;margin:0;line-height:1.5;"></pre>
-          </div>
-          <!-- Raw config editor -->
-          <div id="rawConfigEditor" style="display:none;margin-top:0.6rem;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
-              <span style="font-weight:600;font-size:0.82rem;color:#555;">Edit config (JSON)</span>
-              <div style="display:flex;gap:0.4rem;">
-                <button type="button" onclick="saveRawConfig()" style="font-size:0.78rem;padding:0.2rem 0.6rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;">Save</button>
-                <button type="button" onclick="closeRawConfigEditor()" style="font-size:0.78rem;padding:0.2rem 0.5rem;background:#eee;border:1px solid #ccc;color:#555;border-radius:4px;cursor:pointer;">Cancel</button>
-              </div>
-            </div>
-            <div id="yamlFileWarning" style="display:none;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.4rem 0.6rem;font-size:0.78rem;color:#e65100;margin-bottom:0.4rem;">
-              ⚠ A YAML file exists for this scraper and takes precedence at runtime. Changes here update the inline config only.
-            </div>
-            <textarea id="rawConfigTextarea" style="width:100%;min-height:200px;font-family:monospace;font-size:0.78rem;border:1px solid #ccc;border-radius:5px;padding:0.5rem;resize:vertical;box-sizing:border-box;"></textarea>
-          </div>
         </div>
         </div><!-- /sourceConfigBody -->
+        <!-- Config viewer + raw editor — OUTSIDE sourceConfigBody so visible when collapsed -->
+        <div id="configViewerPanel" style="display:none;margin-top:0.6rem;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:0.6rem 0.75rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+            <span style="font-weight:600;font-size:0.82rem;color:#555;">Effective config</span>
+            <div style="display:flex;align-items:center;gap:0.4rem;">
+              <span id="configSourceTag" style="font-size:0.7rem;padding:0.1rem 0.35rem;border-radius:8px;background:#fff3e0;color:#e65100;"></span>
+              <button type="button" onclick="openRawConfigEditor()" style="font-size:0.76rem;padding:0.15rem 0.5rem;background:none;border:1px solid #999;border-radius:4px;color:#555;cursor:pointer;">Edit raw config</button>
+            </div>
+          </div>
+          <pre id="configViewerContent" style="font-size:0.78rem;font-family:monospace;white-space:pre-wrap;max-height:280px;overflow-y:auto;color:#333;margin:0;line-height:1.5;"></pre>
+        </div>
+        <div id="rawConfigEditor" style="display:none;margin-top:0.6rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
+            <span style="font-weight:600;font-size:0.82rem;color:#555;">Edit config (JSON)</span>
+            <div style="display:flex;gap:0.4rem;">
+              <button type="button" onclick="saveRawConfig()" style="font-size:0.78rem;padding:0.2rem 0.6rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;">Save</button>
+              <button type="button" onclick="closeRawConfigEditor()" style="font-size:0.78rem;padding:0.2rem 0.5rem;background:#eee;border:1px solid #ccc;color:#555;border-radius:4px;cursor:pointer;">Cancel</button>
+            </div>
+          </div>
+          <div id="yamlFileWarning" style="display:none;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.4rem 0.6rem;font-size:0.78rem;color:#e65100;margin-bottom:0.4rem;">
+            ⚠ A YAML file exists for this scraper and takes precedence at runtime. Changes here update the inline config only.
+          </div>
+          <textarea id="rawConfigTextarea" style="width:100%;min-height:200px;font-family:monospace;font-size:0.78rem;border:1px solid #ccc;border-radius:5px;padding:0.5rem;resize:vertical;box-sizing:border-box;"></textarea>
+        </div>
         <!-- Resume banners — OUTSIDE sourceConfigBody so always visible -->
         <div id="resumeBanner" style="display:none;margin-top:0.75rem;">
           <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;font-size:0.9rem;">
@@ -5377,7 +5376,7 @@ _INDEX_HTML = """
         if (config.include) lines.push('Include:   ' + config.include.join(', '));
       }
 
-      return lines.join('\\n') || 'No config fields found.';
+      return lines.join('\n') || 'No config fields found.';
     }
 
     function onExtractionModeChange() {
