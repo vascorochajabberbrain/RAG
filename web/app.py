@@ -4698,6 +4698,8 @@ _INDEX_HTML = """
       } catch(e) { alert('Error: ' + e.message); }
     }
 
+    let _solSettingsOriginal = {};  // track original values to detect changes
+
     function _toggleSolSettings() {
       const panel = document.getElementById('solSettingsPanel');
       if (panel.style.display === 'none') {
@@ -4707,45 +4709,67 @@ _INDEX_HTML = """
           document.getElementById('solSettingsVersionId').value = sol.jbke_version_id || '';
           document.getElementById('solSettingsCbvaId').value = sol.jbke_cbva_id || '';
           document.getElementById('solSettingsCompany').value = sol.company_name || '';
+          _solSettingsOriginal = {
+            versionId: String(sol.jbke_version_id || ''),
+            cbvaId: String(sol.jbke_cbva_id || ''),
+          };
         }
         panel.style.display = '';
-        // Attach save handlers (debounced)
-        for (const inputId of ['solSettingsVersionId', 'solSettingsCbvaId', 'solSettingsCompany']) {
-          const el = document.getElementById(inputId);
-          el.onchange = () => _saveSolSettings();
-        }
+        // Attach save handlers
+        document.getElementById('solSettingsVersionId').onchange = () => _saveSolSettingsWithConfirm('versionId');
+        document.getElementById('solSettingsCbvaId').onchange = () => _saveSolSettingsWithConfirm('cbvaId');
+        document.getElementById('solSettingsCompany').onchange = () => _saveSolSettings();
       } else {
         panel.style.display = 'none';
       }
     }
 
-    let _solSettingsTimer = null;
+    function _saveSolSettingsWithConfirm(changedField) {
+      const versionId = document.getElementById('solSettingsVersionId').value.trim();
+      const cbvaId = document.getElementById('solSettingsCbvaId').value.trim();
+      const fieldLabel = changedField === 'versionId' ? 'jBKE Environment (version_id)' : 'jBKE Virtual Assistant (cbva_id)';
+      const oldVal = _solSettingsOriginal[changedField] || '(empty)';
+      const newVal = (changedField === 'versionId' ? versionId : cbvaId) || '(empty)';
+
+      if (oldVal === newVal) return;  // no actual change
+
+      const msg = `⚠️ You are changing "${fieldLabel}" from ${oldVal} to ${newVal}.\n\n`
+        + `This controls which jBKE environment all collections in this solution push to.\n`
+        + `Changing this incorrectly can push data to the WRONG environment.\n\n`
+        + `Are you sure?`;
+      if (!confirm(msg)) {
+        // Revert to original value
+        if (changedField === 'versionId') document.getElementById('solSettingsVersionId').value = _solSettingsOriginal.versionId;
+        else document.getElementById('solSettingsCbvaId').value = _solSettingsOriginal.cbvaId;
+        return;
+      }
+      _saveSolSettings();
+    }
+
     async function _saveSolSettings() {
       if (!_currentSolutionId) return;
-      clearTimeout(_solSettingsTimer);
-      _solSettingsTimer = setTimeout(async () => {
-        const versionId = document.getElementById('solSettingsVersionId').value.trim();
-        const cbvaId = document.getElementById('solSettingsCbvaId').value.trim();
-        const company = document.getElementById('solSettingsCompany').value.trim();
-        try {
-          const res = await fetch(`/api/solutions/${encodeURIComponent(_currentSolutionId)}/settings`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              jbke_version_id: versionId ? parseInt(versionId) : null,
-              jbke_cbva_id: cbvaId ? parseInt(cbvaId) : null,
-              company_name: company || null,
-            }),
-          });
-          if (res.ok) {
-            const badge = document.getElementById('solSettingsSaved');
-            badge.style.display = 'inline';
-            setTimeout(() => badge.style.display = 'none', 2000);
-            // Refresh solution data
-            await _reloadSolutions(_currentSolutionId);
-          }
-        } catch(e) { console.error('Save settings failed:', e); }
-      }, 500);
+      const versionId = document.getElementById('solSettingsVersionId').value.trim();
+      const cbvaId = document.getElementById('solSettingsCbvaId').value.trim();
+      const company = document.getElementById('solSettingsCompany').value.trim();
+      try {
+        const res = await fetch(`/api/solutions/${encodeURIComponent(_currentSolutionId)}/settings`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            jbke_version_id: versionId ? parseInt(versionId) : null,
+            jbke_cbva_id: cbvaId ? parseInt(cbvaId) : null,
+            company_name: company || null,
+          }),
+        });
+        if (res.ok) {
+          _solSettingsOriginal.versionId = versionId;
+          _solSettingsOriginal.cbvaId = cbvaId;
+          const badge = document.getElementById('solSettingsSaved');
+          badge.style.display = 'inline';
+          setTimeout(() => badge.style.display = 'none', 2000);
+          await _reloadSolutions(_currentSolutionId);
+        }
+      } catch(e) { console.error('Save settings failed:', e); }
     }
 
     async function _applyGlobalSolution() {
