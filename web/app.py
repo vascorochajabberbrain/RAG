@@ -5531,14 +5531,16 @@ _INDEX_HTML = """
        * After loading a saved state, restore the full UI context:
        * solution dropdown → collection dropdown → source config → step indicators.
        */
-      if (!state) return;
+      if (!state) { console.log('[restore] no state'); return; }
       const collName = state.collection_name;
+      console.log('[restore] collName:', collName, '_allSolutions:', _allSolutions.length);
 
       // 1. Find which solution owns this collection
       if (collName && _allSolutions.length) {
         const ownerSol = _allSolutions.find(s =>
           (s.collections || []).some(c => c.collection_name === collName || c.id === collName)
         );
+        console.log('[restore] ownerSol:', ownerSol ? ownerSol.id : 'NOT FOUND');
         if (ownerSol) {
           // Select solution in dropdown
           const solSel = document.getElementById('globalSolution');
@@ -5550,6 +5552,7 @@ _INDEX_HTML = """
           // Load collections and auto-select the right one
           await loadSolutionCollections(ownerSol.id, {autoSelect: false});
           const collSel = document.getElementById('collectionSelect');
+          console.log('[restore] collSel options:', collSel ? Array.from(collSel.options).map(o => o.value) : 'N/A');
           if (collSel) {
             collSel.value = collName;
             onCollectionSelect();
