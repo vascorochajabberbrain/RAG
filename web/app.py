@@ -5271,6 +5271,9 @@ _INDEX_HTML = """
           body: JSON.stringify({ save_path: _urlSavedStatePath })
         }).then(r => r.json());
         setLog(buildLog, res.message || res.detail, !!res.detail);
+        if (res.state && res.state.completed_steps) {
+          _markStepsFromList(res.state.completed_steps);
+        }
         document.getElementById('urlResumeBanner').style.display = 'none';
         document.getElementById('pipelineCard').style.display = 'block';
       } catch(e) {
