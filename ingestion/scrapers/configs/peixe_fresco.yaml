@@ -1,6 +1,6 @@
 # Peixe Fresco — recipe blog scraper (rebuilt with Playwright, replaces Selenium legacy)
 # Keeps name: peixefresco for backward compat with existing solutions.yaml entry.
-name: peixefresco
+name: peixe_fresco
 engine: playwright
 scrape_mode: sitemap
 sitemap_url: "https://store.peixefresco.com.pt/receitas-sitemap.xml"

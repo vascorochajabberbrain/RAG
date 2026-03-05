@@ -39,23 +39,23 @@ solutions:
       label: Shopify products
       scraper_name: first_shopify_test_store
     routing: {}
-- id: peixefresco
+- id: peixe_fresco
   display_name: Peixe Fresco
   company_name: Peixe Fresco
   language: pt
   aliases:
   - pf
   collections:
-  - id: peixefresco_products
+  - id: peixe_fresco_products
     display_name: Products
-    collection_name: peixefresco_products
+    collection_name: peixe_fresco_products
     collection_type: scs
-    scraper_name: peixefresco_products
+    scraper_name: peixe_fresco_products
     sources:
     - id: product_sitemap
       type: url
       label: Product sitemap (102 pages)
-      scraper_name: peixefresco_products
+      scraper_name: peixe_fresco_products
     routing:
       description: Esta coleção contém uma variedade de produtos de peixe e marisco
         frescos, incluindo opções para preparo e consumo.
@@ -91,16 +91,16 @@ solutions:
       - ações de sustentabilidade
       language: pt
       doc_type: product_catalog
-  - id: peixefresco_recipes
+  - id: peixe_fresco_recipes
     display_name: Recipes
-    collection_name: peixefresco_recipes
+    collection_name: peixe_fresco_recipes
     collection_type: scs
-    scraper_name: peixefresco_recipes
+    scraper_name: peixe_fresco_recipes
     sources:
     - id: recipe_sitemap
       type: url
       label: Recipe pages (11 pages)
-      scraper_name: peixefresco_recipes
+      scraper_name: peixe_fresco_recipes
     - id: recipe_pdf
       type: pdf
       label: Caderno de Receitas do Mar (PDF)
@@ -137,16 +137,16 @@ solutions:
       - comida rápida
       language: pt
       doc_type: recipe_book
-  - id: peixefresco_pages
+  - id: peixe_fresco_pages
     display_name: Pages
-    collection_name: peixefresco_pages
+    collection_name: peixe_fresco_pages
     collection_type: scs
-    scraper_name: peixefresco_pages
+    scraper_name: peixe_fresco_pages
     sources:
     - id: page_sitemap
       type: url
       label: Static pages (23 pages)
-      scraper_name: peixefresco_pages
+      scraper_name: peixe_fresco_pages
     routing:
       description: Esta coleção contém informações sobre a venda de peixe fresco,
         incluindo opções de aquicultura e promoções especiais.
@@ -179,26 +179,26 @@ solutions:
       - Informações sobre restaurantes
       language: pt
       doc_type: product_catalog
-  - id: peixefresco_faq
+  - id: peixe_fresco_faq
     display_name: faq
-    collection_name: peixefresco_faq
+    collection_name: peixe_fresco_faq
     collection_type: scs
-    scraper_name: peixefresco_faq
+    scraper_name: peixe_fresco_faq
     scraper_config:
-      name: peixefresco_faq
+      name: peixe_fresco_faq
       engine: httpx
       scrape_mode: sitemap
       text_selector: main, article, .entry-content, body
       extra_urls:
       - https://store.peixefresco.com.pt/perguntas-frequentes/
     routing: {}
-  - id: peixefresco_customer_support
+  - id: peixe_fresco_customer_support
     display_name: Customer Support
-    collection_name: peixefresco_customer_support
+    collection_name: peixe_fresco_customer_support
     collection_type: scs
-    scraper_name: peixefresco_customer_support
+    scraper_name: peixe_fresco_customer_support
     scraper_config:
-      name: peixefresco_customer_support
+      name: peixe_fresco_customer_support
       engine: httpx
       scrape_mode: sitemap
       sitemap_url: https://store.peixefresco.com.pt/page-sitemap.xml
