@@ -6433,7 +6433,7 @@ _INDEX_HTML = """
         : '';
       card.innerHTML = `
         <div style="font-weight:600;margin-bottom:0.4rem;color:#2e7d32;">🔍 Relevance Check</div>
-        <div>✅ ${relevant_count} relevant &nbsp;·&nbsp; ⚠️ ${mismatch_count} flagged &nbsp;·&nbsp; ❌ ${irrelevant_count} irrelevant</div>
+        <div>✅ ${relevant_count} relevant chunks &nbsp;·&nbsp; ⚠️ ${mismatch_count} flagged &nbsp;·&nbsp; ❌ ${irrelevant_count} irrelevant</div>
         ${mismatchSection}${irrelevantSection}
       `;
       buildLog.parentNode.insertBefore(card, buildLog.nextSibling);
