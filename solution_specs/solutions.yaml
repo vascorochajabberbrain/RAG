@@ -186,12 +186,41 @@ solutions:
     scraper_name: peixe_fresco_faq
     scraper_config:
       name: peixe_fresco_faq
-      engine: httpx
-      scrape_mode: sitemap
-      text_selector: main, article, .entry-content, body
-      extra_urls:
+      engine: playwright
+      scrape_mode: url_list
+      urls:
       - https://store.peixefresco.com.pt/perguntas-frequentes/
-    routing: {}
+    routing:
+      description: Esta coleção contém informações sobre peixes frescos, incluindo
+        políticas de entrega e privacidade.
+      keywords:
+      - peixe fresco
+      - entregas grátis
+      - cookies
+      - pesca sustentável
+      - postas de peixe
+      - filetes
+      - bivalves
+      - aquicultura
+      - experiência de navegação
+      - avaliações 5 estrelas
+      - site de peixes
+      - comprar peixe online
+      - política de cookies
+      typical_questions:
+      - Quais são os tipos de peixe disponíveis?
+      - Como funciona a política de entrega?
+      - O que são cookies e como são usados no site?
+      - O peixe é proveniente de pesca sustentável?
+      - Como posso ver as avaliações dos produtos?
+      not_covered:
+      - receitas de peixe
+      - história da piscicultura
+      - exibições de pratos de frutos do mar
+      - informações sobre cozinhar peixe
+      - guia de vinhos para peixes
+      language: pt
+      doc_type: faq
   - id: peixe_fresco_customer_support
     display_name: Customer Support
     collection_name: peixe_fresco_customer_support
