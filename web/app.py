@@ -118,6 +118,29 @@ def api_shutdown():
     return {"message": "Server shutting down…"}
 
 
+@app.get("/restart")
+def restart_server():
+    """Restart the server by re-executing the current Python process."""
+    import threading, sys
+    def _restart():
+        import time
+        time.sleep(0.5)
+        os.execv(sys.executable, [sys.executable, "-m", "uvicorn", "web.app:app",
+                                  "--host", "127.0.0.1", "--port", "8000"])
+    threading.Thread(target=_restart, daemon=True).start()
+    return HTMLResponse("""
+    <html><body style="font-family:system-ui;text-align:center;padding:3rem;">
+    <h2>🔄 Restarting server…</h2>
+    <p>The page will reload automatically.</p>
+    <script>setTimeout(() => {
+      const check = setInterval(async () => {
+        try { const r = await fetch('/api/version'); if (r.ok) { clearInterval(check); location.href = '/'; } }
+        catch(_) {}
+      }, 500);
+    }, 1500);</script>
+    </body></html>""")
+
+
 @app.get("/api/version")
 def api_version():
     import subprocess
