@@ -2866,6 +2866,7 @@ _INDEX_HTML = """
     .log { white-space: pre-wrap; font-size: 0.85rem; background: #f1f3f5; padding: 0.75rem; border-radius: 6px; margin-top: 0.75rem; min-height: 3rem; max-height: 12rem; overflow-y: auto; }
     .log.error { background: #ffe0e0; }
     .log.success { background: #e0f0e0; }
+    .log.warning { background: #fff3e0; border-left: 4px solid #ff9800; }
     .status { font-size: 0.85rem; color: #666; margin-top: 0.5rem; }
     .row { display: flex; gap: 1rem; flex-wrap: wrap; }
     .row > * { flex: 1 1 200px; }
@@ -6007,11 +6008,11 @@ _INDEX_HTML = """
 
     async function runFetchWithProgress() {
       // Warn if chunks or push already exist (re-ingest will require re-chunking + re-pushing)
-      const chunkDone = document.getElementById('stepStatus-chunk')?.textContent === '✅';
-      const pushDone = document.getElementById('stepStatus-push_to_qdrant')?.textContent === '✅';
-      if (chunkDone || pushDone) {
+      const _wasChunked = document.getElementById('stepStatus-chunk')?.textContent === '✅';
+      const _wasPushed = document.getElementById('stepStatus-push_to_qdrant')?.textContent === '✅';
+      if (_wasChunked || _wasPushed) {
         let warn = 'Re-ingesting will clear existing chunks and require you to Chunk again.';
-        if (pushDone) warn += '\\nPrevious data was already pushed to Qdrant — you will also need to Push again.';
+        if (_wasPushed) warn += '\\nPrevious data was already pushed to Qdrant — you will also need to Push again.';
         warn += '\\n\\nContinue?';
         if (!confirm(warn)) return;
       }
@@ -6045,6 +6046,13 @@ _INDEX_HTML = """
           _setStepStatus('create_collection', false);
           _setStepStatus('push_to_qdrant', false);
           _refreshTokenFooter();
+          // Show prominent re-ingest warning
+          if (_wasChunked || _wasPushed) {
+            let reWarn = '⚠️ Old chunks have been cleared. You must run Chunk again.';
+            if (_wasPushed) reWarn += ' Then Push to Qdrant to update the collection.';
+            buildLog.textContent += '\\n\\n' + reWarn;
+            buildLog.className = 'log warning';
+          }
           // Fetch updated state to render relevance report card (if check ran)
           api('/api/workflow/state').then(st => {
             if (st && st.relevance_report) renderRelevanceCard(st.relevance_report);
