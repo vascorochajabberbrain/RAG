@@ -3302,7 +3302,7 @@ _INDEX_HTML = """
 
       <!-- 4. Run pipeline (shown when a source is selected) -->
       <div class="card" id="pipelineCard" style="display:none;">
-        <h2>4. Run pipeline <span class="help-icon" onclick="toggleHelp('help-pipeline')" title="Help">?</span></h2>
+        <h2>4. Run pipeline for selected source <span class="help-icon" onclick="toggleHelp('help-pipeline')" title="Help">?</span></h2>
         <div id="help-pipeline" class="help-tip">Run each step in order. State is auto-saved after Fetch, Translate, and Chunk so you can resume later. <a href="/help#pipeline" target="_blank">Learn more &rarr;</a></div>
         <div id="pipelineWarning" style="display:none;background:#fff3e0;border:1px solid #ff9800;border-left:4px solid #ff9800;border-radius:5px;padding:0.5rem 0.8rem;margin-bottom:0.7rem;font-size:0.85rem;color:#e65100;"></div>
         <p class="status">Ingest → (Translate &amp; Clean) → Chunk → Create Qdrant Collection → Push to Qdrant</p>
