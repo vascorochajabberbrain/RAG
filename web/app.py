@@ -3027,6 +3027,8 @@ _INDEX_HTML = """
     .wiz-preview-box { font-size: 0.78rem; color: #444; background: #f8f9fa; border-radius: 6px; padding: 0.45rem 0.55rem; margin-top: 0.25rem; white-space: pre-wrap; line-height: 1.4; max-height: 90px; overflow-y: auto; border: 1px solid #e8e8e8; }
     .wiz-spinner { display: inline-block; width: 0.75rem; height: 0.75rem; border: 2px solid #ddd; border-top-color: #0066cc; border-radius: 50%; animation: wiz-spin 0.6s linear infinite; vertical-align: middle; }
     @keyframes wiz-spin { to { transform: rotate(360deg); } }
+    @keyframes btn-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+    .btn-running { animation: btn-pulse 1.8s ease-in-out infinite; }
     .wiz-load-item { display: block; width: 100%; text-align: left; background: none; border: none; padding: 0.45rem 0.9rem; font-size: 0.85rem; cursor: pointer; color: #1a56a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wiz-load-item:hover { background: #f0f6ff; }
     .wiz-load-empty { padding: 0.5rem 0.9rem; font-size: 0.82rem; color: #aaa; font-style: italic; }
@@ -5944,9 +5946,9 @@ _INDEX_HTML = """
 
     const _pipelineBtns = () => ['runCreate','runFetch','runTranslate','runChunk','runPush','runSync'].map(id => document.getElementById(id)).filter(Boolean);
     const _clearDone    = () => _pipelineBtns().forEach(b => { if (b.dataset.done) { b.style.background = ''; b.style.color = ''; delete b.dataset.done; } });
-    const _btnRunning   = (btn) => { _clearDone(); btn.disabled = true; btn.style.background = '#e65c00'; btn.style.color = '#fff'; };
-    const _btnDone      = (btn) => { btn.disabled = false; btn.style.background = ''; btn.style.color = ''; };
-    const _btnSuccess   = (btn) => { btn.disabled = false; btn.style.background = '#2e7d32'; btn.style.color = '#fff'; btn.dataset.done = '1'; };
+    const _btnRunning   = (btn) => { _clearDone(); btn.disabled = true; btn.style.background = '#e65c00'; btn.style.color = '#fff'; btn.classList.add('btn-running'); };
+    const _btnDone      = (btn) => { btn.disabled = false; btn.style.background = ''; btn.style.color = ''; btn.classList.remove('btn-running'); };
+    const _btnSuccess   = (btn) => { btn.disabled = false; btn.style.background = '#2e7d32'; btn.style.color = '#fff'; btn.dataset.done = '1'; btn.classList.remove('btn-running'); };
 
     const runStep = async (step) => {
       // Confirm re-chunk if chunks already exist
