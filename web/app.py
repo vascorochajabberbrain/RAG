@@ -5247,6 +5247,7 @@ _INDEX_HTML = """
     let _urlSavedStatePath = null;
 
     async function checkUrlSavedState(collectionName, sourceId) {
+      if (_isRestoring) return;  // skip during state restore
       if (!collectionName || collectionName === '__new__') {
         document.getElementById('urlResumeBanner').style.display = 'none';
         return;
@@ -5549,75 +5550,86 @@ _INDEX_HTML = """
       document.getElementById('pipelineCard').style.display = 'block';
     }
 
+    let _isRestoring = false;  // flag to suppress checkUrlSavedState during restore
+
     async function _restoreUIFromState(state) {
       /**
        * After loading a saved state, restore the full UI context:
        * solution dropdown → collection dropdown → source config → step indicators.
        */
-      if (!state) { console.log('[restore] no state'); return; }
+      if (!state) return;
+      _isRestoring = true;
       const collName = state.collection_name;
-      console.log('[restore] collName:', collName, '_allSolutions:', _allSolutions.length);
 
-      // 1. Find which solution owns this collection
-      if (collName && _allSolutions.length) {
-        const ownerSol = _allSolutions.find(s =>
-          (s.collections || []).some(c => c.collection_name === collName || c.id === collName)
-        );
-        console.log('[restore] ownerSol:', ownerSol ? ownerSol.id : 'NOT FOUND');
-        if (ownerSol) {
-          // Select solution in dropdown
-          const solSel = document.getElementById('globalSolution');
-          if (solSel && solSel.value !== ownerSol.id) {
-            solSel.value = ownerSol.id;
-            _currentSolutionId = ownerSol.id;
-            _applyGlobalSolution();
-          }
-          // Load collections and auto-select the right one
-          await loadSolutionCollections(ownerSol.id, {autoSelect: false});
-          const collSel = document.getElementById('collectionSelect');
-          console.log('[restore] collSel options:', collSel ? Array.from(collSel.options).map(o => o.value) : 'N/A');
-          if (collSel) {
-            collSel.value = collName;
-            onCollectionSelect();
+      try {
+        // 1. Find which solution owns this collection
+        if (collName && _allSolutions.length) {
+          const ownerSol = _allSolutions.find(s =>
+            (s.collections || []).some(c => c.collection_name === collName || c.id === collName)
+          );
+          if (ownerSol) {
+            // Select solution in dropdown
+            const solSel = document.getElementById('globalSolution');
+            if (solSel && solSel.value !== ownerSol.id) {
+              solSel.value = ownerSol.id;
+              _currentSolutionId = ownerSol.id;
+              _applyGlobalSolution();
+            }
+            // Load collections and auto-select the right one
+            await loadSolutionCollections(ownerSol.id, {autoSelect: false});
+            const collSel = document.getElementById('collectionSelect');
+            if (collSel) {
+              collSel.value = collName;
+              onCollectionSelect();
+            }
           }
         }
-      }
 
-      // 2. Set collection name field
-      if (collName) {
-        const cn = document.getElementById('collectionName');
-        if (cn && !cn.value.trim()) cn.value = collName;
-      }
-
-      // 3. Restore source config fields
-      if (state.source_type) {
-        const srcType = document.getElementById('sourceType');
-        if (srcType) { srcType.value = state.source_type; onSourceTypeChange(); }
-      }
-      const sc = state.source_config || {};
-      if (sc.scraper_name) {
-        const sn = document.getElementById('scraperName');
-        if (sn) sn.value = sc.scraper_name;
-      }
-      if (sc.engine) {
-        const eng = document.getElementById('scraperEngine');
-        if (eng) eng.value = sc.engine;
-      }
-
-      // 4. Step indicators
-      if (state.completed_steps) {
-        _markStepsFromList(state.completed_steps);
-      }
-
-      // 5. Chunk mode
-      if (state.chunking_config) {
-        const chunkSel = document.getElementById('chunkMode');
-        if (chunkSel) {
-          if (state.chunking_config.use_proposition_chunking) chunkSel.value = 'proposition';
-          else if (state.chunking_config.use_hierarchical_chunking) chunkSel.value = 'hierarchical';
-          else chunkSel.value = 'simple';
-          _prevChunkMode = chunkSel.value;
+        // 2. Set collection name field
+        if (collName) {
+          const cn = document.getElementById('collectionName');
+          if (cn && !cn.value.trim()) cn.value = collName;
         }
+
+        // 3. Restore source config fields
+        if (state.source_type) {
+          const srcType = document.getElementById('sourceType');
+          if (srcType) { srcType.value = state.source_type; onSourceTypeChange(); }
+        }
+        const sc = state.source_config || {};
+        if (sc.scraper_name) {
+          const sn = document.getElementById('scraperName');
+          if (sn) sn.value = sc.scraper_name;
+        }
+        if (sc.engine) {
+          const eng = document.getElementById('scraperEngine');
+          if (eng) eng.value = sc.engine;
+        }
+
+        // 4. Chunk mode
+        if (state.chunking_config) {
+          const chunkSel = document.getElementById('chunkMode');
+          if (chunkSel) {
+            if (state.chunking_config.use_proposition_chunking) chunkSel.value = 'proposition';
+            else if (state.chunking_config.use_hierarchical_chunking) chunkSel.value = 'hierarchical';
+            else chunkSel.value = 'simple';
+            _prevChunkMode = chunkSel.value;
+          }
+        }
+
+        // 5. Step indicators — run last with delay to override any resets from selectSource
+        const steps = state.completed_steps;
+        if (steps && steps.length) {
+          _markStepsFromList(steps);
+          setTimeout(() => _markStepsFromList(steps), 200);
+        }
+
+        // 6. Ensure pipeline is visible and banners are hidden
+        document.getElementById('pipelineCard').style.display = 'block';
+        document.getElementById('urlResumeBanner').style.display = 'none';
+      } finally {
+        // Clear flag after a delay to let any pending async calls (checkUrlSavedState) see it
+        setTimeout(() => { _isRestoring = false; }, 500);
       }
     }
 
