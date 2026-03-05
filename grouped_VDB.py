@@ -23,7 +23,9 @@ def making_description_of_groups(chunks):
                    You can return as many groups as you think are necessary.
                    Note, just write the descriptions, not the names of the groups or any reference to the number od the group.Return in JSON but without writting json at beggining"""}]
     )
-
+    if hasattr(completion, 'usage') and completion.usage:
+        from llms.token_tracker import record_usage
+        record_usage("gpt-4o", completion.usage.prompt_tokens, completion.usage.completion_tokens)
     print(completion.choices[0].message.content)
     return json.loads(completion.choices[0].message.content)
 
@@ -257,6 +259,9 @@ def ai_new_description(gc, group_index, with_other_descriptions=False):
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}]
     )
+    if hasattr(completion, 'usage') and completion.usage:
+        from llms.token_tracker import record_usage
+        record_usage("gpt-4o", completion.usage.prompt_tokens, completion.usage.completion_tokens)
     return completion.choices[0].message.content
 
 def ai_rewrite_all_descriptions(gc):

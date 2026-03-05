@@ -32,6 +32,18 @@ _cancel_event = threading.Event()
 _loop: asyncio.AbstractEventLoop = None
 
 
+def _emit_token_log():
+    """Emit per-task token usage as a LOG: line in the SSE progress queue."""
+    from llms.token_tracker import get_tracker
+    task = get_tracker().get_task_usage()
+    if task:
+        parts = []
+        for model, counts in sorted(task.items()):
+            inp, out = counts.get("input", 0), counts.get("output", 0)
+            parts.append(f"{model}: {inp:,} in / {out:,} out")
+        _progress_queue.put("LOG:🪙 Tokens used: " + " · ".join(parts))
+
+
 def get_state():
     global _current_state, _tracker
     if _tracker is None:
@@ -118,6 +130,19 @@ def api_version():
     except Exception:
         commit = "unknown"
     return {"version": APP_VERSION, "commit": commit}
+
+
+# ── Token usage tracking ──
+@app.get("/api/tokens")
+def get_tokens():
+    from llms.token_tracker import get_tracker
+    return get_tracker().get_all()
+
+@app.post("/api/tokens/reset")
+def reset_tokens():
+    from llms.token_tracker import get_tracker
+    get_tracker().reset_session()
+    return {"reset": True}
 
 
 @app.get("/api/collections")
@@ -1185,8 +1210,10 @@ def run_workflow_step(req: StepRequest):
             step = Step(req.step)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Unknown step: {req.step}")
+        from llms.token_tracker import get_tracker
+        get_tracker().reset_task()
         msg = run_step(state, step)
-        return {"message": msg, "state": state.to_dict()}
+        return {"message": msg, "state": state.to_dict(), "token_usage": get_tracker().get_all()}
     except HTTPException:
         raise
     except Exception as e:
@@ -1208,13 +1235,15 @@ def qa(req: QARequest):
         collection_names = [s.strip() for s in req.collection_name.split(",") if s.strip()]
     else:
         collection_names = req.collection_name
+    from llms.token_tracker import get_tracker
+    get_tracker().reset_task()
     history = []
     retrieved = get_retrieved_info(req.question, history, collection_names,
                                    embedding_model=req.embedding_model)
     answer = get_answer(history, retrieved, req.question, req.company)
     # retrieved is now a dict {text, sources}; pass sources through to the UI
     sources = retrieved.get("sources", []) if isinstance(retrieved, dict) else []
-    return {"question": req.question, "answer": answer, "sources": sources}
+    return {"question": req.question, "answer": answer, "sources": sources, "token_usage": get_tracker().get_all()}
 
 
 @app.post("/api/workflow/reset")
@@ -1565,6 +1594,8 @@ def run_fetch_streaming(req: StepRequest):
         def flush(self): pass
 
     _cancel_event.clear()
+    from llms.token_tracker import get_tracker as _get_tracker
+    _get_tracker().reset_task()
 
     def _run():
         old_stdout = sys.stdout
@@ -1574,6 +1605,7 @@ def run_fetch_streaming(req: StepRequest):
             if _cancel_event.is_set():
                 _progress_queue.put("CANCELLED:Ingest was stopped by user.")
             else:
+                _emit_token_log()
                 _progress_queue.put(f"DONE:{msg}")
         except Exception as e:
             if _cancel_event.is_set():
@@ -1609,6 +1641,8 @@ def run_push_streaming(req: StepRequest):
         def flush(self): pass
 
     _cancel_event.clear()
+    from llms.token_tracker import get_tracker as _get_tracker
+    _get_tracker().reset_task()
 
     def _run():
         old_stdout = sys.stdout
@@ -1618,6 +1652,7 @@ def run_push_streaming(req: StepRequest):
             if _cancel_event.is_set():
                 _progress_queue.put("CANCELLED:Push was stopped by user.")
             else:
+                _emit_token_log()
                 _progress_queue.put(f"DONE:{msg}")
         except Exception as e:
             if _cancel_event.is_set():
@@ -1639,9 +1674,12 @@ def run_translate(req: StepRequest):
     state = get_state()
     _apply_state_update(state, req.state_update)
     _clear_progress_queue()
+    from llms.token_tracker import get_tracker as _get_tracker
+    _get_tracker().reset_task()
 
     def _run():
         run_step(state, Step.TRANSLATE_AND_CLEAN)
+        _emit_token_log()
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
@@ -5572,6 +5610,7 @@ _INDEX_HTML = """
         if (stepBtn) { isError ? _btnDone(stepBtn) : _btnSuccess(stepBtn); }
         if (!isError) _setStepStatus(step, true);
         setLog(buildLog, msg, isError);
+        if (!isError && res.token_usage) _showTaskTokens(res.token_usage);
         // After chunk step: render collection metadata card if available
         if (step === 'chunk' && res.state && res.state.collection_metadata) {
           renderMetadataCard(res.state.collection_metadata);
@@ -5845,6 +5884,7 @@ _INDEX_HTML = """
           _hideStopBtn('btnStopIngest');
           _btnSuccess(btn); btn.textContent = '1. Ingest';
           _setStepStatus('fetch', true);
+          _refreshTokenFooter();
           // Fetch updated state to render relevance report card (if check ran)
           api('/api/workflow/state').then(st => {
             if (st && st.relevance_report) renderRelevanceCard(st.relevance_report);
@@ -5919,6 +5959,7 @@ _INDEX_HTML = """
           _hideStopBtn('btnStopPush');
           _btnSuccess(btn);
           _setStepStatus('push_to_qdrant', true);
+          _refreshTokenFooter();
           // Refresh collection view to update status badges
           if (_currentSolutionId) loadSolutionCollections(_currentSolutionId);
         } else if (data.startsWith('CANCELLED:')) {
@@ -5976,6 +6017,7 @@ _INDEX_HTML = """
           es.close();
           _btnSuccess(btn);
           _setStepStatus('translate_and_clean', true);
+          _refreshTokenFooter();
         } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
           es.close();
           _btnDone(btn);
@@ -6070,6 +6112,10 @@ _INDEX_HTML = """
         qaResult.textContent = 'Q: ' + res.question + '\\n\\nA: ' + res.answer;
         qaResult.classList.remove('error');
         qaResult.classList.add('success');
+        if (res.token_usage && res.token_usage.task) {
+          qaResult.textContent += '\\n\\n🪙 ' + _formatTokenUsage(res.token_usage.task);
+          _refreshTokenFooter();
+        }
 
         // Render source attribution chips below the answer
         const existingSources = document.getElementById('qaSources');
@@ -9173,12 +9219,56 @@ _INDEX_HTML = """
       a.click();
     }
 
+    // ── Token usage display ──
+    function _formatTokenUsage(usage) {
+      if (!usage || !Object.keys(usage).length) return '—';
+      return Object.entries(usage).sort().map(([model, c]) => {
+        const parts = [];
+        if (c.input) parts.push(c.input.toLocaleString() + ' in');
+        if (c.output) parts.push(c.output.toLocaleString() + ' out');
+        return model + ': ' + parts.join(' / ');
+      }).join(' · ');
+    }
+
+    async function _refreshTokenFooter() {
+      try {
+        const data = await api('/api/tokens');
+        const el = document.getElementById('tokenSessionDisplay');
+        if (el) el.textContent = _formatTokenUsage(data.session);
+      } catch(_) {}
+    }
+
+    async function resetTokenCounter() {
+      try {
+        await fetch('/api/tokens/reset', { method: 'POST' });
+        const el = document.getElementById('tokenSessionDisplay');
+        if (el) el.textContent = '—';
+      } catch(_) {}
+    }
+
+    // Show per-task token usage after a step completes (non-streaming steps)
+    function _showTaskTokens(tokenUsage) {
+      if (!tokenUsage || !tokenUsage.task || !Object.keys(tokenUsage.task).length) return;
+      const msg = '🪙 Tokens used: ' + _formatTokenUsage(tokenUsage.task);
+      const log = document.getElementById('buildLog');
+      if (log) log.textContent += (log.textContent ? '\\n' : '') + msg;
+      _refreshTokenFooter();
+    }
+
+    // Refresh footer on page load
+    _refreshTokenFooter();
+
   </script>
-  <footer style="text-align:center;padding:1.2rem 0 0.8rem;font-size:0.78rem;color:#aaa;">
-    jabberBrain RAG builder &nbsp;·&nbsp; v__APP_VERSION__
+  <footer style="padding:0.8rem 1.5rem;font-size:0.78rem;color:#aaa;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+    <span>jabberBrain RAG builder &nbsp;·&nbsp; v__APP_VERSION__
     &nbsp;&nbsp;
     <button type="button" id="btnShutdown" class="btn-shutdown" onclick="shutdownServer()"
-      title="Stop the server (same as Ctrl+C in terminal)">⏹ Stop server</button>
+      title="Stop the server (same as Ctrl+C in terminal)">⏹ Stop server</button></span>
+    <span id="tokenFooter" style="font-size:0.76rem;color:#888;">
+      🪙 Tokens: <span id="tokenSessionDisplay">—</span>
+      &nbsp;
+      <button type="button" onclick="resetTokenCounter()" style="font-size:0.7rem;padding:0.1rem 0.4rem;background:none;border:1px solid #ccc;border-radius:3px;color:#999;cursor:pointer;" title="Reset token counter">↺ Reset</button>
+    </span>
   </footer>
 
   <!-- FAQ Table Modal — lives outside all panels so it works from any tab -->

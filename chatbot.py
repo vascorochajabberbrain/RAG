@@ -28,6 +28,9 @@ def improve_query(query, history):
         model="gpt-4o",
         messages=messages
         )
+    if hasattr(completion, 'usage') and completion.usage:
+        from llms.token_tracker import record_usage
+        record_usage("gpt-4o", completion.usage.prompt_tokens, completion.usage.completion_tokens)
     new_query = completion.choices[0].message.content
     print("----------------------------------------\nOld query: ", query, "\nNew query: ", new_query, "\n----------------------------------------\n")
     return new_query
@@ -50,6 +53,9 @@ def retrieve_from_vdb(query, collection_names, embedding_model: str = "text-embe
         input=query,
         model=embedding_model
     )
+    if hasattr(response, 'usage') and response.usage:
+        from llms.token_tracker import record_usage
+        record_usage(embedding_model, response.usage.prompt_tokens, 0)
     embeddings = response.data[0].embedding
 
     connection = get_qdrant_connection()
@@ -133,6 +139,9 @@ Answer the user's query based on this data when applicable."""
         model="gpt-4o",
         messages=messages
         )
+    if hasattr(completion, 'usage') and completion.usage:
+        from llms.token_tracker import record_usage
+        record_usage("gpt-4o", completion.usage.prompt_tokens, completion.usage.completion_tokens)
     return completion.choices[0].message.content
 
 

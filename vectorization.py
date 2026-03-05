@@ -45,8 +45,9 @@ def get_text_chunks(text, additional_prompt=None):
         messages= [{"role": "system", "content": prompt},
                    {"role": "user", "content": text}]
         )
-    
-    #print(completion.choices[0].message.content)
+    if hasattr(completion, 'usage') and completion.usage:
+        from llms.token_tracker import record_usage
+        record_usage("gpt-4o-mini", completion.usage.prompt_tokens, completion.usage.completion_tokens)
     end_time = time.time()
     print(f"Chunking took: {end_time - start_time:.2f} seconds")
 
@@ -69,12 +70,15 @@ def get_points(text_chunks, condition, initial_idx, model_id="text-embedding-ada
     if not isinstance(initial_idx, int):
         raise ValueError("initial_idx has to be an integer")
     openai_client = get_openai_client()
+    from llms.token_tracker import record_usage
     points = []
     for idx, chunk in enumerate(text_chunks):
         response = openai_client.embeddings.create(
             input=chunk,
             model=model_id
         )
+        if hasattr(response, 'usage') and response.usage:
+            record_usage(model_id, response.usage.prompt_tokens, 0)
         embeddings = response.data[0].embedding
         point_id = str(uuid.uuid4())  # Generate a unique ID for the point
         points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "condition": condition, "idx": initial_idx + idx}))
@@ -85,12 +89,15 @@ def get_points_with_source(text_chunks, source, condition, initial_idx, model_id
     if not isinstance(initial_idx, int):
         raise ValueError("initial_idx has to be an integer")
     openai_client = get_openai_client()
+    from llms.token_tracker import record_usage
     points = []
     for idx, chunk in enumerate(text_chunks):
         response = openai_client.embeddings.create(
             input=chunk,
             model=model_id
         )
+        if hasattr(response, 'usage') and response.usage:
+            record_usage(model_id, response.usage.prompt_tokens, 0)
         embeddings = response.data[0].embedding
         point_id = str(uuid.uuid4())  # Generate a unique ID for the point
         points.append(PointStruct(id=point_id, vector=embeddings, payload={"text": chunk, "source": source, "condition": condition, "idx": initial_idx + idx}))
@@ -111,6 +118,9 @@ def get_embedding(text, model_id="text-embedding-ada-002"):
         input=text,
         model=model_id
     )
+    if hasattr(response, 'usage') and response.usage:
+        from llms.token_tracker import record_usage
+        record_usage(model_id, response.usage.prompt_tokens, 0)
     return response.data[0].embedding
 
 def get_point_id():

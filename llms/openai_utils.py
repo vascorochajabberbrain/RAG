@@ -65,7 +65,10 @@ def openai_chat_completion(prompt, text, model="gpt-4o-mini"):
                 messages=[{"role": "system", "content": prompt},
                         {"role": "user", "content": text}]
             )
-    #print(completion.choices[0].message.content)
+    # Track token usage
+    if hasattr(completion, 'usage') and completion.usage:
+        from llms.token_tracker import record_usage
+        record_usage(model, completion.usage.prompt_tokens, completion.usage.completion_tokens)
     end_time = time.time()
     print(f"Elapsed time measured locally: {end_time - start_time:.2f} seconds")
     return completion.choices[0].message.content.strip()
