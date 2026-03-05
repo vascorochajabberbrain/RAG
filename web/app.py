@@ -1780,7 +1780,7 @@ def _faq_generate_table_impl(req: FaqTableRequest):
     source_label = None
 
     # Source 1: In-memory workflow state (available right after chunking, no push needed)
-    wf_state = get_state().workflow_state
+    wf_state = get_state()
     if wf_state and wf_state.collection_name and req.collection_name in wf_state.collection_name:
         if wf_state.chunks:
             texts = [t for t in wf_state.chunks[:req.max_items] if t]
