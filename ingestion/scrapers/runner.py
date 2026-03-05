@@ -77,3 +77,45 @@ def run_scraper(scraper_name: str, options: dict = None, inline_config: dict = N
         return run_shopify_scraper(config)
 
     return f"Error: Unknown engine '{engine}' in config for scraper '{scraper_name}'.", []
+
+
+def detect_extraction_mode(config: dict) -> str:
+    """Determine extraction mode from config fields.
+
+    Returns one of: 'generic', 'structured', 'custom_js', 'shopify'.
+    """
+    engine = config.get("engine", "playwright")
+    if engine == "shopify":
+        return "shopify"
+    if config.get("custom_js_extraction"):
+        return "custom_js"
+    if config.get("structured_extraction"):
+        return "structured"
+    return "generic"
+
+
+def resolve_config(scraper_name: str, inline_config: dict = None) -> dict:
+    """Resolve the effective scraper config and return it with metadata.
+
+    Returns:
+        {
+            "config": { ...full resolved config... },
+            "source": "yaml_file" | "inline" | "default",
+            "yaml_file_exists": bool,
+            "extraction_mode": "generic" | "structured" | "custom_js" | "shopify"
+        }
+    """
+    config_dir = os.path.join(os.path.dirname(__file__), "configs")
+    yaml_path = os.path.join(config_dir, f"{scraper_name}.yaml")
+    yaml_exists = os.path.isfile(yaml_path)
+
+    config = _load_config(scraper_name, inline_config=inline_config)
+    source = "yaml_file" if yaml_exists else ("inline" if inline_config else "default")
+    mode = detect_extraction_mode(config)
+
+    return {
+        "config": config,
+        "source": source,
+        "yaml_file_exists": yaml_exists,
+        "extraction_mode": mode,
+    }

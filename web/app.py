@@ -540,9 +540,18 @@ def solution_collections(solution_id: str):
                 except Exception:
                     points_count = 0
             sources = _ensure_sources(c)
-            # Add per-source pipeline status
+            # Add per-source pipeline status and extraction mode
+            from ingestion.scrapers.runner import resolve_config as _resolve_cfg
             for src in sources:
                 src["pipeline_status"] = _source_status(cname, src.get("id", "default"))
+                if src.get("type") == "url" and src.get("scraper_name"):
+                    try:
+                        resolved = _resolve_cfg(src["scraper_name"], c.get("scraper_config"))
+                        src["extraction_mode"] = resolved["extraction_mode"]
+                        src["config_source"] = resolved["source"]
+                    except Exception:
+                        src["extraction_mode"] = "generic"
+                        src["config_source"] = "unknown"
             result.append({
                 "name": cname,
                 "id": c.get("id", cname),
@@ -737,6 +746,54 @@ def suggest_collection_routing(solution_id: str, collection_id: str):
     save_routing_metadata(solution_id, collection_id, routing)
 
     return {"routing": routing, "chunks_sampled": len(chunks)}
+
+
+@app.get("/api/scraper/resolve-config")
+def resolve_scraper_config(scraper_name: str = "", collection_name: str = ""):
+    """Resolve the effective scraper config for a source.
+    Checks YAML file first, falls back to inline config from solutions.yaml."""
+    from ingestion.scrapers.runner import resolve_config
+    from solution_specs.loader import load_solutions
+    inline_config = None
+    if collection_name:
+        for sol in load_solutions():
+            for c in sol.get("collections", []):
+                if c.get("collection_name") == collection_name:
+                    inline_config = c.get("scraper_config")
+                    break
+            if inline_config:
+                break
+    return resolve_config(scraper_name or "", inline_config)
+
+
+class UpdateScraperConfigRequest(BaseModel):
+    scraper_config: dict
+
+
+@app.put("/api/solutions/{solution_id}/collections/{collection_name}/scraper-config")
+def update_scraper_config(solution_id: str, collection_name: str, req: UpdateScraperConfigRequest):
+    """Save updated scraper_config to solutions.yaml for a collection."""
+    import yaml as _yaml
+    specs_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "solution_specs", "solutions.yaml")
+    with open(specs_path, "r", encoding="utf-8") as f:
+        data = _yaml.safe_load(f) or {}
+    saved = False
+    for sol in data.get("solutions", []):
+        if sol.get("id") != solution_id:
+            continue
+        for coll in sol.get("collections", []):
+            if coll.get("collection_name") == collection_name:
+                coll["scraper_config"] = req.scraper_config
+                saved = True
+                break
+        break
+    if not saved:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    with open(specs_path, "w", encoding="utf-8") as f:
+        _yaml.dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    from solution_specs.loader import reload
+    reload()
+    return {"ok": True, "message": "Scraper config saved."}
 
 
 class AddSourceRequest(BaseModel):
@@ -3282,6 +3339,41 @@ _INDEX_HTML = """
             <label>Shop URL</label>
             <input type="text" id="shopUrl" placeholder="https://mystore.myshopify.com">
           </div>
+          <!-- Extraction mode selector -->
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;">
+            <label style="margin:0;white-space:nowrap;">Extraction mode</label>
+            <select id="extractionMode" onchange="onExtractionModeChange()" style="flex:1;max-width:320px;">
+              <option value="generic">Generic — grab all text</option>
+              <option value="structured">Structured — CSS field extraction</option>
+              <option value="custom_js">Custom JS — browser-side function</option>
+              <option value="shopify">Shopify — JSON API</option>
+            </select>
+          </div>
+          <!-- Config viewer (read-only) -->
+          <div id="configViewerPanel" style="display:none;margin-top:0.6rem;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:0.6rem 0.75rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+              <span style="font-weight:600;font-size:0.82rem;color:#555;">Effective config</span>
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <span id="configSourceTag" style="font-size:0.7rem;padding:0.1rem 0.35rem;border-radius:8px;background:#fff3e0;color:#e65100;"></span>
+                <button type="button" onclick="openRawConfigEditor()" style="font-size:0.76rem;padding:0.15rem 0.5rem;background:none;border:1px solid #999;border-radius:4px;color:#555;cursor:pointer;">Edit raw config</button>
+              </div>
+            </div>
+            <pre id="configViewerContent" style="font-size:0.78rem;font-family:monospace;white-space:pre-wrap;max-height:280px;overflow-y:auto;color:#333;margin:0;line-height:1.5;"></pre>
+          </div>
+          <!-- Raw config editor -->
+          <div id="rawConfigEditor" style="display:none;margin-top:0.6rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
+              <span style="font-weight:600;font-size:0.82rem;color:#555;">Edit config (JSON)</span>
+              <div style="display:flex;gap:0.4rem;">
+                <button type="button" onclick="saveRawConfig()" style="font-size:0.78rem;padding:0.2rem 0.6rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;">Save</button>
+                <button type="button" onclick="closeRawConfigEditor()" style="font-size:0.78rem;padding:0.2rem 0.5rem;background:#eee;border:1px solid #ccc;color:#555;border-radius:4px;cursor:pointer;">Cancel</button>
+              </div>
+            </div>
+            <div id="yamlFileWarning" style="display:none;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.4rem 0.6rem;font-size:0.78rem;color:#e65100;margin-bottom:0.4rem;">
+              ⚠ A YAML file exists for this scraper and takes precedence at runtime. Changes here update the inline config only.
+            </div>
+            <textarea id="rawConfigTextarea" style="width:100%;min-height:200px;font-family:monospace;font-size:0.78rem;border:1px solid #ccc;border-radius:5px;padding:0.5rem;resize:vertical;box-sizing:border-box;"></textarea>
+          </div>
         </div>
         </div><!-- /sourceConfigBody -->
         <!-- Resume banners — OUTSIDE sourceConfigBody so always visible -->
@@ -4957,6 +5049,12 @@ _INDEX_HTML = """
       started:     { bg: '#f3e5f5', color: '#7b1fa2', label: 'Started' },
       not_started: { bg: '#f5f5f5', color: '#999',    label: '' },
     };
+    const _extractionModeStyles = {
+      generic:    { bg: '#f0f0f0', color: '#666',    label: 'Generic' },
+      structured: { bg: '#e3f2fd', color: '#1565c0', label: 'Structured' },
+      custom_js:  { bg: '#f3e5f5', color: '#7b1fa2', label: 'Custom JS' },
+      shopify:    { bg: '#e8f5e9', color: '#2e7d32', label: 'Shopify' },
+    };
 
     function _statusBadge(ps) {
       if (!ps || ps.status === 'not_started') return null;
@@ -5010,6 +5108,17 @@ _INDEX_HTML = """
           scraperBadge.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.4rem;border-radius:10px;background:#e3f0fd;color:#1a5276;flex-shrink:0;';
           scraperBadge.textContent = src.scraper_name;
           row.appendChild(scraperBadge);
+        }
+
+        // Extraction mode badge
+        if (src.extraction_mode) {
+          const ms = _extractionModeStyles[src.extraction_mode] || _extractionModeStyles.generic;
+          const modeBadge = document.createElement('span');
+          modeBadge.style.cssText = 'font-size:0.68rem;padding:0.08rem 0.38rem;border-radius:10px;background:' + ms.bg + ';color:' + ms.color + ';flex-shrink:0;font-weight:600;';
+          modeBadge.textContent = ms.label;
+          if (src.config_source === 'yaml_file') modeBadge.title = 'Config from YAML file (takes precedence)';
+          else if (src.config_source === 'inline') modeBadge.title = 'Config from solutions.yaml';
+          row.appendChild(modeBadge);
         }
 
         // Per-source delete-chunks button — only when pushed to Qdrant
@@ -5105,9 +5214,14 @@ _INDEX_HTML = """
       // Set type-specific fields
       if (src.type === 'url') {
         document.getElementById('scraperName').value = src.scraper_name || '';
+        // Load and display effective config
+        loadSourceConfig(src.scraper_name || '', collName);
         // Check for saved state
         checkUrlSavedState(collName, sourceId);
       } else {
+        // Hide config viewer for non-URL sources
+        document.getElementById('configViewerPanel').style.display = 'none';
+        document.getElementById('rawConfigEditor').style.display = 'none';
         // Auto-fill file path if stored in source definition
         if (src.file_path) {
           setSelectedPath(src.file_path);
@@ -5185,6 +5299,138 @@ _INDEX_HTML = """
           } catch(e) { alert('Error removing source: ' + e.message); }
         }
       });
+    }
+
+    // ── Extraction mode config viewer + editor ──
+    let _resolvedConfig = null;
+
+    async function loadSourceConfig(scraperName, collectionName) {
+      try {
+        const params = new URLSearchParams({ scraper_name: scraperName || '', collection_name: collectionName || '' });
+        const res = await fetch('/api/scraper/resolve-config?' + params).then(r => r.json());
+        _resolvedConfig = res;
+        updateConfigViewer();
+      } catch(e) {
+        _resolvedConfig = null;
+        document.getElementById('configViewerPanel').style.display = 'none';
+      }
+    }
+
+    function updateConfigViewer() {
+      const panel = document.getElementById('configViewerPanel');
+      const modeSelect = document.getElementById('extractionMode');
+      if (!_resolvedConfig || !_resolvedConfig.config) {
+        panel.style.display = 'none';
+        return;
+      }
+      modeSelect.value = _resolvedConfig.extraction_mode || 'generic';
+      // Config source tag
+      const sourceTag = document.getElementById('configSourceTag');
+      const labels = { yaml_file: '📁 YAML file', inline: '📋 Inline', default: '⬜ Default' };
+      sourceTag.textContent = labels[_resolvedConfig.source] || _resolvedConfig.source;
+      sourceTag.style.background = _resolvedConfig.source === 'yaml_file' ? '#e8f5e9' : '#fff3e0';
+      sourceTag.style.color = _resolvedConfig.source === 'yaml_file' ? '#2e7d32' : '#e65100';
+      // YAML warning
+      document.getElementById('yamlFileWarning').style.display = _resolvedConfig.yaml_file_exists ? 'block' : 'none';
+      // Render formatted config
+      document.getElementById('configViewerContent').textContent = formatConfigForViewer(_resolvedConfig.config, _resolvedConfig.extraction_mode);
+      panel.style.display = 'block';
+    }
+
+    function formatConfigForViewer(config, mode) {
+      const lines = [];
+      if (config.name) lines.push('Name:         ' + config.name);
+      if (config.engine) lines.push('Engine:       ' + config.engine);
+      if (config.scrape_mode) lines.push('Scrape mode:  ' + config.scrape_mode);
+      if (config.sitemap_url) lines.push('Sitemap URL:  ' + config.sitemap_url);
+      if (config.url_filter) lines.push('URL filter:   ' + config.url_filter);
+      if (config.url_allowlist) lines.push('URL allowlist: ' + config.url_allowlist.join(', '));
+      if (config.text_selector) lines.push('Text selector: ' + config.text_selector);
+      if (config.excluded_urls && config.excluded_urls.length) lines.push('Excluded URLs: ' + config.excluded_urls.length + ' URLs');
+
+      if (mode === 'structured' && config.structured_extraction) {
+        lines.push('');
+        lines.push('── Structured extraction ──');
+        for (const [field, sel] of Object.entries(config.structured_extraction)) {
+          lines.push('  ' + field + ': ' + sel);
+        }
+        if (config.attribute_rows) {
+          lines.push('Attribute rows:');
+          config.attribute_rows.forEach(r => lines.push('  ' + r.field + ' ← row "' + r.row_name + '"'));
+        }
+      }
+
+      if (mode === 'custom_js' && config.custom_js_extraction) {
+        lines.push('');
+        lines.push('── Custom JS extraction ──');
+        lines.push(config.custom_js_extraction.trim());
+      }
+
+      if (config.chunk_template) {
+        lines.push('');
+        lines.push('── Chunk template ──');
+        lines.push(config.chunk_template.trim());
+      }
+
+      if (mode === 'shopify') {
+        if (config.shop_url) lines.push('Shop URL:  ' + config.shop_url);
+        if (config.include) lines.push('Include:   ' + config.include.join(', '));
+      }
+
+      return lines.join('\\n') || 'No config fields found.';
+    }
+
+    function onExtractionModeChange() {
+      const mode = document.getElementById('extractionMode').value;
+      const engineSel = document.getElementById('scraperEngine');
+      if (mode === 'shopify' && engineSel.value !== 'shopify') {
+        engineSel.value = 'shopify';
+        onScraperEngineChange();
+      } else if (mode !== 'shopify' && engineSel.value === 'shopify') {
+        engineSel.value = 'playwright';
+        onScraperEngineChange();
+      }
+    }
+
+    function openRawConfigEditor() {
+      if (!_resolvedConfig) return;
+      document.getElementById('rawConfigTextarea').value = JSON.stringify(_resolvedConfig.config, null, 2);
+      document.getElementById('rawConfigEditor').style.display = 'block';
+      document.getElementById('configViewerPanel').style.display = 'none';
+    }
+
+    function closeRawConfigEditor() {
+      document.getElementById('rawConfigEditor').style.display = 'none';
+      document.getElementById('configViewerPanel').style.display = 'block';
+    }
+
+    async function saveRawConfig() {
+      const solId = _currentSolutionId;
+      const collName = document.getElementById('collectionSelect').value;
+      if (!solId || !collName) return;
+      let config;
+      try {
+        config = JSON.parse(document.getElementById('rawConfigTextarea').value);
+      } catch(e) {
+        alert('Invalid JSON: ' + e.message);
+        return;
+      }
+      try {
+        const res = await fetch(
+          '/api/solutions/' + encodeURIComponent(solId) + '/collections/' + encodeURIComponent(collName) + '/scraper-config',
+          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scraper_config: config }) }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Save failed');
+        window._activeScraperConfig = config;
+        // Refresh viewer
+        const scraperName = document.getElementById('scraperName').value.trim();
+        await loadSourceConfig(scraperName, collName);
+        closeRawConfigEditor();
+        setLog(buildLog, 'Scraper config saved.', false);
+      } catch(e) {
+        alert('Save failed: ' + e.message);
+      }
     }
 
     function deleteCollection(btn) {
