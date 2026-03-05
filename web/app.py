@@ -1303,7 +1303,10 @@ def state_load(req: StateLoadRequest):
                 print(f"[state/load] Could not reopen collection: {ce}")
 
         _current_state = state
-        steps_done = ', '.join(state.completed_steps) or 'none'
+        step_labels = {'fetch': 'Ingest', 'clean': 'Clean', 'translate_and_clean': 'Translate & Clean',
+                       'chunk': 'Chunk', 'group': 'Group', 'create_collection': 'Create Collection',
+                       'push_to_qdrant': 'Push to Qdrant', 'sync': 'Sync'}
+        steps_done = ', '.join(step_labels.get(s, s) for s in state.completed_steps) or 'none'
         chunks_info = f" {len(state.chunks)} chunks ready." if state.chunks else ""
         return {
             "message": f"✅ Resumed! Steps done: {steps_done}.{chunks_info} You can continue from where you left off.",
@@ -3113,22 +3116,6 @@ _INDEX_HTML = """
           </div>
           <div id="sourcePathFull" style="font-size:0.75rem;color:#aaa;margin-bottom:0.3rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;" title=""></div>
           <div id="recentFiles" style="display:none;margin-bottom:0.6rem;"></div>
-          <div id="resumeBanner" style="display:none;margin-bottom:0.75rem;">
-            <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;font-size:0.9rem;">
-              <strong>💾 Saved state found!</strong> <span id="resumeInfo"></span>
-            </div>
-            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
-              <button type="button" onclick="resumeState()" style="padding:0.4rem 1rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Resume →</button>
-              <button type="button" id="startFreshBtn" onclick="confirmStartFresh()" style="padding:0.4rem 1rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Start fresh</button>
-            </div>
-            <div id="startFreshConfirm" style="display:none;margin-top:0.4rem;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.5rem 0.75rem;font-size:0.83rem;">
-              <span style="color:#e65100;">⚠ This will ignore your saved progress and start a new pipeline run. The saved state file is kept on disk.</span>
-              <div style="margin-top:0.4rem;display:flex;gap:0.4rem;">
-                <button type="button" onclick="doStartFresh()" style="padding:0.25rem 0.75rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Yes, start fresh</button>
-                <button type="button" onclick="cancelStartFresh()" style="padding:0.25rem 0.75rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
-              </div>
-            </div>
-          </div>
         </div>
         <div id="scraperRow" class="hidden">
           <div style="display:flex;align-items:center;gap:0.5rem;">
@@ -3166,24 +3153,41 @@ _INDEX_HTML = """
             <label>Shop URL</label>
             <input type="text" id="shopUrl" placeholder="https://mystore.myshopify.com">
           </div>
-          <div id="urlResumeBanner" style="display:none;margin-top:0.75rem;">
-            <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;font-size:0.9rem;">
-              <strong>💾 Saved state found!</strong> <span id="urlResumeInfo"></span>
-            </div>
-            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
-              <button type="button" onclick="resumeUrlState()" style="padding:0.4rem 1rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Resume →</button>
-              <button type="button" id="urlStartFreshBtn" onclick="confirmUrlStartFresh()" style="padding:0.4rem 1rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Start fresh</button>
-            </div>
-            <div id="urlStartFreshConfirm" style="display:none;margin-top:0.4rem;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.5rem 0.75rem;font-size:0.83rem;">
-              <span style="color:#e65100;">⚠ This will ignore your saved progress and start a new pipeline run. The saved state file is kept on disk.</span>
-              <div style="margin-top:0.4rem;display:flex;gap:0.4rem;">
-                <button type="button" onclick="doUrlStartFresh()" style="padding:0.25rem 0.75rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Yes, start fresh</button>
-                <button type="button" onclick="cancelUrlStartFresh()" style="padding:0.25rem 0.75rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
-              </div>
+        </div>
+        </div><!-- /sourceConfigBody -->
+        <!-- Resume banners — OUTSIDE sourceConfigBody so always visible -->
+        <div id="resumeBanner" style="display:none;margin-top:0.75rem;">
+          <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;font-size:0.9rem;">
+            <strong>💾 Saved state found!</strong> <span id="resumeInfo"></span>
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+            <button type="button" onclick="resumeState()" style="padding:0.4rem 1rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Resume →</button>
+            <button type="button" id="startFreshBtn" onclick="confirmStartFresh()" style="padding:0.4rem 1rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Start fresh</button>
+          </div>
+          <div id="startFreshConfirm" style="display:none;margin-top:0.4rem;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.5rem 0.75rem;font-size:0.83rem;">
+            <span style="color:#e65100;">⚠ This will ignore your saved progress and start a new pipeline run. The saved state file is kept on disk.</span>
+            <div style="margin-top:0.4rem;display:flex;gap:0.4rem;">
+              <button type="button" onclick="doStartFresh()" style="padding:0.25rem 0.75rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Yes, start fresh</button>
+              <button type="button" onclick="cancelStartFresh()" style="padding:0.25rem 0.75rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
             </div>
           </div>
         </div>
-        </div><!-- /sourceConfigBody -->
+        <div id="urlResumeBanner" style="display:none;margin-top:0.75rem;">
+          <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;font-size:0.9rem;">
+            <strong>💾 Saved state found!</strong> <span id="urlResumeInfo"></span>
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+            <button type="button" onclick="resumeUrlState()" style="padding:0.4rem 1rem;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Resume →</button>
+            <button type="button" id="urlStartFreshBtn" onclick="confirmUrlStartFresh()" style="padding:0.4rem 1rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;font-weight:500;">Start fresh</button>
+          </div>
+          <div id="urlStartFreshConfirm" style="display:none;margin-top:0.4rem;background:#fff3e0;border:1px solid #ffcc80;border-radius:5px;padding:0.5rem 0.75rem;font-size:0.83rem;">
+            <span style="color:#e65100;">⚠ This will ignore your saved progress and start a new pipeline run. The saved state file is kept on disk.</span>
+            <div style="margin-top:0.4rem;display:flex;gap:0.4rem;">
+              <button type="button" onclick="doUrlStartFresh()" style="padding:0.25rem 0.75rem;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Yes, start fresh</button>
+              <button type="button" onclick="cancelUrlStartFresh()" style="padding:0.25rem 0.75rem;background:#e9ecef;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 4. Run pipeline (shown when a source is selected) -->
@@ -4654,7 +4658,7 @@ _INDEX_HTML = """
         if (!data.files || data.files.length === 0) { _hideStateFiles(); return; }
         let html = '<div style="font-weight:600;margin-bottom:0.3rem;">💾 Saved state files</div>';
         data.files.forEach(f => {
-          const steps = (f.completed_steps || []).join(' → ') || '—';
+          const steps = (f.completed_steps || []).map(s => _stepLabel(s)).join(' → ') || '—';
           const items = f.scraped_items_count ? f.scraped_items_count + ' items' : '';
           const chunks = f.chunks_count ? f.chunks_count + ' chunks' : '';
           const info = [items, chunks].filter(Boolean).join(', ') || 'empty';
@@ -4938,6 +4942,8 @@ _INDEX_HTML = """
           document.getElementById('sourcePathFull').style.display = 'none';
         }
       }
+      // Auto-collapse source config once pipeline is visible
+      _collapseSourceConfig();
     }
 
     function showAddSourceForm() {
@@ -5215,7 +5221,7 @@ _INDEX_HTML = """
         const res = await fetch(url).then(r => r.json());
         if (res.found) {
           _urlSavedStatePath = res.save_path;
-          const steps = res.completed_steps.join(', ') || 'none';
+          const steps = res.completed_steps.map(s => _stepLabel(s)).join(', ') || 'none';
           const chunks = res.chunks_count ? ` ${res.chunks_count} chunks ready.` : '';
           const items = res.scraped_items_count ? ` ${res.scraped_items_count} scraped pages.` : '';
           const staleWarning = res.stale ? `\n⚠️ Stale: ${res.stale_reason}` : '';
@@ -5468,7 +5474,7 @@ _INDEX_HTML = """
           _savedStateInfo = res;
           const steps = res.completed_steps || [];
           const info = steps.length
-            ? `Steps done: <strong>${steps.join(', ')}</strong>. ${res.chunks_count ? res.chunks_count + ' chunks ready.' : ''}`
+            ? `Steps done: <strong>${steps.map(s => _stepLabel(s)).join(', ')}</strong>. ${res.chunks_count ? res.chunks_count + ' chunks ready.' : ''}`
             : 'Empty state file found.';
           document.getElementById('resumeInfo').innerHTML = info;
           document.getElementById('resumeBanner').style.display = 'block';
@@ -5579,6 +5585,12 @@ _INDEX_HTML = """
       chunk: 'runChunk', create_collection: 'runCreate',
       push_to_qdrant: 'runPush', sync: 'runSync'
     };
+    const _stepLabelMap = {
+      fetch: 'Ingest', clean: 'Clean', translate_and_clean: 'Translate & Clean',
+      chunk: 'Chunk', group: 'Group', create_collection: 'Create Collection',
+      push_to_qdrant: 'Push to Qdrant', sync: 'Sync', test_qa: 'Test Q&A'
+    };
+    function _stepLabel(name) { return _stepLabelMap[name] || name; }
     function _setStepStatus(stepName, done) {
       const el = document.getElementById('stepStatus-' + stepName);
       if (el) { el.textContent = done ? '✅' : '⬜'; el.title = done ? 'Completed' : 'Not started'; }
@@ -5779,6 +5791,26 @@ _INDEX_HTML = """
       body.style.display = open ? 'none' : '';
       if (chev) chev.textContent = open ? '▶' : '▼';
     }
+    function _collapseSourceConfig() {
+      const body = document.getElementById('sourceConfigBody');
+      const chev = document.getElementById('sourceConfigChevron');
+      const summary = document.getElementById('sourceConfigSummary');
+      if (body) body.style.display = 'none';
+      if (chev) chev.textContent = '▶';
+      // Build summary from source type + engine/file
+      const st = (document.getElementById('sourceType') || {}).value || '';
+      const scraper = (document.getElementById('scraperName') || {}).value || '';
+      const engine = (document.getElementById('scraperEngine') || {}).value || '';
+      if (summary) {
+        if (st === 'url') {
+          summary.textContent = (scraper || 'URL') + ' · ' + engine;
+        } else {
+          const path = (document.getElementById('sourcePath') || {}).value || '';
+          summary.textContent = st.toUpperCase() + (path ? ' · ' + path.split('/').pop() : '');
+        }
+        summary.style.display = 'inline';
+      }
+    }
     function toggleRoutingBody() {
       const body = document.getElementById('routingBody');
       const chev = document.getElementById('routingChevron');
@@ -5859,6 +5891,11 @@ _INDEX_HTML = """
     function _hideStopBtn(id) { const b = document.getElementById(id); if (b) b.style.display = 'none'; }
 
     async function runFetchWithProgress() {
+      // Warn if chunks already exist (re-ingest will require re-chunking)
+      const chunkStatus = document.getElementById('stepStatus-chunk');
+      if (chunkStatus && chunkStatus.textContent === '✅') {
+        if (!confirm('You have already chunked this data. Re-ingesting will require you to chunk again. Continue?')) return;
+      }
       const btn = document.getElementById('runFetch');
       _btnRunning(btn);
       btn.textContent = '1. Ingesting…';
@@ -5884,6 +5921,10 @@ _INDEX_HTML = """
           _hideStopBtn('btnStopIngest');
           _btnSuccess(btn); btn.textContent = '1. Ingest';
           _setStepStatus('fetch', true);
+          // After re-ingest, downstream steps are stale
+          _setStepStatus('chunk', false);
+          _setStepStatus('create_collection', false);
+          _setStepStatus('push_to_qdrant', false);
           _refreshTokenFooter();
           // Fetch updated state to render relevance report card (if check ran)
           api('/api/workflow/state').then(st => {
@@ -6915,6 +6956,7 @@ _INDEX_HTML = """
       _wizardRenderAll();
       document.getElementById('wizardResults').style.display = 'flex';
       _wizardShowConfigLabel(_wizardCurrentSolId());
+      _collapseWizardCard();
     }
 
     // Render the yellow diff summary banner above the sitemap list
@@ -8628,6 +8670,7 @@ _INDEX_HTML = """
       const chatSec = document.getElementById('wizardChatSection');
       if (chatSec) chatSec.style.display = '';
       _wizardRenderAll();
+      _collapseWizardCard();
       // Load confirmed collection statuses from the API
       _wizardLoadConfirmedColls(_wizardCurrentSolId());
 
