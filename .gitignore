@@ -8,6 +8,8 @@ __pycache__
 
 # Temp / generated files
 .rag_state_*.json
+.token_usage.log
+.token_session.json
 .wizard_state_*.json
 .rag_server*.log
 .domain_rank.db

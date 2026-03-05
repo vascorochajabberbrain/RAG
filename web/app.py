@@ -32,16 +32,20 @@ _cancel_event = threading.Event()
 _loop: asyncio.AbstractEventLoop = None
 
 
-def _emit_token_log():
-    """Emit per-task token usage as a LOG: line in the SSE progress queue."""
+def _emit_token_log(step_name: str = "", collection_name: str = ""):
+    """Emit per-task token usage as a LOG: line in the SSE progress queue, and log to file."""
     from llms.token_tracker import get_tracker
-    task = get_tracker().get_task_usage()
+    tracker = get_tracker()
+    task = tracker.get_task_usage()
     if task:
         parts = []
         for model, counts in sorted(task.items()):
             inp, out = counts.get("input", 0), counts.get("output", 0)
             parts.append(f"{model}: {inp:,} in / {out:,} out")
         _progress_queue.put("LOG:🪙 Tokens used: " + " · ".join(parts))
+    # Always log step to file and persist session (even if 0 tokens)
+    if step_name:
+        tracker.log_step(step_name, collection_name)
 
 
 def get_state():
@@ -1234,9 +1238,13 @@ def run_workflow_step(req: StepRequest):
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Unknown step: {req.step}")
         from llms.token_tracker import get_tracker
-        get_tracker().reset_task()
+        tracker = get_tracker()
+        tracker.reset_task()
         msg = run_step(state, step)
-        return {"message": msg, "state": state.to_dict(), "token_usage": get_tracker().get_all()}
+        step_label = {'chunk': 'Chunk', 'create_collection': 'Create Collection',
+                       'group': 'Group', 'clean': 'Clean'}.get(req.step, req.step)
+        tracker.log_step(step_label, state.collection_name)
+        return {"message": msg, "state": state.to_dict(), "token_usage": tracker.get_all()}
     except HTTPException:
         raise
     except Exception as e:
@@ -1259,14 +1267,17 @@ def qa(req: QARequest):
     else:
         collection_names = req.collection_name
     from llms.token_tracker import get_tracker
-    get_tracker().reset_task()
+    tracker = get_tracker()
+    tracker.reset_task()
     history = []
     retrieved = get_retrieved_info(req.question, history, collection_names,
                                    embedding_model=req.embedding_model)
     answer = get_answer(history, retrieved, req.question, req.company)
     # retrieved is now a dict {text, sources}; pass sources through to the UI
     sources = retrieved.get("sources", []) if isinstance(retrieved, dict) else []
-    return {"question": req.question, "answer": answer, "sources": sources, "token_usage": get_tracker().get_all()}
+    coll_label = req.collection_name if isinstance(req.collection_name, str) else ",".join(collection_names[:3])
+    tracker.log_step("Q&A", coll_label)
+    return {"question": req.question, "answer": answer, "sources": sources, "token_usage": tracker.get_all()}
 
 
 @app.post("/api/workflow/reset")
@@ -1644,7 +1655,7 @@ def run_fetch_streaming(req: StepRequest):
             if _cancel_event.is_set():
                 _progress_queue.put("CANCELLED:Ingest was stopped by user.")
             else:
-                _emit_token_log()
+                _emit_token_log("Ingest", state.collection_name)
                 _progress_queue.put(f"DONE:{msg}")
         except Exception as e:
             if _cancel_event.is_set():
@@ -1691,7 +1702,7 @@ def run_push_streaming(req: StepRequest):
             if _cancel_event.is_set():
                 _progress_queue.put("CANCELLED:Push was stopped by user.")
             else:
-                _emit_token_log()
+                _emit_token_log("Push", state.collection_name)
                 _progress_queue.put(f"DONE:{msg}")
         except Exception as e:
             if _cancel_event.is_set():
@@ -1718,7 +1729,7 @@ def run_translate(req: StepRequest):
 
     def _run():
         run_step(state, Step.TRANSLATE_AND_CLEAN)
-        _emit_token_log()
+        _emit_token_log("Translate & Clean", state.collection_name)
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
