@@ -3049,13 +3049,15 @@ _INDEX_HTML = """
       <div class="card" id="sourceConfigCard" style="display:none;">
         <h2>3. Source config <span id="sourceConfigLabel" style="font-weight:400;color:#888;font-size:0.85rem;"></span> <span class="help-icon" onclick="toggleHelp('help-source-config')" title="Help">?</span></h2>
         <div id="help-source-config" class="help-tip">Configure how this source is fetched. For files (PDF/TXT/CSV), pick a local file. For websites, enter a scraper name and choose an engine. <a href="/help#source-config" target="_blank">Learn more &rarr;</a></div>
-        <label>Source type</label>
-        <select id="sourceType" onchange="onSourceTypeChange()">
-          <option value="pdf">PDF file</option>
-          <option value="txt">Text file</option>
-          <option value="csv">CSV file</option>
-          <option value="url">Website (scraper)</option>
-        </select>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <label style="margin:0;white-space:nowrap;">Source type</label>
+          <select id="sourceType" onchange="onSourceTypeChange()" style="max-width:180px;">
+            <option value="pdf">PDF file</option>
+            <option value="txt">Text file</option>
+            <option value="csv">CSV file</option>
+            <option value="url">Website (scraper)</option>
+          </select>
+        </div>
         <div id="filePickerRow">
           <label>File</label>
           <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.2rem">
@@ -3085,8 +3087,10 @@ _INDEX_HTML = """
           </div>
         </div>
         <div id="scraperRow" class="hidden">
-          <label>Scraper name</label>
-          <input type="text" id="scraperName" placeholder="e.g. peixefresco_products">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <label style="margin:0;white-space:nowrap;">Scraper name</label>
+            <input type="text" id="scraperName" placeholder="e.g. peixefresco_products" style="max-width:220px;">
+          </div>
             <div style="margin-top:0.4rem;">
               <button type="button" id="loginToggleBtn" onclick="toggleLoginSection()" style="font-size:0.79rem;background:none;border:1px dashed #bbb;border-radius:5px;padding:0.18rem 0.5rem;color:#666;cursor:pointer;">🔒 Site requires login</button>
             </div>
