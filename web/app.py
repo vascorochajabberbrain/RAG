@@ -1725,6 +1725,15 @@ def faq_generate_table(req: FaqTableRequest):
       3. Qdrant collection (if it exists and has chunks)
       4. None → helpful error message
     """
+    try:
+        return _faq_generate_table_impl(req)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"table": "", "count": 0, "error": str(e)}
+
+
+def _faq_generate_table_impl(req: FaqTableRequest):
     import os, glob
     from llms.openai_utils import openai_chat_completion
     tracker = get_state().tracker
@@ -1767,11 +1776,14 @@ def faq_generate_table(req: FaqTableRequest):
 
     # Source 3: Qdrant (if pushed)
     if not texts:
-        if tracker._existing_collection_name(req.collection_name):
-            points = tracker.scroll_all(req.collection_name, limit=req.max_items)
-            texts = [p.get("text", "") for p in (points or []) if p.get("text")]
-            if texts:
-                source_label = "Qdrant"
+        try:
+            if tracker and tracker._existing_collection_name(req.collection_name):
+                points = tracker.scroll_all(req.collection_name, limit=req.max_items)
+                texts = [p.get("text", "") for p in (points or []) if p.get("text")]
+                if texts:
+                    source_label = "Qdrant"
+        except Exception as e:
+            print(f"[faq-table] Qdrant lookup failed: {e}")
 
     if not texts:
         return {"table": "", "count": 0, "error": "No content found. Run the Ingest and Chunk steps for this collection first, then try again."}
