@@ -5976,8 +5976,8 @@ _INDEX_HTML = """
       const pushDone = document.getElementById('stepStatus-push_to_qdrant')?.textContent === '✅';
       if (chunkDone || pushDone) {
         let warn = 'Re-ingesting will clear existing chunks and require you to Chunk again.';
-        if (pushDone) warn += '\nPrevious data was already pushed to Qdrant — you will also need to Push again.';
-        warn += '\n\nContinue?';
+        if (pushDone) warn += '\\nPrevious data was already pushed to Qdrant — you will also need to Push again.';
+        warn += '\\n\\nContinue?';
         if (!confirm(warn)) return;
       }
       const btn = document.getElementById('runFetch');
