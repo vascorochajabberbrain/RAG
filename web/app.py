@@ -1816,12 +1816,20 @@ def _faq_generate_table_impl(req: FaqTableRequest):
     # Source 3: Qdrant (if pushed)
     if not texts:
         try:
-            if tracker and tracker._existing_collection_name(req.collection_name):
+            exists = tracker._existing_collection_name(req.collection_name) if tracker else None
+            print(f"[faq-table] Qdrant lookup: collection='{req.collection_name}', exists={exists}")
+            if exists:
                 points = tracker.scroll_all(req.collection_name, limit=req.max_items)
-                texts = [p.get("text", "") for p in (points or []) if p.get("text")]
+                print(f"[faq-table] scroll_all returned {len(points or [])} points")
+                if points:
+                    sample = points[0]
+                    print(f"[faq-table] sample payload keys: {list(sample.keys()) if isinstance(sample, dict) else type(sample)}")
+                texts = [p.get("text", "") for p in (points or []) if isinstance(p, dict) and p.get("text")]
                 if texts:
                     source_label = "Qdrant"
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"[faq-table] Qdrant lookup failed: {e}")
 
     if not texts:
