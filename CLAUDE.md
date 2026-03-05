@@ -222,6 +222,7 @@ python -m workflow.cli     # Guided CLI workflow
 - [ ] Define API contract: how Session Engine calls this RAG layer (HTTP endpoint? direct Python import?)
 - [ ] Future: integrate two-step routing in Session Engine using `solutions.yaml` routing metadata
 - [ ] Future: migrate Hey Harper collections to new scraper (currently legacy Selenium data)
+- [ ] **Source grouping in Analyse Site wizard** — Add a "Source" layer inside collections so pages/URLs are grouped by source (e.g. one source per sitemap, PDF, or external website). Each source carries its own scraper config, engine, and login credentials. Enables multi-website collections with different auth. Auto-create a "Default" source when first assigning pages. Migration: wrap existing flat `collection.pages` arrays in a default source object in `.wizard_state_*.json`. No Qdrant reprocessing needed — data model change only. *(Parked 2026-03-04, revisit Saturday 2026-03-07)*
 
 ### Peixe Fresco — Collection Status (as of 2026-02-25)
 
