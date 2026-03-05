@@ -5271,9 +5271,7 @@ _INDEX_HTML = """
           body: JSON.stringify({ save_path: _urlSavedStatePath })
         }).then(r => r.json());
         setLog(buildLog, res.message || res.detail, !!res.detail);
-        if (res.state && res.state.completed_steps) {
-          _markStepsFromList(res.state.completed_steps);
-        }
+        await _restoreUIFromState(res.state);
         document.getElementById('urlResumeBanner').style.display = 'none';
         document.getElementById('pipelineCard').style.display = 'block';
       } catch(e) {
@@ -5528,6 +5526,75 @@ _INDEX_HTML = """
       document.getElementById('pipelineCard').style.display = 'block';
     }
 
+    async function _restoreUIFromState(state) {
+      /**
+       * After loading a saved state, restore the full UI context:
+       * solution dropdown → collection dropdown → source config → step indicators.
+       */
+      if (!state) return;
+      const collName = state.collection_name;
+
+      // 1. Find which solution owns this collection
+      if (collName && _allSolutions.length) {
+        const ownerSol = _allSolutions.find(s =>
+          (s.collections || []).some(c => c.collection_name === collName || c.id === collName)
+        );
+        if (ownerSol) {
+          // Select solution in dropdown
+          const solSel = document.getElementById('globalSolution');
+          if (solSel && solSel.value !== ownerSol.id) {
+            solSel.value = ownerSol.id;
+            _currentSolutionId = ownerSol.id;
+            _applyGlobalSolution();
+          }
+          // Load collections and auto-select the right one
+          await loadSolutionCollections(ownerSol.id, {autoSelect: false});
+          const collSel = document.getElementById('collectionSelect');
+          if (collSel) {
+            collSel.value = collName;
+            onCollectionSelect();
+          }
+        }
+      }
+
+      // 2. Set collection name field
+      if (collName) {
+        const cn = document.getElementById('collectionName');
+        if (cn && !cn.value.trim()) cn.value = collName;
+      }
+
+      // 3. Restore source config fields
+      if (state.source_type) {
+        const srcType = document.getElementById('sourceType');
+        if (srcType) { srcType.value = state.source_type; onSourceTypeChange(); }
+      }
+      const sc = state.source_config || {};
+      if (sc.scraper_name) {
+        const sn = document.getElementById('scraperName');
+        if (sn) sn.value = sc.scraper_name;
+      }
+      if (sc.engine) {
+        const eng = document.getElementById('scraperEngine');
+        if (eng) eng.value = sc.engine;
+      }
+
+      // 4. Step indicators
+      if (state.completed_steps) {
+        _markStepsFromList(state.completed_steps);
+      }
+
+      // 5. Chunk mode
+      if (state.chunking_config) {
+        const chunkSel = document.getElementById('chunkMode');
+        if (chunkSel) {
+          if (state.chunking_config.use_proposition_chunking) chunkSel.value = 'proposition';
+          else if (state.chunking_config.use_hierarchical_chunking) chunkSel.value = 'hierarchical';
+          else chunkSel.value = 'simple';
+          _prevChunkMode = chunkSel.value;
+        }
+      }
+    }
+
     async function resumeState() {
       if (!_savedStatePath) return;
       setLog(buildLog, 'Resuming saved state…', false);
@@ -5538,13 +5605,7 @@ _INDEX_HTML = """
           body: JSON.stringify({ save_path: _savedStatePath })
         }).then(r => r.json());
         setLog(buildLog, res.message, false);
-        if (res.state && res.state.collection_name) {
-          const cn = document.getElementById('collectionName');
-          if (cn && !cn.value.trim()) cn.value = res.state.collection_name;
-        }
-        if (res.state && res.state.completed_steps) {
-          _markStepsFromList(res.state.completed_steps);
-        }
+        await _restoreUIFromState(res.state);
         hideBanner();
         document.getElementById('pipelineCard').style.display = 'block';
       } catch(e) {
