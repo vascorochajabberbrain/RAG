@@ -1779,60 +1779,55 @@ def _faq_generate_table_impl(req: FaqTableRequest):
     texts = []
     source_label = None
 
-    # Collect candidate text sources — pick the one with the MOST chunks
-    # (Qdrant with 23 chunks beats a saved state with 1 raw page)
-    candidates = []  # list of (texts_list, label)
+    # Priority: local data first (in-memory → saved state → Qdrant as last resort)
 
     # Source 1: In-memory workflow state (available right after chunking, no push needed)
     wf_state = get_state()
     if wf_state and wf_state.collection_name and req.collection_name in wf_state.collection_name:
         if wf_state.chunks:
-            c = [t for t in wf_state.chunks[:req.max_items] if t]
-            if c:
-                candidates.append((c, "in-memory (chunks)"))
-        if not candidates and wf_state.scraped_items:
-            c = [item.get("text", "") for item in wf_state.scraped_items[:req.max_items] if item.get("text")]
-            if c:
-                candidates.append((c, "in-memory (scraped pages)"))
+            texts = [t for t in wf_state.chunks[:req.max_items] if t]
+            if texts:
+                source_label = "in-memory (chunks)"
+        if not texts and wf_state.scraped_items:
+            texts = [item.get("text", "") for item in wf_state.scraped_items[:req.max_items] if item.get("text")]
+            if texts:
+                source_label = "in-memory (scraped pages)"
 
     # Source 2: Saved workflow state files
-    from workflow.models import WorkflowState
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    state_files = sorted(
-        glob.glob(os.path.join(root, f".rag_state_{req.collection_name}*.json")),
-        key=lambda f: os.path.getmtime(f), reverse=True
-    )
-    for state_path in state_files:
+    if not texts:
+        from workflow.models import WorkflowState
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        state_files = sorted(
+            glob.glob(os.path.join(root, f".rag_state_{req.collection_name}*.json")),
+            key=lambda f: os.path.getmtime(f), reverse=True
+        )
+        for state_path in state_files:
+            try:
+                saved = WorkflowState.load_from_disk(state_path)
+                if saved and saved.chunks:
+                    texts = [t for t in saved.chunks[:req.max_items] if t]
+                    source_label = "saved state (chunks)"
+                elif saved and saved.scraped_items:
+                    texts = [item.get("text", "") for item in saved.scraped_items[:req.max_items] if item.get("text")]
+                    source_label = "saved state (scraped pages)"
+                if texts:
+                    break
+            except Exception:
+                continue
+
+    # Source 3: Qdrant (fallback only — local data is the source of truth)
+    if not texts:
         try:
-            saved = WorkflowState.load_from_disk(state_path)
-            if saved and saved.chunks:
-                c = [t for t in saved.chunks[:req.max_items] if t]
-                if c:
-                    candidates.append((c, "saved state (chunks)"))
-                    break
-            elif saved and saved.scraped_items:
-                c = [item.get("text", "") for item in saved.scraped_items[:req.max_items] if item.get("text")]
-                if c:
-                    candidates.append((c, "saved state (scraped pages)"))
-                    break
-        except Exception:
-            continue
+            if tracker and tracker._existing_collection_name(req.collection_name):
+                points = tracker.scroll_all(req.collection_name, limit=req.max_items)
+                texts = [p.get("text", "") for p in (points or []) if isinstance(p, dict) and p.get("text")]
+                if texts:
+                    source_label = "Qdrant"
+        except Exception as e:
+            print(f"[faq-table] Qdrant lookup failed: {e}")
 
-    # Source 3: Qdrant (if pushed)
-    try:
-        if tracker and tracker._existing_collection_name(req.collection_name):
-            points = tracker.scroll_all(req.collection_name, limit=req.max_items)
-            c = [p.get("text", "") for p in (points or []) if isinstance(p, dict) and p.get("text")]
-            if c:
-                candidates.append((c, "Qdrant"))
-    except Exception as e:
-        print(f"[faq-table] Qdrant lookup failed: {e}")
-
-    # Pick the source with the most chunks (better coverage)
-    if candidates:
-        candidates.sort(key=lambda x: len(x[0]), reverse=True)
-        texts, source_label = candidates[0]
-        print(f"[faq-table] Using source '{source_label}' with {len(texts)} texts (of {len(candidates)} candidates)")
+    if texts:
+        print(f"[faq-table] Using source '{source_label}' with {len(texts)} texts")
 
     if not texts:
         return {"table": "", "count": 0, "error": "No content found. Run the Ingest and Chunk steps for this collection first, then try again."}
