@@ -35,7 +35,7 @@ def run_step(state: WorkflowState, step: Step, cancel_check=None) -> str:
         return f"Unknown step: {step}"
 
     # Track completion and auto-save for steps that produce persistent output
-    _SAVEABLE_STEPS = {Step.FETCH, Step.TRANSLATE_AND_CLEAN, Step.CHUNK, Step.PUSH_TO_QDRANT}
+    _SAVEABLE_STEPS = {Step.FETCH, Step.TRANSLATE_AND_CLEAN, Step.CHUNK, Step.CREATE_COLLECTION, Step.PUSH_TO_QDRANT}
     if not msg.startswith("Error") and step in _SAVEABLE_STEPS:
         if step.value not in state.completed_steps:
             state.completed_steps.append(step.value)

@@ -5911,7 +5911,12 @@ _INDEX_HTML = """
     }
     function _markStepsFromList(completedSteps) {
       _resetAllStepStatus();
-      (completedSteps || []).forEach(s => _setStepStatus(s, true));
+      const steps = completedSteps || [];
+      steps.forEach(s => _setStepStatus(s, true));
+      // If push is done, create_collection must have succeeded too
+      if (steps.includes('push_to_qdrant') && !steps.includes('create_collection')) {
+        _setStepStatus('create_collection', true);
+      }
       _updatePipelineWarning();
     }
 
