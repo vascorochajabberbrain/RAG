@@ -3048,7 +3048,12 @@ _INDEX_HTML = """
 
       <!-- 3. Source config (shown when a source is selected) -->
       <div class="card" id="sourceConfigCard" style="display:none;">
-        <h2>3. Source config <span id="sourceConfigLabel" style="font-weight:400;color:#888;font-size:0.85rem;"></span> <span class="help-icon" onclick="toggleHelp('help-source-config')" title="Help">?</span></h2>
+        <h2 style="cursor:pointer;user-select:none;" onclick="toggleSourceConfigCard()">
+          <span id="sourceConfigChevron">▼</span> 3. Source config <span id="sourceConfigLabel" style="font-weight:400;color:#888;font-size:0.85rem;"></span>
+          <span id="sourceConfigSummary" style="display:none;font-weight:400;font-size:0.82rem;color:#888;margin-left:0.5rem;"></span>
+          <span class="help-icon" onclick="event.stopPropagation();toggleHelp('help-source-config')" title="Help">?</span>
+        </h2>
+        <div id="sourceConfigBody">
         <div id="help-source-config" class="help-tip">Configure how this source is fetched. For files (PDF/TXT/CSV), pick a local file. For websites, enter a scraper name and choose an engine. <a href="/help#source-config" target="_blank">Learn more &rarr;</a></div>
         <div style="display:flex;align-items:center;gap:0.5rem;">
           <label style="margin:0;white-space:nowrap;">Source type</label>
@@ -3140,6 +3145,7 @@ _INDEX_HTML = """
             </div>
           </div>
         </div>
+        </div><!-- /sourceConfigBody -->
       </div>
 
       <!-- 4. Run pipeline (shown when a source is selected) -->
@@ -3314,7 +3320,11 @@ _INDEX_HTML = """
 
       <!-- Input card -->
       <div class="card">
-        <h2>🔍 Analyse Site</h2>
+        <h2 style="cursor:pointer;user-select:none;" onclick="toggleWizardCard()">
+          <span id="wizardChevron">▼</span> 🔍 Analyse Site
+          <span id="wizardSummary" style="display:none;font-weight:400;font-size:0.82rem;color:#888;margin-left:0.5rem;"></span>
+        </h2>
+        <div id="wizardCardBody">
         <p class="status" style="margin-top:0">Enter a URL to discover the site&apos;s sitemap structure, then drag sitemaps or individual pages into collections.</p>
         <label>Website URL</label>
         <input id="wizardUrl" type="text" placeholder="https://example.com" style="margin-bottom:0.35rem;">
@@ -3372,6 +3382,7 @@ _INDEX_HTML = """
           <button type="button" class="btn-wizard" onclick="runWizardAnalyse()">🔍 Select Analyse Mode</button>
         </div>
         <div id="wizardLog" class="log hidden" style="margin-top:0.75rem;max-height:8rem;"></div>
+        </div><!-- /wizardCardBody -->
       </div>
 
       <!-- Two-column results (shown after analyse) -->
@@ -4473,53 +4484,17 @@ _INDEX_HTML = """
         document.getElementById('routingMetadataPanel').style.display = 'none';
         return;
       }
-      if (collections.length === 1) {
-        // Single collection — no pills needed, but still show routing panel
-        const c = collections[0];
+      // Find currently selected collection and show its routing metadata
+      const collSelect = document.getElementById('collectionSelect');
+      const selectedName = collSelect ? collSelect.value : '';
+      const c = collections.find(col => col.name === selectedName) || collections[0];
+      if (c) {
         if (c.scraper_config) window._activeScraperConfig = c.scraper_config;
         else window._activeScraperConfig = null;
-        // Auto-select first source if available
-        const sources = c.sources || [];
-        if (sources.length === 1) selectSource(sources[0].id);
-        renderRoutingMetadataPanel(c, solId);
-        return;
-      }
-      // Multiple collections — render pills
-      const label = document.createElement('p');
-      label.style.cssText = 'font-size:0.82rem;color:#888;margin:0 0 0.4rem 0;';
-      label.textContent = 'Select collection to build:';
-      container.appendChild(label);
-      const pillRow = document.createElement('div');
-      pillRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.6rem;';
-
-      function selectPill(btn, c) {
-        pillRow.querySelectorAll('button').forEach(b => {
-          b.style.background = '#222'; b.style.color = '#ccc'; b.style.borderColor = '#555';
-        });
-        btn.style.background = '#2a5caa'; btn.style.color = '#fff'; btn.style.borderColor = '#2a5caa';
-        if (c.scraper_config) window._activeScraperConfig = c.scraper_config;
-        else window._activeScraperConfig = null;
-        const collSelect = document.getElementById('collectionSelect');
-        if (collSelect) { collSelect.value = c.name; onCollectionSelect(); }
-        // Auto-select first source if only one
         const sources = c.sources || [];
         if (sources.length === 1) selectSource(sources[0].id);
         renderRoutingMetadataPanel(c, solId);
       }
-
-      collections.forEach((c, idx) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = c.display_name || c.name;
-        btn.style.cssText = 'padding:0.25rem 0.7rem;border-radius:999px;border:1px solid #555;background:#222;color:#ccc;cursor:pointer;font-size:0.85rem;';
-        btn.onclick = () => selectPill(btn, c);
-        pillRow.appendChild(btn);
-      });
-      container.appendChild(pillRow);
-
-      // Auto-select the first pill on load
-      const firstBtn = pillRow.querySelector('button');
-      if (firstBtn) selectPill(firstBtn, collections[0]);
     }
 
     function renderRoutingMetadataPanel(coll, solId) {
@@ -4527,16 +4502,19 @@ _INDEX_HTML = """
       if (!panel) return;
       const routing = coll.routing || {};
       const isEmpty = !routing.description;
+      const statusIcon = isEmpty ? '⬜' : '✅';
+      const statusTip = isEmpty ? 'No metadata' : 'Metadata present';
       panel.style.display = 'block';
       panel.innerHTML = `
         <div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:0.8rem;margin-top:0.6rem;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-            <span style="font-size:0.82rem;color:#888;">Routing Metadata — <em>${coll.display_name || coll.name}</em></span>
-            <div style="display:flex;gap:0.4rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;" onclick="toggleRoutingBody()">
+            <span style="font-size:0.82rem;color:#888;"><span id="routingChevron">▶</span> Routing Metadata ${statusIcon} — <em>${coll.display_name || coll.name}</em></span>
+            <div style="display:flex;gap:0.4rem;" onclick="event.stopPropagation();">
               <button type="button" id="btnRegenRouting" title="Re-generate from Qdrant content (uses LLM)" style="font-size:0.78rem;padding:0.15rem 0.5rem;background:#1a3a1a;border:1px solid #3a6a3a;color:#8bc88b;border-radius:4px;cursor:pointer;">↺ Regenerate</button>
               <button type="button" id="btnEditRouting" style="font-size:0.78rem;padding:0.15rem 0.5rem;background:#333;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;">Edit</button>
             </div>
           </div>
+          <div id="routingBody" style="display:none;margin-top:0.5rem;">
           ${isEmpty
             ? '<p style="font-size:0.82rem;color:#666;margin:0;">No routing metadata yet. Will be auto-generated after chunking.</p>'
             : `<div style="font-size:0.82rem;color:#aaa;line-height:1.6;">
@@ -4553,6 +4531,7 @@ _INDEX_HTML = """
               <button type="button" onclick="saveRoutingMetadata('${solId}','${coll.id || coll.name}')" style="padding:0.3rem 0.8rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;font-size:0.82rem;">Save</button>
               <button type="button" onclick="document.getElementById('routingEditArea').style.display='none'" style="padding:0.3rem 0.8rem;background:#333;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
             </div>
+          </div>
           </div>
         </div>`;
       document.getElementById('btnEditRouting').onclick = () => {
@@ -5729,6 +5708,47 @@ _INDEX_HTML = """
       buildLog.parentNode.insertBefore(card, buildLog.nextSibling);
     }
 
+    // ── Collapsible section toggles ──
+    function toggleWizardCard() {
+      const body = document.getElementById('wizardCardBody');
+      const chev = document.getElementById('wizardChevron');
+      if (!body) return;
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      if (chev) chev.textContent = open ? '▶' : '▼';
+    }
+    function _collapseWizardCard() {
+      const body = document.getElementById('wizardCardBody');
+      const chev = document.getElementById('wizardChevron');
+      const summary = document.getElementById('wizardSummary');
+      if (body) body.style.display = 'none';
+      if (chev) chev.textContent = '▶';
+      // Build summary from URL + language
+      const url = (document.getElementById('wizardUrl') || {}).value || '';
+      const langSel = document.getElementById('wizardLang');
+      const lang = langSel ? langSel.options[langSel.selectedIndex].text : '';
+      if (summary && url) {
+        try { summary.textContent = new URL(url).hostname + ' · ' + lang; } catch(_) { summary.textContent = url + ' · ' + lang; }
+        summary.style.display = 'inline';
+      }
+    }
+    function toggleSourceConfigCard() {
+      const body = document.getElementById('sourceConfigBody');
+      const chev = document.getElementById('sourceConfigChevron');
+      if (!body) return;
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      if (chev) chev.textContent = open ? '▶' : '▼';
+    }
+    function toggleRoutingBody() {
+      const body = document.getElementById('routingBody');
+      const chev = document.getElementById('routingChevron');
+      if (!body) return;
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      if (chev) chev.textContent = open ? '▶' : '▼';
+    }
+
     function toggleWizardLogin() {
       const sec = document.getElementById('wizardLoginSection');
       if (sec) sec.style.display = sec.style.display !== 'none' ? 'none' : '';
@@ -6645,6 +6665,7 @@ _INDEX_HTML = """
               _wizardInitState(p.categories, p.suggested_collections);
               _wizardRenderAll();
               document.getElementById('wizardResults').style.display = 'flex';
+              _collapseWizardCard();
               _wizardShowConfigLabel(_wizardCurrentSolId());
               // Fetch confirmed collection statuses (for returning users with existing collections)
               _wizardLoadConfirmedColls(_wizardCurrentSolId());
