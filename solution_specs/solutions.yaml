@@ -43,6 +43,8 @@ solutions:
   display_name: Peixe Fresco
   company_name: Peixe Fresco
   language: pt
+  jbke_version_id: null
+  jbke_cbva_id: null
   aliases:
   - pf
   collections:
@@ -191,34 +193,36 @@ solutions:
       urls:
       - https://store.peixefresco.com.pt/perguntas-frequentes/
     routing:
-      description: Esta coleção contém informações sobre peixes frescos, incluindo
-        políticas de entrega e privacidade.
+      description: Esta coleção contém informações sobre a política de privacidade
+        e serviços de entrega relacionados a produtos de peixe fresco.
       keywords:
       - peixe fresco
       - entregas grátis
       - cookies
       - pesca sustentável
-      - postas de peixe
+      - avaliações 5 estrelas
       - filetes
+      - postas
       - bivalves
       - aquicultura
+      - política de privacidade
       - experiência de navegação
-      - avaliações 5 estrelas
-      - site de peixes
-      - comprar peixe online
-      - política de cookies
+      - website
+      - produtos do mar
+      - cart
+      - consentimento
       typical_questions:
-      - Quais são os tipos de peixe disponíveis?
-      - Como funciona a política de entrega?
-      - O que são cookies e como são usados no site?
-      - O peixe é proveniente de pesca sustentável?
-      - Como posso ver as avaliações dos produtos?
+      - Qual é a política de privacidade do site?
+      - Como funcionam as entregas de peixe fresco?
+      - O que significa pesca sustentável?
+      - O que são produtos bivalves disponíveis?
+      - Como posso melhorar minha experiência de navegação?
       not_covered:
       - receitas de peixe
-      - história da piscicultura
-      - exibições de pratos de frutos do mar
-      - informações sobre cozinhar peixe
-      - guia de vinhos para peixes
+      - técnicas de culinária
+      - informações nutricionais
+      - história da pesca
+      - dicas de conservação
       language: pt
       doc_type: faq
   - id: peixe_fresco_customer_support
@@ -231,9 +235,19 @@ solutions:
       engine: httpx
       scrape_mode: sitemap
       sitemap_url: https://store.peixefresco.com.pt/page-sitemap.xml
-      text_selector: main, article, .entry-content, body
       excluded_urls:
+      - https://store.peixefresco.com.pt/
+      - https://store.peixefresco.com.pt/blog-de-receitas-peixe-fresco/
+      - https://store.peixefresco.com.pt/carrinho-peixe-fresco/
+      - https://store.peixefresco.com.pt/favoritos-peixe-fresco/
+      - https://store.peixefresco.com.pt/imprensa/
       - https://store.peixefresco.com.pt/receitas/
+      - https://store.peixefresco.com.pt/communication-preferences/
+      - https://store.peixefresco.com.pt/pedido-concluido/
+      - https://store.peixefresco.com.pt/finalizar-compra/
+      - https://store.peixefresco.com.pt/my-payment-information/
+      - https://store.peixefresco.com.pt/chatbot/
+      text_selector: main, article, .entry-content, body
     routing: {}
 settings:
   doc_types:

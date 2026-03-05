@@ -563,6 +563,7 @@ def solution_collections(solution_id: str):
                 "routing": c.get("routing", {}),
                 "exists": exists,
                 "points_count": points_count,
+                "jbke_rcm_id": c.get("jbke_rcm_id"),
             })
         return {"solution_id": solution_id, "collections": result}
     except HTTPException:
@@ -747,6 +748,79 @@ def suggest_collection_routing(solution_id: str, collection_id: str):
     save_routing_metadata(solution_id, collection_id, routing)
 
     return {"routing": routing, "chunks_sampled": len(chunks)}
+
+
+@app.post("/api/solutions/{solution_id}/collections/{collection_id}/push-to-jbke")
+def push_to_jbke(solution_id: str, collection_id: str):
+    """Push routing metadata for a collection to jBKE (create or update)."""
+    import yaml
+    from solution_specs.loader import get_solution
+
+    sol = get_solution(solution_id)
+    if not sol:
+        raise HTTPException(status_code=404, detail=f"Solution '{solution_id}' not found")
+
+    coll = next((c for c in sol.get("collections", []) if c.get("id") == collection_id), None)
+    if not coll:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_id}' not found")
+
+    routing = coll.get("routing", {})
+    if not routing.get("description") and not routing.get("keywords"):
+        raise HTTPException(status_code=400, detail="No routing metadata to push. Generate or edit metadata first.")
+
+    version_id = sol.get("jbke_version_id")
+    if not version_id:
+        raise HTTPException(status_code=400,
+                            detail="jbke_version_id not set for this solution in solutions.yaml")
+
+    rcm_id = coll.get("jbke_rcm_id")
+    cbva_id = sol.get("jbke_cbva_id")
+
+    # Load settings for LLM / vector config
+    specs_path = _specs_file()
+    with open(specs_path, "r", encoding="utf-8") as f:
+        all_data = yaml.safe_load(f)
+    settings = all_data.get("settings", {})
+
+    try:
+        from web.jbke_client import JBKEClient
+        client = JBKEClient()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        result = client.push_routing(
+            version_id=int(version_id),
+            rcm_id=int(rcm_id) if rcm_id else None,
+            collection_name=coll.get("collection_name", collection_id),
+            collection_type=coll.get("collection_type", "scs"),
+            routing=routing,
+            settings=settings,
+            cbva_id=int(cbva_id) if cbva_id else None,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"jBKE request failed: {e}")
+
+    # If created, save the new rcm_id back to solutions.yaml
+    if result.get("success") and result.get("action") == "created" and result.get("rcm_id"):
+        try:
+            with open(specs_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            for s in data.get("solutions", []):
+                if s.get("id") == solution_id:
+                    for c in s.get("collections", []):
+                        if c.get("id") == collection_id:
+                            c["jbke_rcm_id"] = result["rcm_id"]
+                            break
+                    break
+            with open(specs_path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            from solution_specs.loader import reload
+            reload()
+        except Exception as e:
+            print(f"[push-to-jbke] Warning: saved to jBKE but failed to save rcm_id to solutions.yaml: {e}")
+
+    return result
 
 
 @app.get("/api/scraper/resolve-config")
@@ -4814,9 +4888,11 @@ _INDEX_HTML = """
         <div style="background:#f0f7ff;border:1px solid #b3d4f5;border-radius:8px;padding:0.85rem 1rem;margin-top:0.6rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;" onclick="toggleRoutingBody()">
             <span style="font-weight:600;color:#1565c0;font-size:0.88rem;"><span id="routingChevron">▶</span> 📋 Routing Metadata ${statusIcon}</span>
-            <div style="display:flex;gap:0.4rem;" onclick="event.stopPropagation();">
+            <div style="display:flex;gap:0.4rem;align-items:center;" onclick="event.stopPropagation();">
               <button type="button" id="btnRegenRouting" title="Re-generate from Qdrant content (uses LLM)" style="font-size:0.78rem;padding:0.2rem 0.55rem;background:#e8f5e9;border:1px solid #a5d6a7;color:#2e7d32;border-radius:4px;cursor:pointer;">↺ Regenerate</button>
               <button type="button" id="btnEditRouting" style="font-size:0.78rem;padding:0.2rem 0.55rem;background:#e3f2fd;border:1px solid #90caf9;color:#1565c0;border-radius:4px;cursor:pointer;">✏️ Edit</button>
+              <button type="button" id="btnPushJBKE" title="Push routing metadata to jBKE" style="font-size:0.78rem;padding:0.2rem 0.55rem;background:#f3e5f5;border:1px solid #ce93d8;color:#7b1fa2;border-radius:4px;cursor:pointer;${isEmpty ? 'opacity:0.5;pointer-events:none;' : ''}">🔄 Push to jBKE</button>
+              <span id="jbkeStatus" style="font-size:0.68rem;padding:0.1rem 0.4rem;border-radius:8px;${coll.jbke_rcm_id ? 'background:#e8f5e9;color:#2e7d32;' : 'background:#f5f5f5;color:#999;'}">${coll.jbke_rcm_id ? 'jBKE #' + coll.jbke_rcm_id : 'Not in jBKE'}</span>
             </div>
           </div>
           <div id="routingBody" style="display:none;margin-top:0.5rem;">
@@ -4847,6 +4923,9 @@ _INDEX_HTML = """
       document.getElementById('btnRegenRouting').onclick = () => {
         regenerateRoutingMetadata(solId, coll.id || coll.name, coll.display_name || coll.name);
       };
+      document.getElementById('btnPushJBKE').onclick = () => {
+        pushToJBKE(solId, coll.id || coll.name);
+      };
     }
 
     async function regenerateRoutingMetadata(solId, collId, collName) {
@@ -4869,6 +4948,41 @@ _INDEX_HTML = """
         alert('Regenerate error: ' + e.message);
       } finally {
         if (btn) { btn.textContent = '↺ Regenerate'; btn.disabled = false; }
+      }
+    }
+
+    async function pushToJBKE(solId, collId) {
+      const btn = document.getElementById('btnPushJBKE');
+      const statusEl = document.getElementById('jbkeStatus');
+      if (btn) { btn.textContent = '⏳ Pushing…'; btn.disabled = true; }
+      try {
+        const res = await fetch(
+          `/api/solutions/${encodeURIComponent(solId)}/collections/${encodeURIComponent(collId)}/push-to-jbke`,
+          { method: 'POST' }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          setLog(buildLog, 'Push to jBKE failed: ' + (data.detail || 'Unknown error'), true);
+          return;
+        }
+        if (data.success) {
+          const actionText = data.action === 'created' ? 'Created in' : 'Updated in';
+          setLog(buildLog, `✅ ${actionText} jBKE: ${data.message}`, false);
+          // Update status badge
+          if (statusEl && data.rcm_id) {
+            statusEl.textContent = 'jBKE #' + data.rcm_id;
+            statusEl.style.background = '#e8f5e9';
+            statusEl.style.color = '#2e7d32';
+          }
+          // Reload to get updated jbke_rcm_id
+          await loadSolutionCollections(solId);
+        } else {
+          setLog(buildLog, 'Push to jBKE failed: ' + (data.message || 'Unknown error'), true);
+        }
+      } catch(e) {
+        setLog(buildLog, 'Push to jBKE error: ' + e.message, true);
+      } finally {
+        if (btn) { btn.textContent = '🔄 Push to jBKE'; btn.disabled = false; }
       }
     }
 
