@@ -1587,31 +1587,38 @@ def faq_generate_table(req: FaqTableRequest):
     """
     Extract Q&A pairs as a tab-separated table for copy-paste into jBKE.
     Source priority:
-      1. Qdrant collection (if it exists and has chunks)
-      2. Saved workflow state file (.rag_state_{collection_name}.json) — pre-Qdrant fallback
-      3. Neither → helpful error message
+      1. In-memory workflow state (chunks available right after chunking)
+      2. Saved workflow state files (.rag_state_{collection_name}*.json)
+      3. Qdrant collection (if it exists and has chunks)
+      4. None → helpful error message
     """
-    import os
+    import os, glob
     from llms.openai_utils import openai_chat_completion
     tracker = get_state().tracker
     texts = []
     source_label = None
 
-    # Source 1: Qdrant (preferred)
-    if tracker._existing_collection_name(req.collection_name):
-        points = tracker.scroll_all(req.collection_name, limit=req.max_items)
-        texts = [p.get("text", "") for p in (points or []) if p.get("text")]
-        if texts:
-            source_label = "Qdrant"
+    # Source 1: In-memory workflow state (available right after chunking, no push needed)
+    wf_state = get_state().workflow_state
+    if wf_state and wf_state.collection_name and req.collection_name in wf_state.collection_name:
+        if wf_state.chunks:
+            texts = [t for t in wf_state.chunks[:req.max_items] if t]
+            if texts:
+                source_label = "in-memory (chunks)"
+        if not texts and wf_state.scraped_items:
+            texts = [item.get("text", "") for item in wf_state.scraped_items[:req.max_items] if item.get("text")]
+            if texts:
+                source_label = "in-memory (scraped pages)"
 
-    # Source 2: Saved workflow state file (pre-Qdrant fallback)
+    # Source 2: Saved workflow state files
     if not texts:
         from workflow.models import WorkflowState
-        state_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            f".rag_state_{req.collection_name}.json"
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        state_files = sorted(
+            glob.glob(os.path.join(root, f".rag_state_{req.collection_name}*.json")),
+            key=lambda f: os.path.getmtime(f), reverse=True
         )
-        if os.path.exists(state_path):
+        for state_path in state_files:
             try:
                 saved = WorkflowState.load_from_disk(state_path)
                 if saved and saved.chunks:
@@ -1620,11 +1627,21 @@ def faq_generate_table(req: FaqTableRequest):
                 elif saved and saved.scraped_items:
                     texts = [item.get("text", "") for item in saved.scraped_items[:req.max_items] if item.get("text")]
                     source_label = "saved state (scraped pages)"
+                if texts:
+                    break
             except Exception:
-                pass
+                continue
+
+    # Source 3: Qdrant (if pushed)
+    if not texts:
+        if tracker._existing_collection_name(req.collection_name):
+            points = tracker.scroll_all(req.collection_name, limit=req.max_items)
+            texts = [p.get("text", "") for p in (points or []) if p.get("text")]
+            if texts:
+                source_label = "Qdrant"
 
     if not texts:
-        return {"table": "", "count": 0, "error": "No content found. Open 'Work with RAG', run the Ingest step for this collection, then try again."}
+        return {"table": "", "count": 0, "error": "No content found. Run the Ingest and Chunk steps for this collection first, then try again."}
 
     joined = "\n---\n".join(t[:400] for t in texts)
     system_prompt = (
