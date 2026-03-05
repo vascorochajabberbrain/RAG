@@ -6363,15 +6363,65 @@ _INDEX_HTML = """
           _setStepStatus('create_collection', true);
           _setStepStatus('push_to_qdrant', true);
           _refreshTokenFooter();
-          // Refresh collection view to update status badges (keep current selection)
+          // Refresh collection view to update status badges (keep current selection + pipeline)
           if (_currentSolutionId) {
-            const collSelect = document.getElementById('collectionSelect');
-            const curVal = collSelect ? collSelect.value : '';
-            await loadSolutionCollections(_currentSolutionId, {autoSelect: false});
-            if (curVal && collSelect) {
-              collSelect.value = curVal;
-              const c = _currentCollections[curVal];
-              if (c) renderRoutingMetadataPanel(c, _currentSolutionId);
+            _isRestoring = true;
+            try {
+              const collSelect = document.getElementById('collectionSelect');
+              const curVal = collSelect ? collSelect.value : '';
+              await loadSolutionCollections(_currentSolutionId, {autoSelect: false});
+              if (curVal && collSelect) {
+                collSelect.value = curVal;
+                const c = _currentCollections[curVal];
+                if (c) {
+                  renderRoutingMetadataPanel(c, _currentSolutionId);
+                  // Update status info inline (banner + info row) without full onCollectionSelect
+                  const banner = document.getElementById('buildCollBanner');
+                  if (banner) {
+                    const dn = c.display_name || curVal;
+                    const pts = c.points_count || 0;
+                    banner.textContent = '📦 ' + dn + (c.exists ? ' · ' + pts + ' points in Qdrant' : ' · not yet in Qdrant');
+                  }
+                  // Refresh the info row (status text + ovals)
+                  const info = document.getElementById('existingCollectionInfo');
+                  if (info) {
+                    info.innerHTML = '';
+                    if (c.exists) {
+                      const base = document.createElement('span');
+                      base.textContent = '✓ In Qdrant';
+                      base.style.cssText = 'color:#2e7d32;font-weight:500;';
+                      if (c.points_count) base.textContent += ' · ' + c.points_count + ' points';
+                      info.appendChild(base);
+                    }
+                    const sources = c.sources || [];
+                    if (sources.length > 0) {
+                      const groups = {};
+                      sources.forEach(s => {
+                        const st = (s.pipeline_status || {}).status || 'not_started';
+                        if (!groups[st]) groups[st] = { count: 0, chunks: 0 };
+                        groups[st].count++;
+                        groups[st].chunks += (s.pipeline_status || {}).chunks || 0;
+                      });
+                      ['pushed','chunked','fetched','started','not_started'].forEach(st => {
+                        if (!groups[st] || st === 'not_started') return;
+                        const g = groups[st];
+                        const s = _statusStyles[st];
+                        const oval = document.createElement('span');
+                        oval.style.cssText = 'font-size:0.72rem;padding:0.12rem 0.5rem;border-radius:10px;background:' + s.bg + ';color:' + s.color + ';margin-left:0.4rem;font-weight:500;';
+                        let text = s.label;
+                        if (g.chunks) text += ' · ' + g.chunks + ' chunks' + (st !== 'pushed' ? ' (local)' : '');
+                        if (sources.length > 1) text += ' (' + g.count + ')';
+                        oval.textContent = text;
+                        info.appendChild(oval);
+                      });
+                    }
+                    // Also refresh the source list row badges
+                    renderSourcesList(c.sources || []);
+                  }
+                }
+              }
+            } finally {
+              setTimeout(() => { _isRestoring = false; }, 300);
             }
           }
         } else if (data.startsWith('CANCELLED:')) {
