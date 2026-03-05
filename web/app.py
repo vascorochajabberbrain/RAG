@@ -753,10 +753,10 @@ def resolve_scraper_config(scraper_name: str = "", collection_name: str = ""):
     """Resolve the effective scraper config for a source.
     Checks YAML file first, falls back to inline config from solutions.yaml."""
     from ingestion.scrapers.runner import resolve_config
-    from solution_specs.loader import load_solutions
+    from solution_specs.loader import list_solutions
     inline_config = None
     if collection_name:
-        for sol in load_solutions():
+        for sol in list_solutions():
             for c in sol.get("collections", []):
                 if c.get("collection_name") == collection_name:
                     inline_config = c.get("scraper_config")
@@ -1510,8 +1510,8 @@ def _check_staleness(state_data: dict, collection_name: str) -> dict:
     """Compare state file's source_config against current solutions.yaml config.
     Returns {stale: bool, stale_reason: str} if mismatched."""
     try:
-        from solution_specs.loader import load_solutions
-        solutions = load_solutions()
+        from solution_specs.loader import list_solutions
+        solutions = list_solutions()
         state_cfg = state_data.get("source_config") or {}
 
         # Find the matching collection in solutions.yaml
