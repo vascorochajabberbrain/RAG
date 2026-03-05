@@ -6337,7 +6337,7 @@ _INDEX_HTML = """
       const _resetPush = () => { _hideStopBtn('btnStopPush'); _btnDone(btn); };
 
       const es = new EventSource('/api/progress');
-      es.onmessage = (e) => {
+      es.onmessage = async (e) => {
         const data = e.data;
         if (data.startsWith('LOG:')) {
           const line = data.replace('LOG:', '');
@@ -6351,10 +6351,20 @@ _INDEX_HTML = """
           es.close();
           _hideStopBtn('btnStopPush');
           _btnSuccess(btn);
+          _setStepStatus('create_collection', true);
           _setStepStatus('push_to_qdrant', true);
           _refreshTokenFooter();
-          // Refresh collection view to update status badges
-          if (_currentSolutionId) loadSolutionCollections(_currentSolutionId);
+          // Refresh collection view to update status badges (keep current selection)
+          if (_currentSolutionId) {
+            const collSelect = document.getElementById('collectionSelect');
+            const curVal = collSelect ? collSelect.value : '';
+            await loadSolutionCollections(_currentSolutionId, {autoSelect: false});
+            if (curVal && collSelect) {
+              collSelect.value = curVal;
+              const c = _currentCollections[curVal];
+              if (c) renderRoutingMetadataPanel(c, _currentSolutionId);
+            }
+          }
         } else if (data.startsWith('CANCELLED:')) {
           const msg = data.replace('CANCELLED:', '');
           buildLog.textContent += '\\n⛔ ' + msg;
