@@ -109,6 +109,30 @@ class JBKEClient:
 
     # ── CRUD operations ────────────────────────────────────────────
 
+    def list_collections(self, version_id: int) -> list[dict]:
+        """Fetch all RAG collection records for this version."""
+        url = self._endpoint("rag_collection_process.php")
+        params = {
+            **self._auth_params(version_id),
+            "UserAction": "GetAll",
+        }
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        result = self._parse_response(resp)
+        if result.get("success"):
+            return result.get("data", [])
+        return []
+
+    def find_collection_by_name(
+        self, version_id: int, collection_name: str
+    ) -> dict | None:
+        """Find a RAG collection by its rcd_name. Returns the record dict or None."""
+        all_colls = self.list_collections(version_id)
+        for coll in all_colls:
+            if coll.get("rcd_name") == collection_name:
+                return coll
+        return None
+
     def get_collection(self, version_id: int, rcm_id: int) -> dict | None:
         """Fetch a RAG collection record by rcm_id (main table id)."""
         url = self._endpoint("rag_collection_process.php")
@@ -257,6 +281,17 @@ class JBKEClient:
             collection_name, collection_type, routing, settings, cbva_id,
             version_id=version_id,
         )
+
+        if not rcm_id:
+            # No rcm_id stored — check if collection already exists in jBKE
+            existing = self.find_collection_by_name(version_id, collection_name)
+            if existing:
+                rcm_id = int(existing.get("rcm_id", 0)) or None
+                if rcm_id:
+                    log.info(
+                        "Auto-detected existing jBKE collection '%s' → rcm_id=%s",
+                        collection_name, rcm_id,
+                    )
 
         if rcm_id:
             # UPDATE existing

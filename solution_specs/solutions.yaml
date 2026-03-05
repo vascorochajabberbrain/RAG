@@ -108,6 +108,9 @@ solutions:
       - comida rápida
       language: pt
       doc_type: recipe_book
+      additional_prompt: Na sua resposta, inclua sempre a URL do(s) produto(s) da
+        empresa utilizado(s) na receita quando essa informação estiver presente no
+        contexto recuperado
     scraper_config:
       name: peixe_fresco_recipes
       engine: playwright

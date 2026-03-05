@@ -801,8 +801,9 @@ def push_to_jbke(solution_id: str, collection_id: str):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"jBKE request failed: {e}")
 
-    # If created, save the new rcm_id back to solutions.yaml
-    if result.get("success") and result.get("action") == "created" and result.get("rcm_id"):
+    # Save rcm_id back to solutions.yaml if we got one we didn't have before
+    new_rcm_id = result.get("rcm_id")
+    if result.get("success") and new_rcm_id and new_rcm_id != rcm_id:
         try:
             with open(specs_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
@@ -810,7 +811,7 @@ def push_to_jbke(solution_id: str, collection_id: str):
                 if s.get("id") == solution_id:
                     for c in s.get("collections", []):
                         if c.get("id") == collection_id:
-                            c["jbke_rcm_id"] = result["rcm_id"]
+                            c["jbke_rcm_id"] = new_rcm_id
                             break
                     break
             with open(specs_path, "w", encoding="utf-8") as f:
@@ -4981,6 +4982,25 @@ _INDEX_HTML = """
       }
     }
 
+    function _jbkeFlash(anchorEl, msg, isError) {
+      // Show an inline flash message near the Push button
+      const existing = document.getElementById('_jbkeFlash');
+      if (existing) existing.remove();
+      const flash = document.createElement('div');
+      flash.id = '_jbkeFlash';
+      flash.style.cssText = 'font-size:0.78rem;padding:0.35rem 0.6rem;border-radius:5px;margin-top:0.4rem;'
+        + (isError
+          ? 'background:#ffebee;color:#c62828;border:1px solid #ef9a9a;'
+          : 'background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;');
+      flash.textContent = msg;
+      // Insert after the routing header bar
+      const panel = document.getElementById('routingMetadataPanel');
+      const body = document.getElementById('routingBody');
+      if (body) body.insertBefore(flash, body.firstChild);
+      else if (panel) panel.appendChild(flash);
+      setTimeout(() => flash.remove(), 6000);
+    }
+
     async function pushToJBKE(solId, collId) {
       const btn = document.getElementById('btnPushJBKE');
       const statusEl = document.getElementById('jbkeStatus');
@@ -4992,12 +5012,16 @@ _INDEX_HTML = """
         );
         const data = await res.json();
         if (!res.ok) {
-          setLog(buildLog, 'Push to jBKE failed: ' + (data.detail || 'Unknown error'), true);
+          const msg = 'Push to jBKE failed: ' + (data.detail || 'Unknown error');
+          setLog(buildLog, msg, true);
+          _jbkeFlash(btn, msg, true);
           return;
         }
         if (data.success) {
           const actionText = data.action === 'created' ? 'Created in' : 'Updated in';
-          setLog(buildLog, `✅ ${actionText} jBKE: ${data.message}`, false);
+          const msg = `✅ ${actionText} jBKE: ${data.message}`;
+          setLog(buildLog, msg, false);
+          _jbkeFlash(btn, msg, false);
           // Update status badge
           if (statusEl && data.rcm_id) {
             statusEl.textContent = 'jBKE #' + data.rcm_id;
@@ -5007,10 +5031,14 @@ _INDEX_HTML = """
           // Reload to get updated jbke_rcm_id
           await loadSolutionCollections(solId);
         } else {
-          setLog(buildLog, 'Push to jBKE failed: ' + (data.message || 'Unknown error'), true);
+          const msg = 'Push to jBKE failed: ' + (data.message || 'Unknown error');
+          setLog(buildLog, msg, true);
+          _jbkeFlash(btn, msg, true);
         }
       } catch(e) {
-        setLog(buildLog, 'Push to jBKE error: ' + e.message, true);
+        const msg = 'Push to jBKE error: ' + e.message;
+        setLog(buildLog, msg, true);
+        _jbkeFlash(btn, msg, true);
       } finally {
         if (btn) { btn.textContent = '🔄 Push to jBKE'; btn.disabled = false; }
       }
