@@ -3348,6 +3348,14 @@ _INDEX_HTML = """
               <option value="custom_js">Custom JS — browser-side function</option>
               <option value="shopify">Shopify — JSON API</option>
             </select>
+            <span class="help-icon" onclick="toggleHelp('help-extraction-mode')" title="Help">?</span>
+          </div>
+          <div id="help-extraction-mode" class="help-tip">
+            Controls <em>how content is extracted</em> from each page (not how pages are discovered &mdash; that is <code>scrape_mode</code> in the config).<br>
+            <strong>Generic</strong> &mdash; grabs all visible text from the page. Good default for most sites.<br>
+            <strong>Structured</strong> &mdash; uses CSS selectors to extract specific fields (name, price, description, etc.) into a template. Define selectors in <code>structured_extraction</code> in the raw config.<br>
+            <strong>Custom JS</strong> &mdash; runs a JavaScript function in the browser that returns a fields dict. Needed for complex layouts like Elementor. Define in <code>custom_js_extraction</code> in the raw config.<br>
+            <strong>Shopify</strong> &mdash; fetches product data via Shopify JSON API. No HTML scraping needed.
           </div>
         </div>
         </div><!-- /sourceConfigBody -->
@@ -5392,12 +5400,17 @@ _INDEX_HTML = """
       if (mode === 'shopify' && engineSel.value !== 'shopify') {
         engineSel.value = 'shopify';
         onScraperEngineChange();
+        return;  // onScraperEngineChange already saves
       } else if (mode !== 'shopify' && engineSel.value === 'shopify') {
         engineSel.value = 'playwright';
         onScraperEngineChange();
+        return;
       }
-      // Refresh viewer with new mode
-      if (_resolvedConfig && _resolvedConfig.config) updateConfigViewer();
+      // Refresh viewer with new mode + auto-save
+      if (_resolvedConfig && _resolvedConfig.config) {
+        updateConfigViewer();
+        _autoSaveConfig();
+      }
     }
 
     function openRawConfigEditor() {
@@ -5412,17 +5425,10 @@ _INDEX_HTML = """
       document.getElementById('configViewerPanel').style.display = 'block';
     }
 
-    async function saveRawConfig() {
+    async function _persistConfig(config, opts) {
       const solId = _currentSolutionId;
       const collName = document.getElementById('collectionSelect').value;
-      if (!solId || !collName) return;
-      let config;
-      try {
-        config = JSON.parse(document.getElementById('rawConfigTextarea').value);
-      } catch(e) {
-        alert('Invalid JSON: ' + e.message);
-        return;
-      }
+      if (!solId || !collName) return false;
       try {
         const res = await fetch(
           '/api/solutions/' + encodeURIComponent(solId) + '/collections/' + encodeURIComponent(collName) + '/scraper-config',
@@ -5431,13 +5437,37 @@ _INDEX_HTML = """
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Save failed');
         window._activeScraperConfig = config;
-        // Refresh viewer
-        const scraperName = document.getElementById('scraperName').value.trim();
-        await loadSourceConfig(scraperName, collName);
+        if (opts && opts.reload) {
+          const scraperName = document.getElementById('scraperName').value.trim();
+          await loadSourceConfig(scraperName, collName);
+        }
+        return true;
+      } catch(e) {
+        console.error('Config save failed:', e);
+        return false;
+      }
+    }
+
+    async function _autoSaveConfig() {
+      if (!_resolvedConfig || !_resolvedConfig.config) return;
+      const ok = await _persistConfig(_resolvedConfig.config);
+      if (ok) setLog(buildLog, 'Config saved.', false);
+    }
+
+    async function saveRawConfig() {
+      let config;
+      try {
+        config = JSON.parse(document.getElementById('rawConfigTextarea').value);
+      } catch(e) {
+        alert('Invalid JSON: ' + e.message);
+        return;
+      }
+      const ok = await _persistConfig(config, { reload: true });
+      if (ok) {
         closeRawConfigEditor();
         setLog(buildLog, 'Scraper config saved.', false);
-      } catch(e) {
-        alert('Save failed: ' + e.message);
+      } else {
+        alert('Save failed.');
       }
     }
 
@@ -5811,10 +5841,11 @@ _INDEX_HTML = """
         _prevEngine = engine;
       }
       document.getElementById('shopifyUrlRow').classList.toggle('hidden', engine !== 'shopify');
-      // Sync engine change into resolved config + refresh viewer
+      // Sync engine change into resolved config + refresh viewer + auto-save
       if (_resolvedConfig && _resolvedConfig.config) {
         _resolvedConfig.config.engine = engine;
         updateConfigViewer();
+        _autoSaveConfig();
       }
     }
 
