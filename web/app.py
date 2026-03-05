@@ -619,6 +619,16 @@ def add_collection_to_solution(req: AddCollectionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/api/qdrant/{collection_name}/points-only")
+def qdrant_delete_points_only(collection_name: str):
+    """Delete a Qdrant collection but keep the local config in solutions.yaml."""
+    tracker = get_state().tracker
+    if not tracker._existing_collection_name(collection_name):
+        raise HTTPException(404, f"Collection '{collection_name}' not found in Qdrant")
+    tracker._delete_collection(collection_name)
+    return {"deleted": collection_name, "message": f"Qdrant collection '{collection_name}' deleted. Local config preserved."}
+
+
 class DeleteCollectionRequest(BaseModel):
     solution_id: str
     collection_name: str
@@ -7085,6 +7095,22 @@ _INDEX_HTML = """
                       base.style.cssText = 'color:#2e7d32;font-weight:500;';
                       if (c.points_count) base.textContent += ' · ' + c.points_count + ' points';
                       info.appendChild(base);
+                      // "Clear Qdrant" button — delete Qdrant data only, keep local config
+                      const clearBtn = document.createElement('button');
+                      clearBtn.type = 'button';
+                      clearBtn.textContent = '🗑 Clear Qdrant';
+                      clearBtn.title = 'Delete Qdrant collection data only (keeps local config & state files)';
+                      clearBtn.style.cssText = 'font-size:0.7rem;padding:0.1rem 0.4rem;margin-left:0.5rem;background:#fff;border:1px solid #e57373;color:#c62828;border-radius:4px;cursor:pointer;';
+                      clearBtn.onclick = async () => {
+                        if (!confirm('Delete all Qdrant data for "' + c.collection_name + '"?\\n\\nThis keeps your local config, state files, and solutions.yaml entry.')) return;
+                        try {
+                          const r = await fetch('/api/qdrant/' + encodeURIComponent(c.collection_name) + '/points-only', {method:'DELETE'});
+                          const d = await r.json();
+                          if (!r.ok) { alert(d.detail || 'Delete failed'); return; }
+                          await loadSolutionCollections(_currentSolutionId);
+                        } catch(e) { alert('Error: ' + e.message); }
+                      };
+                      info.appendChild(clearBtn);
                     }
                     const sources = c.sources || [];
                     if (sources.length > 0) {
