@@ -140,6 +140,22 @@ class JBKEClient:
                 return coll
         return None
 
+    def _find_by_name_scan(
+        self, version_id: int, collection_name: str
+    ) -> dict | None:
+        """Find a collection by name: try GetAll first, then scan IDs 1-100."""
+        # Try GetAll (fast path)
+        found = self.find_collection_by_name(version_id, collection_name)
+        if found:
+            return found
+        # Fallback: scan individual IDs via GetData
+        log.info("GetAll didn't find '%s', scanning IDs…", collection_name)
+        for rcm_id in range(1, 101):
+            rec = self.get_collection(version_id, rcm_id)
+            if rec and isinstance(rec, dict) and rec.get("rcd_name") == collection_name:
+                return rec
+        return None
+
     def get_collection(self, version_id: int, rcm_id: int) -> dict | None:
         """Fetch a RAG collection record by rcm_id (main table id)."""
         url = self._endpoint("rag_collection_process.php")
@@ -318,6 +334,34 @@ class JBKEClient:
             # CREATE new
             result = self.create_collection(version_id, fields)
             success = result.get("success", False)
+
+            # Handle "already exists" — find the existing record and update it
+            if not success:
+                errors = result.get("errors", {})
+                err_vals = " ".join(str(v) for v in errors.values()) if isinstance(errors, dict) else str(errors)
+                if "already exists" in err_vals.lower():
+                    log.info(
+                        "Collection '%s' already exists in jBKE, looking up rcm_id…",
+                        collection_name,
+                    )
+                    found = self._find_by_name_scan(version_id, collection_name)
+                    if found:
+                        found_id = int(found.get("rcm_id", 0)) or None
+                        if found_id:
+                            log.info("Found existing rcm_id=%s, updating…", found_id)
+                            upd = self.update_collection(version_id, found_id, fields)
+                            upd_ok = upd.get("success", False)
+                            return {
+                                "success": upd_ok,
+                                "action": "updated",
+                                "rcm_id": found_id,
+                                "message": (
+                                    f"Found existing collection in jBKE (rcm_id={found_id}) and updated it"
+                                    if upd_ok
+                                    else f"Found rcm_id={found_id} but update failed: {upd.get('errors', upd)}"
+                                ),
+                            }
+
             # Try to extract the new rcm_id from the response
             new_rcm_id = None
             if success:
