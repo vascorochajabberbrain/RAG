@@ -524,8 +524,8 @@ def _get_collection_routing(state: WorkflowState) -> dict | None:
     if not collection_name:
         return None
     try:
-        from solution_specs.loader import get_all_solutions
-        for sol in get_all_solutions():
+        from solution_specs.loader import list_solutions
+        for sol in list_solutions():
             for coll in sol.get("collections", []):
                 if (
                     coll.get("collection_name") == collection_name
