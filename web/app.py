@@ -4788,7 +4788,7 @@ _INDEX_HTML = """
             const oval = document.createElement('span');
             oval.style.cssText = 'font-size:0.72rem;padding:0.12rem 0.5rem;border-radius:10px;background:' + s.bg + ';color:' + s.color + ';margin-left:0.4rem;font-weight:500;';
             let text = s.label;
-            if (g.chunks) text += ' · ' + g.chunks + ' chunks';
+            if (g.chunks) text += ' · ' + g.chunks + ' chunks' + (st !== 'pushed' ? ' (local)' : '');
             if (sources.length > 1) text += ' (' + g.count + ')';
             oval.textContent = text;
             info.appendChild(oval);
@@ -4828,7 +4828,7 @@ _INDEX_HTML = """
     function _statusBadge(ps) {
       if (!ps || ps.status === 'not_started') return null;
       const s = _statusStyles[ps.status] || _statusStyles.not_started;
-      const chunks = ps.chunks ? ' · ' + ps.chunks + ' chunks' : '';
+      const chunks = ps.chunks ? ' · ' + ps.chunks + ' chunks' + (ps.status !== 'pushed' ? ' (local)' : '') : '';
       const items = (ps.status === 'fetched' && ps.items) ? ' · ' + ps.items + ' items' : '';
       const el = document.createElement('span');
       el.style.cssText = 'font-size:0.7rem;padding:0.1rem 0.45rem;border-radius:10px;background:' + s.bg + ';color:' + s.color + ';flex-shrink:0;font-weight:500;';
@@ -5753,6 +5753,13 @@ _INDEX_HTML = """
     const _btnSuccess   = (btn) => { btn.disabled = false; btn.style.background = '#2e7d32'; btn.style.color = '#fff'; btn.dataset.done = '1'; };
 
     const runStep = async (step) => {
+      // Confirm re-chunk if chunks already exist
+      if (step === 'chunk') {
+        const chunkDone = document.getElementById('stepStatus-chunk')?.textContent === '✅';
+        if (chunkDone) {
+          if (!confirm('Chunks already exist. Re-chunking will replace them. Continue?')) return;
+        }
+      }
       const stepBtnMap = { chunk: 'runChunk', push_to_qdrant: 'runPush', create_collection: 'runCreate' };
       const stepLabelMap = { chunk: 'Chunking…', push_to_qdrant: 'Pushing to Qdrant…', create_collection: 'Creating Qdrant collection…' };
       const stepBtn = stepBtnMap[step] ? document.getElementById(stepBtnMap[step]) : null;
