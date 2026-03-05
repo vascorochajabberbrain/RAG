@@ -80,6 +80,9 @@ def _run_create_collection(state: WorkflowState) -> str:
     coll_cls = COLLECTIONS_TYPES_MAP[coll_type]
     state.collection_object = coll_cls(state.collection_name)
     tracker._open_collections.add(state.collection_object)
+    # Reset push status — collection was wiped, so previous push is invalid
+    if "push_to_qdrant" in (state.completed_steps or []):
+        state.completed_steps.remove("push_to_qdrant")
     return (
         f"Created and opened collection '{state.collection_name}' "
         f"(type={coll_type}, model={state.embedding_model}, dims={vector_size})."

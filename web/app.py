@@ -5956,6 +5956,13 @@ _INDEX_HTML = """
           if (!confirm('Chunks already exist. Re-chunking will replace them. Continue?')) return;
         }
       }
+      // Confirm re-create if data was already pushed to Qdrant
+      if (step === 'create_collection') {
+        const pushDone = document.getElementById('stepStatus-push_to_qdrant')?.textContent === '✅';
+        if (pushDone) {
+          if (!confirm('Data has already been pushed to Qdrant. Re-creating the collection will DELETE all points. Continue?')) return;
+        }
+      }
       const stepBtnMap = { chunk: 'runChunk', push_to_qdrant: 'runPush', create_collection: 'runCreate' };
       const stepLabelMap = { chunk: 'Chunking…', push_to_qdrant: 'Pushing to Qdrant…', create_collection: 'Creating Qdrant collection…' };
       const stepBtn = stepBtnMap[step] ? document.getElementById(stepBtnMap[step]) : null;
@@ -5967,6 +5974,11 @@ _INDEX_HTML = """
         const isError = msg.includes('Error') || !!res.detail;
         if (stepBtn) { isError ? _btnDone(stepBtn) : _btnSuccess(stepBtn); }
         if (!isError) _setStepStatus(step, true);
+        // After create_collection: reset push status (collection was wiped)
+        if (!isError && step === 'create_collection') {
+          _setStepStatus('push_to_qdrant', false);
+          _updatePipelineWarning();
+        }
         setLog(buildLog, msg, isError);
         if (!isError && res.token_usage) _showTaskTokens(res.token_usage);
         // After chunk step: render collection metadata card if available
