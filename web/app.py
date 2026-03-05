@@ -3299,7 +3299,7 @@ _INDEX_HTML = """
     <div id="solSettingsPanel" style="display:none;background:#f8f9fa;border:1px solid #dde;border-radius:8px;padding:0.7rem 1rem;margin-bottom:0.7rem;">
       <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem;">⚙️ Solution Settings</div>
       <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;font-size:0.82rem;">
-        <label style="display:flex;align-items:center;gap:0.3rem;">jBKE Environment (version_id):
+        <label style="display:flex;align-items:center;gap:0.3rem;">jBKE Environment Id:
           <input id="solSettingsVersionId" type="text" inputmode="numeric" pattern="[0-9]*" style="width:70px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
         </label>
         <label style="display:flex;align-items:center;gap:0.3rem;">jBKE Virtual Assistant (cbva_id):
