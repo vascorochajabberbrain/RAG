@@ -5376,7 +5376,7 @@ _INDEX_HTML = """
         if (config.include) lines.push('Include:   ' + config.include.join(', '));
       }
 
-      return lines.join('\n') || 'No config fields found.';
+      return lines.join('\\n') || 'No config fields found.';
     }
 
     function onExtractionModeChange() {
