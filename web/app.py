@@ -4679,33 +4679,37 @@ _INDEX_HTML = """
       const routing = coll.routing || {};
       const isEmpty = !routing.description;
       const statusIcon = isEmpty ? '⬜' : '✅';
-      const statusTip = isEmpty ? 'No metadata' : 'Metadata present';
+      const topics = (routing.topics || []).map(t => '<span style="display:inline-block;background:#d0e8ff;color:#1a1a1a;border-radius:4px;padding:0.1rem 0.45rem;margin:0.1rem 0.2rem 0.1rem 0;font-size:0.8rem;">' + t + '</span>').join('');
+      const keywords = (routing.keywords || []).join(', ');
+      const typicalQs = (routing.typical_questions || []).map(q => '<li style="margin-bottom:0.15rem;">' + q + '</li>').join('');
+      const notCovered = (routing.not_covered || []).join(', ');
       panel.style.display = 'block';
       panel.innerHTML = `
-        <div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:0.8rem;margin-top:0.6rem;">
+        <div style="background:#f0f7ff;border:1px solid #b3d4f5;border-radius:8px;padding:0.85rem 1rem;margin-top:0.6rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;" onclick="toggleRoutingBody()">
-            <span style="font-size:0.82rem;color:#888;"><span id="routingChevron">▶</span> Routing Metadata ${statusIcon} — <em>${coll.display_name || coll.name}</em></span>
+            <span style="font-weight:600;color:#1565c0;font-size:0.88rem;"><span id="routingChevron">▶</span> 📋 Routing Metadata ${statusIcon}</span>
             <div style="display:flex;gap:0.4rem;" onclick="event.stopPropagation();">
-              <button type="button" id="btnRegenRouting" title="Re-generate from Qdrant content (uses LLM)" style="font-size:0.78rem;padding:0.15rem 0.5rem;background:#1a3a1a;border:1px solid #3a6a3a;color:#8bc88b;border-radius:4px;cursor:pointer;">↺ Regenerate</button>
-              <button type="button" id="btnEditRouting" style="font-size:0.78rem;padding:0.15rem 0.5rem;background:#333;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;">Edit</button>
+              <button type="button" id="btnRegenRouting" title="Re-generate from Qdrant content (uses LLM)" style="font-size:0.78rem;padding:0.2rem 0.55rem;background:#e8f5e9;border:1px solid #a5d6a7;color:#2e7d32;border-radius:4px;cursor:pointer;">↺ Regenerate</button>
+              <button type="button" id="btnEditRouting" style="font-size:0.78rem;padding:0.2rem 0.55rem;background:#e3f2fd;border:1px solid #90caf9;color:#1565c0;border-radius:4px;cursor:pointer;">✏️ Edit</button>
             </div>
           </div>
           <div id="routingBody" style="display:none;margin-top:0.5rem;">
           ${isEmpty
-            ? '<p style="font-size:0.82rem;color:#666;margin:0;">No routing metadata yet. Will be auto-generated after chunking.</p>'
-            : `<div style="font-size:0.82rem;color:#aaa;line-height:1.6;">
-                <b>Description:</b> ${routing.description || '—'}<br>
-                <b>Keywords:</b> ${(routing.keywords || []).join(', ') || '—'}<br>
-                <b>Typical questions:</b> ${(routing.typical_questions || []).join(' | ') || '—'}<br>
-                <b>Not covered:</b> ${(routing.not_covered || []).join(', ') || '—'}<br>
-                <b>Language:</b> ${routing.language || '—'} &nbsp; <b>Type:</b> ${routing.doc_type || '—'}
+            ? '<p style="font-size:0.84rem;color:#888;margin:0;">No routing metadata yet. Will be auto-generated after chunking.</p>'
+            : `<div style="font-size:0.84rem;color:#333;line-height:1.7;">
+                <div style="margin-bottom:0.35rem;"><strong>Type:</strong> ${routing.doc_type || '—'} &nbsp;·&nbsp; <strong>Language:</strong> ${routing.language || '—'}</div>
+                <div style="margin-bottom:0.4rem;font-style:italic;color:#555;">${routing.description || ''}</div>
+                ${topics ? '<div style="margin-bottom:0.35rem;"><strong>Topics:</strong> ' + topics + '</div>' : ''}
+                <div style="margin-bottom:0.35rem;color:#555;"><strong>Keywords:</strong> ${keywords || '—'}</div>
+                ${typicalQs ? '<div style="margin-bottom:0.35rem;"><strong>Typical questions:</strong><ul style="margin:0.2rem 0 0 1.2rem;padding:0;">' + typicalQs + '</ul></div>' : ''}
+                ${notCovered ? '<div style="color:#555;"><strong>Not covered:</strong> ${notCovered}</div>' : ''}
                </div>`
           }
           <div id="routingEditArea" style="display:none;margin-top:0.6rem;">
-            <textarea id="routingJsonInput" rows="10" style="width:100%;background:#111;border:1px solid #444;color:#ccc;font-family:monospace;font-size:0.78rem;padding:0.4rem;border-radius:4px;box-sizing:border-box;">${isEmpty ? JSON.stringify({description:'',keywords:[],typical_questions:[],not_covered:[],language:'',doc_type:''}, null, 2) : JSON.stringify(routing, null, 2)}</textarea>
+            <textarea id="routingJsonInput" rows="10" style="width:100%;background:#fff;border:1px solid #90caf9;color:#333;font-family:monospace;font-size:0.78rem;padding:0.4rem;border-radius:4px;box-sizing:border-box;">${isEmpty ? JSON.stringify({description:'',keywords:[],typical_questions:[],not_covered:[],language:'',doc_type:''}, null, 2) : JSON.stringify(routing, null, 2)}</textarea>
             <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
               <button type="button" onclick="saveRoutingMetadata('${solId}','${coll.id || coll.name}')" style="padding:0.3rem 0.8rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;font-size:0.82rem;">Save</button>
-              <button type="button" onclick="document.getElementById('routingEditArea').style.display='none'" style="padding:0.3rem 0.8rem;background:#333;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
+              <button type="button" onclick="document.getElementById('routingEditArea').style.display='none'" style="padding:0.3rem 0.8rem;background:#eee;border:1px solid #ccc;color:#555;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
             </div>
           </div>
           </div>
@@ -5988,10 +5992,6 @@ _INDEX_HTML = """
         }
         setLog(buildLog, msg, isError);
         if (!isError && res.token_usage) _showTaskTokens(res.token_usage);
-        // After chunk step: render collection metadata card if available
-        if (step === 'chunk' && res.state && res.state.collection_metadata) {
-          renderMetadataCard(res.state.collection_metadata);
-        }
         // After chunk: auto-save routing metadata if a solution + collection is selected
         if (step === 'chunk' && res.state && res.state.collection_metadata) {
           const solId = _currentSolutionId;
@@ -5999,6 +5999,10 @@ _INDEX_HTML = """
           if (solId && collSelect && collSelect.value && collSelect.value !== '__new__') {
             const collId = (collSelect.options[collSelect.selectedIndex] || {}).dataset?.collId || collSelect.value;
             await autoSaveRoutingMetadata(solId, collId, res.state.collection_metadata);
+            // Auto-expand the routing panel so the user sees the freshly generated metadata
+            const rb = document.getElementById('routingBody');
+            const rc = document.getElementById('routingChevron');
+            if (rb) { rb.style.display = ''; if (rc) rc.textContent = '▼'; }
           }
         }
       } catch (e) {
@@ -6101,25 +6105,6 @@ _INDEX_HTML = """
         <div style="font-weight:600;margin-bottom:0.4rem;color:#2e7d32;">🔍 Relevance Check</div>
         <div>✅ ${relevant_count} relevant &nbsp;·&nbsp; ⚠️ ${mismatch_count} flagged &nbsp;·&nbsp; ❌ ${irrelevant_count} irrelevant</div>
         ${mismatchSection}${irrelevantSection}
-      `;
-      buildLog.parentNode.insertBefore(card, buildLog.nextSibling);
-    }
-
-    function renderMetadataCard(meta) {
-      const existing = document.getElementById('metadataCard');
-      if (existing) existing.remove();
-      if (!meta || !Object.keys(meta).length) return;
-      const card = document.createElement('div');
-      card.id = 'metadataCard';
-      card.style.cssText = 'margin-top:0.75rem;background:#f0f7ff;border:1px solid #b3d4f5;border-radius:8px;padding:0.85rem 1rem;font-size:0.86rem;';
-      const topics = (meta.topics || []).map(t => `<span style="display:inline-block;background:#d0e8ff;border-radius:4px;padding:0.1rem 0.45rem;margin:0.1rem 0.2rem 0.1rem 0;">${t}</span>`).join('');
-      const keywords = (meta.keywords || []).join(', ');
-      card.innerHTML = `
-        <div style="font-weight:600;margin-bottom:0.5rem;color:#1565c0;">📋 Collection Metadata</div>
-        <div style="margin-bottom:0.35rem;"><strong>Type:</strong> ${meta.doc_type || '—'} &nbsp;·&nbsp; <strong>Language:</strong> ${meta.language || '—'}</div>
-        <div style="margin-bottom:0.4rem;"><em>${meta.description || ''}</em></div>
-        <div style="margin-bottom:0.35rem;"><strong>Topics:</strong> ${topics || '—'}</div>
-        <div style="color:#555;"><strong>Keywords:</strong> ${keywords || '—'}</div>
       `;
       buildLog.parentNode.insertBefore(card, buildLog.nextSibling);
     }
