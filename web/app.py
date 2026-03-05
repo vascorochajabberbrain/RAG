@@ -4861,6 +4861,9 @@ _INDEX_HTML = """
       const info = document.getElementById('existingCollectionInfo');
       const delBtn = document.getElementById('btnDeleteCollection');
       _selectedSourceId = null;
+      // Hide stale resume banner from previous collection
+      document.getElementById('urlResumeBanner').style.display = 'none';
+      _urlSavedStatePath = null;
       // Update sticky collection banner
       const banner = document.getElementById('buildCollBanner');
       if (banner) {
@@ -5081,6 +5084,9 @@ _INDEX_HTML = """
       // Reset pipeline state when switching sources
       _clearDone();
       setLog(buildLog, '', false);
+      // Hide stale resume banner immediately (async check will re-show if valid)
+      document.getElementById('urlResumeBanner').style.display = 'none';
+      _urlSavedStatePath = null;
 
       // Populate source config
       const configCard = document.getElementById('sourceConfigCard');
