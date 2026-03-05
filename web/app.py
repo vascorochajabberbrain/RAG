@@ -2704,7 +2704,7 @@ _HELP_HTML = """<!DOCTYPE html>
       <a href="#push">4. Push to Qdrant</a>
       <a href="#embedding-model">Embedding Model</a>
       <a href="#saved-state">Saved State &amp; Resume</a>
-      <a href="#reset-state">Reset State</a>
+      <a href="#reset-state">Clear Session</a>
       <a href="#chat">Chat / Test Q&amp;A</a>
       <a href="#faq-generator">FAQ Table Generator</a>
       <a href="#routing-metadata">Routing Metadata</a>
@@ -2827,8 +2827,8 @@ _HELP_HTML = """<!DOCTYPE html>
       <li><strong>Start fresh</strong> — ignores the saved state and starts a new pipeline run (the state file is kept on disk)</li>
     </ul>
 
-    <h2 id="reset-state">Reset State</h2>
-    <p>The "Reset state" button clears the in-memory workflow state for the current session. It does <strong>not</strong> delete any files on disk or data in Qdrant — it only resets the session so you can start fresh without reloading the page.</p>
+    <h2 id="reset-state">Clear Session</h2>
+    <p>The "Clear session" button clears the in-memory workflow state for the current session. It does <strong>not</strong> delete any files on disk or data in Qdrant — it only resets the session so you can start fresh. Your work is saved in state files and can be resumed.</p>
 
     <h2 id="chat">Chat / Test Q&amp;A</h2>
     <p>The Chat tab lets you test retrieval quality by asking questions against a collection. The pipeline is:</p>
@@ -3371,8 +3371,8 @@ _INDEX_HTML = """
           <span class="help-icon" onclick="toggleHelp('help-sync')" title="Help">?</span>
         </div>
         <div id="help-sync" class="help-tip">Compares current source data against what's already in Qdrant. Detects new, changed, or removed content so you can update incrementally. <a href="/help#sync" target="_blank">Learn more &rarr;</a></div>
-        <button type="button" class="btn-secondary" id="runReset">Reset state</button> <span class="help-icon" onclick="toggleHelp('help-reset')" title="Help">?</span>
-        <div id="help-reset" class="help-tip">Clears the in-memory session state only. Does <strong>not</strong> delete files on disk or data in Qdrant. <a href="/help#reset-state" target="_blank">Learn more &rarr;</a></div>
+        <button type="button" class="btn-secondary" id="runReset">Clear session</button> <span class="help-icon" onclick="toggleHelp('help-reset')" title="Help">?</span>
+        <div id="help-reset" class="help-tip">Clears the in-memory session only. Your work is saved in state files and can be resumed. Does <strong>not</strong> delete files on disk or data in Qdrant. <a href="/help#reset-state" target="_blank">Learn more &rarr;</a></div>
         <div id="syncResult" class="hidden" style="margin-top:0.6rem;padding:0.6rem 0.9rem;border-radius:8px;font-size:0.88rem;font-family:monospace;"></div>
         <div id="buildLog" class="log"></div>
       </div>
