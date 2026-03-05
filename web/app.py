@@ -5323,6 +5323,12 @@ _INDEX_HTML = """
         return;
       }
       modeSelect.value = _resolvedConfig.extraction_mode || 'generic';
+      // Sync engine dropdown from config
+      const engineSel = document.getElementById('scraperEngine');
+      const cfgEngine = _resolvedConfig.config.engine || 'playwright';
+      engineSel.value = cfgEngine;
+      _prevEngine = cfgEngine;
+      document.getElementById('shopifyUrlRow').classList.toggle('hidden', cfgEngine !== 'shopify');
       // Config source tag
       const sourceTag = document.getElementById('configSourceTag');
       const labels = { yaml_file: '📁 YAML file', inline: '📋 Inline', default: '⬜ Default' };
@@ -5381,6 +5387,7 @@ _INDEX_HTML = """
 
     function onExtractionModeChange() {
       const mode = document.getElementById('extractionMode').value;
+      if (_resolvedConfig) _resolvedConfig.extraction_mode = mode;
       const engineSel = document.getElementById('scraperEngine');
       if (mode === 'shopify' && engineSel.value !== 'shopify') {
         engineSel.value = 'shopify';
@@ -5389,6 +5396,8 @@ _INDEX_HTML = """
         engineSel.value = 'playwright';
         onScraperEngineChange();
       }
+      // Refresh viewer with new mode
+      if (_resolvedConfig && _resolvedConfig.config) updateConfigViewer();
     }
 
     function openRawConfigEditor() {
@@ -5802,6 +5811,11 @@ _INDEX_HTML = """
         _prevEngine = engine;
       }
       document.getElementById('shopifyUrlRow').classList.toggle('hidden', engine !== 'shopify');
+      // Sync engine change into resolved config + refresh viewer
+      if (_resolvedConfig && _resolvedConfig.config) {
+        _resolvedConfig.config.engine = engine;
+        updateConfigViewer();
+      }
     }
 
     // ── Recent files (persisted in localStorage) ──────────────────────────
