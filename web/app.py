@@ -5356,6 +5356,23 @@ _INDEX_HTML = """
           base.style.cssText = 'color:#2e7d32;font-weight:500;';
           if (coll && coll.points_count) base.textContent += ' · ' + coll.points_count + ' points';
           info.appendChild(base);
+          // "Clear Qdrant" button
+          const collName = coll && coll.collection_name || val;
+          const clearBtn = document.createElement('button');
+          clearBtn.type = 'button';
+          clearBtn.textContent = '🗑 Clear Qdrant';
+          clearBtn.title = 'Delete Qdrant collection data only (keeps local config & state files)';
+          clearBtn.style.cssText = 'font-size:0.7rem;padding:0.1rem 0.4rem;margin-left:0.5rem;background:#fff;border:1px solid #e57373;color:#c62828;border-radius:4px;cursor:pointer;';
+          clearBtn.onclick = async () => {
+            if (!confirm('Delete all Qdrant data for "' + collName + '"?\\n\\nThis keeps your local config, state files, and solutions.yaml entry.')) return;
+            try {
+              const r = await fetch('/api/qdrant/' + encodeURIComponent(collName) + '/points-only', {method:'DELETE'});
+              const d = await r.json();
+              if (!r.ok) { alert(d.detail || 'Delete failed'); return; }
+              await loadSolutionCollections(_currentSolutionId);
+            } catch(e) { alert('Error: ' + e.message); }
+          };
+          info.appendChild(clearBtn);
         } else {
           const base = document.createElement('span');
           base.textContent = '⚠ Not yet pushed to Qdrant';
