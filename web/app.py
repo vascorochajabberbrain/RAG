@@ -4772,7 +4772,16 @@ _INDEX_HTML = """
         }).then(r => r.json());
         if (!res.detail) {
           setLog(buildLog, (res.message || 'Routing metadata saved.') + ' Edit it in the panel above if needed.', false);
-          await loadSolutionCollections(solId);
+          // Refresh collection list but keep current selection (don't reset the pipeline UI)
+          const collSelect = document.getElementById('collectionSelect');
+          const curVal = collSelect ? collSelect.value : '';
+          await loadSolutionCollections(solId, {autoSelect: false});
+          if (curVal && collSelect) {
+            collSelect.value = curVal;
+            // Re-render routing metadata panel without resetting pipeline
+            const c = _currentCollections[curVal];
+            if (c) renderRoutingMetadataPanel(c, solId);
+          }
         }
       } catch(e) { /* silent — auto-save failure is non-critical */ }
     }
