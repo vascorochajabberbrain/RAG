@@ -3300,10 +3300,10 @@ _INDEX_HTML = """
       <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem;">⚙️ Solution Settings</div>
       <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;font-size:0.82rem;">
         <label style="display:flex;align-items:center;gap:0.3rem;">jBKE Environment (version_id):
-          <input id="solSettingsVersionId" type="number" min="0" style="width:70px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
+          <input id="solSettingsVersionId" type="text" inputmode="numeric" pattern="[0-9]*" style="width:70px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
         </label>
         <label style="display:flex;align-items:center;gap:0.3rem;">jBKE Virtual Assistant (cbva_id):
-          <input id="solSettingsCbvaId" type="number" min="0" style="width:70px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
+          <input id="solSettingsCbvaId" type="text" inputmode="numeric" pattern="[0-9]*" style="width:70px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
         </label>
         <label style="display:flex;align-items:center;gap:0.3rem;">Company name:
           <input id="solSettingsCompany" type="text" style="width:160px;font-size:0.82rem;padding:0.15rem 0.3rem;border:1px solid #ccc;border-radius:4px;">
