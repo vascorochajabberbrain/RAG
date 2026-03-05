@@ -2950,7 +2950,7 @@ _INDEX_HTML = """
     </div>
 
     <div id="panel-build" class="panel hidden">
-      <div id="buildCollBanner" style="display:none;position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#1a5276,#2980b9);color:#fff;padding:0.45rem 1rem;border-radius:8px;font-size:0.88rem;font-weight:600;margin-top:0.5rem;margin-bottom:0.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.15);"></div>
+      <div id="buildCollBanner" style="display:none;position:sticky;top:2.8rem;z-index:99;background:linear-gradient(135deg,#1a5276,#2980b9);color:#fff;padding:0.45rem 1rem;border-radius:8px;font-size:0.88rem;font-weight:600;margin-bottom:0.5rem;box-shadow:0 2px 8px rgba(0,0,0,0.15);"></div>
       <div id="stateFilesCard" style="display:none;margin-bottom:0.5rem;border:1px solid #e0e0e0;border-radius:8px;padding:0.5rem 0.75rem;background:#fafafa;font-size:0.8rem;"></div>
       <div class="card">
         <h2>1. Collection <span class="help-icon" onclick="toggleHelp('help-collection')" title="Help">?</span></h2>
