@@ -32,7 +32,7 @@ _cancel_event = threading.Event()
 _loop: asyncio.AbstractEventLoop = None
 
 
-def _emit_token_log(step_name: str = "", collection_name: str = ""):
+def _emit_token_log(step_name: str = "", collection_name: str = "", solution_id: str = ""):
     """Emit per-task token usage as a LOG: line in the SSE progress queue, and log to file."""
     from llms.token_tracker import get_tracker
     tracker = get_tracker()
@@ -45,7 +45,7 @@ def _emit_token_log(step_name: str = "", collection_name: str = ""):
         _progress_queue.put("LOG:🪙 Tokens used: " + " · ".join(parts))
     # Always log step to file and persist session (even if 0 tokens)
     if step_name:
-        tracker.log_step(step_name, collection_name)
+        tracker.log_step(step_name, collection_name, solution_id)
 
 
 def get_state():
@@ -88,6 +88,7 @@ class StepRequest(BaseModel):
     step: str
     state_update: Optional[dict] = None
     login_config: Optional[dict] = None
+    solution_id: Optional[str] = None
 
 
 class QARequest(BaseModel):
@@ -170,6 +171,67 @@ def reset_tokens():
     from llms.token_tracker import get_tracker
     get_tracker().reset_session()
     return {"reset": True}
+
+@app.get("/api/tokens/log")
+def get_token_log():
+    """Return parsed token usage log entries."""
+    import re
+    log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".token_usage.log")
+    if not os.path.exists(log_path):
+        return {"entries": []}
+    entries = []
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                # Format: 2026-03-04 10:33 | Ingest (coll) | model: X in / Y out | total: A in / B out
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) < 3:
+                    continue
+                timestamp = parts[0]
+                step_info = parts[1]
+                # Extract step, collection, and solution
+                # Format: "Step (collection) [solution_id]" or "Step (collection)" or "Step [solution_id]" or "Step"
+                solution = ""
+                sol_m = re.search(r"\[(.+?)\]", step_info)
+                if sol_m:
+                    solution = sol_m.group(1).strip()
+                    step_info_clean = step_info[:sol_m.start()].strip()
+                else:
+                    step_info_clean = step_info
+                m = re.match(r"(.+?)\s*\((.+)\)", step_info_clean)
+                step = m.group(1).strip() if m else step_info_clean
+                collection = m.group(2).strip() if m else ""
+                # Parse model tokens
+                models = {}
+                total_in, total_out = 0, 0
+                for p in parts[2:]:
+                    if p.startswith("total:"):
+                        t = re.findall(r"([\d,]+)\s*in\s*/\s*([\d,]+)\s*out", p)
+                        if t:
+                            total_in = int(t[0][0].replace(",", ""))
+                            total_out = int(t[0][1].replace(",", ""))
+                    else:
+                        tm = re.match(r"(.+?):\s*([\d,]+)\s*in\s*/\s*([\d,]+)\s*out", p)
+                        if tm:
+                            models[tm.group(1).strip()] = {
+                                "input": int(tm.group(2).replace(",", "")),
+                                "output": int(tm.group(3).replace(",", ""))
+                            }
+                entries.append({
+                    "timestamp": timestamp,
+                    "step": step,
+                    "collection": collection,
+                    "solution": solution,
+                    "models": models,
+                    "total_input": total_in,
+                    "total_output": total_out,
+                })
+    except Exception as e:
+        return {"entries": [], "error": str(e)}
+    return {"entries": entries}
 
 
 @app.get("/api/collections")
@@ -1243,7 +1305,7 @@ def run_workflow_step(req: StepRequest):
         msg = run_step(state, step)
         step_label = {'chunk': 'Chunk', 'create_collection': 'Create Collection',
                        'group': 'Group', 'clean': 'Clean'}.get(req.step, req.step)
-        tracker.log_step(step_label, state.collection_name)
+        tracker.log_step(step_label, state.collection_name, req.solution_id or "")
         return {"message": msg, "state": state.to_dict(), "token_usage": tracker.get_all()}
     except HTTPException:
         raise
@@ -1276,7 +1338,7 @@ def qa(req: QARequest):
     # retrieved is now a dict {text, sources}; pass sources through to the UI
     sources = retrieved.get("sources", []) if isinstance(retrieved, dict) else []
     coll_label = req.collection_name if isinstance(req.collection_name, str) else ",".join(collection_names[:3])
-    tracker.log_step("Q&A", coll_label)
+    tracker.log_step("Q&A", coll_label, req.solution_id or "")
     return {"question": req.question, "answer": answer, "sources": sources, "token_usage": tracker.get_all()}
 
 
@@ -1655,7 +1717,7 @@ def run_fetch_streaming(req: StepRequest):
             if _cancel_event.is_set():
                 _progress_queue.put("CANCELLED:Ingest was stopped by user.")
             else:
-                _emit_token_log("Ingest", state.collection_name)
+                _emit_token_log("Ingest", state.collection_name, req.solution_id or "")
                 _progress_queue.put(f"DONE:{msg}")
         except Exception as e:
             if _cancel_event.is_set():
@@ -1702,7 +1764,7 @@ def run_push_streaming(req: StepRequest):
             if _cancel_event.is_set():
                 _progress_queue.put("CANCELLED:Push was stopped by user.")
             else:
-                _emit_token_log("Push", state.collection_name)
+                _emit_token_log("Push", state.collection_name, req.solution_id or "")
                 _progress_queue.put(f"DONE:{msg}")
         except Exception as e:
             if _cancel_event.is_set():
@@ -1729,7 +1791,7 @@ def run_translate(req: StepRequest):
 
     def _run():
         run_step(state, Step.TRANSLATE_AND_CLEAN)
-        _emit_token_log("Translate & Clean", state.collection_name)
+        _emit_token_log("Translate & Clean", state.collection_name, req.solution_id or "")
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
@@ -3693,6 +3755,27 @@ _INDEX_HTML = """
           <span id="settingsSaveStatus" style="font-size:0.82rem;color:#555;"></span>
         </div>
 
+        <div class="card" style="margin-top:1rem;">
+          <h2 style="margin:0 0 0.75rem;">🪙 Token Usage Log</h2>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.6rem;">
+            <label style="font-size:0.82rem;margin:0;">From</label>
+            <input type="date" id="tokenLogFrom" style="padding:0.25rem 0.4rem;font-size:0.82rem;border:1px solid #c8d8f0;border-radius:5px;">
+            <label style="font-size:0.82rem;margin:0;">To</label>
+            <input type="date" id="tokenLogTo" style="padding:0.25rem 0.4rem;font-size:0.82rem;border:1px solid #c8d8f0;border-radius:5px;">
+            <label style="font-size:0.82rem;margin:0;">Model</label>
+            <select id="tokenLogModel" style="padding:0.25rem 0.4rem;font-size:0.82rem;border:1px solid #c8d8f0;border-radius:5px;">
+              <option value="">All models</option>
+            </select>
+            <label style="font-size:0.82rem;margin:0;">Solution</label>
+            <select id="tokenLogSolution" style="padding:0.25rem 0.4rem;font-size:0.82rem;border:1px solid #c8d8f0;border-radius:5px;">
+              <option value="">All solutions</option>
+            </select>
+            <button type="button" class="btn-secondary" onclick="loadTokenLog()" style="font-size:0.82rem;">🔍 Filter</button>
+          </div>
+          <div id="tokenLogTotals" style="display:none;background:#f0f4f8;border-radius:5px;padding:0.5rem 0.75rem;margin-bottom:0.5rem;font-size:0.85rem;font-weight:500;"></div>
+          <div id="tokenLogTable" style="max-height:400px;overflow-y:auto;font-size:0.8rem;"></div>
+        </div>
+
       </div>
 
       <!-- DEV-only section (hidden in PROD) -->
@@ -4720,7 +4803,7 @@ _INDEX_HTML = """
           html += '<span style="color:#555;font-size:0.72rem;white-space:nowrap;">' + info + '</span>';
           html += '<span style="color:#888;font-size:0.72rem;white-space:nowrap;">' + date + '</span>';
           html += '<span style="font-size:0.68rem;padding:0.08rem 0.35rem;border-radius:8px;background:#e3f2fd;color:#1565c0;white-space:nowrap;">' + steps + '</span>';
-          html += '<button onclick="_deleteStateFile(\\'' + f.path.replace(/'/g, "\\\\'") + '\\', \\'' + collectionName + '\\')" style="background:transparent;border:1px solid #e57373;color:#c62828;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:5px;cursor:pointer;" title="Delete this state file">🗑</button>';
+          html += '<button data-path="' + f.path.replace(/"/g, '&quot;') + '" data-coll="' + collectionName + '" onclick="_deleteStateFile(this.dataset.path, this.dataset.coll)" style="background:transparent;border:1px solid #e57373;color:#c62828;font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:5px;cursor:pointer;" title="Delete this state file">🗑</button>';
           html += '</div>';
         });
         card.innerHTML = html;
@@ -4897,7 +4980,7 @@ _INDEX_HTML = """
           chunkDelBtn.type = 'button';
           chunkDelBtn.style.cssText = 'font-size:0.75rem;padding:0.1rem 0.45rem;background:none;border:1px solid #c0392b;border-radius:4px;color:#c0392b;cursor:pointer;flex-shrink:0;';
           chunkDelBtn.textContent = '🗑';
-          chunkDelBtn.title = 'Delete this source\\'s points from Qdrant';
+          chunkDelBtn.title = "Delete this source's points from Qdrant";
           chunkDelBtn.onclick = (e) => {
             e.stopPropagation();
             _inlineConfirm(chunkDelBtn, {
@@ -5151,7 +5234,7 @@ _INDEX_HTML = """
       if (name === 'shopify') { if (typeof loadShopifyStores === 'function') loadShopifyStores(); }
       if (name === 'sites') { if (typeof _loadDomcopStatus === 'function') _loadDomcopStatus(); }
       if (name === 'qdrant') loadQdrantOverview();
-      if (name === 'settings') _settingsLoad();
+      if (name === 'settings') { _settingsLoad(); loadTokenLog(); }
     }
 
     // ── Settings tab functions ────────────────────────────────────────────────
@@ -5218,6 +5301,94 @@ _INDEX_HTML = """
         setTimeout(() => { statusEl.textContent = ''; }, 3000);
       } catch(e) {
         statusEl.textContent = '❌ ' + (e.message || e);
+      }
+    }
+
+    async function loadTokenLog() {
+      const tableEl = document.getElementById('tokenLogTable');
+      const totalsEl = document.getElementById('tokenLogTotals');
+      tableEl.innerHTML = '<em>Loading…</em>';
+      totalsEl.style.display = 'none';
+      try {
+        const res = await fetch('/api/tokens/log');
+        const data = await res.json();
+        let entries = data.entries || [];
+        if (!entries.length) { tableEl.innerHTML = '<em>No token usage logged yet.</em>'; return; }
+
+        // Apply filters
+        const fromVal = document.getElementById('tokenLogFrom').value;
+        const toVal = document.getElementById('tokenLogTo').value;
+        const modelVal = document.getElementById('tokenLogModel').value;
+        const solVal = document.getElementById('tokenLogSolution').value;
+
+        if (fromVal) entries = entries.filter(e => e.timestamp >= fromVal);
+        if (toVal) entries = entries.filter(e => e.timestamp <= toVal + ' 23:59');
+        if (modelVal) entries = entries.filter(e => e.models && e.models[modelVal]);
+        if (solVal) entries = entries.filter(e => e.solution === solVal);
+
+        // Populate model + solution dropdowns (from full data, before filtering)
+        const allEntries = data.entries;
+        const modelSet = new Set();
+        const solSet = new Set();
+        allEntries.forEach(e => {
+          Object.keys(e.models || {}).forEach(m => modelSet.add(m));
+          if (e.solution) solSet.add(e.solution);
+        });
+        const modelSel = document.getElementById('tokenLogModel');
+        const curModel = modelSel.value;
+        modelSel.innerHTML = '<option value="">All models</option>' + [...modelSet].sort().map(m => '<option value="' + m + '"' + (m === curModel ? ' selected' : '') + '>' + m + '</option>').join('');
+        const solSel = document.getElementById('tokenLogSolution');
+        const curSol = solSel.value;
+        solSel.innerHTML = '<option value="">All solutions</option>' + [...solSet].sort().map(s => '<option value="' + s + '"' + (s === curSol ? ' selected' : '') + '>' + s + '</option>').join('');
+
+        if (!entries.length) { tableEl.innerHTML = '<em>No entries match the selected filters.</em>'; return; }
+
+        // Compute totals
+        let grandIn = 0, grandOut = 0;
+        const modelTotals = {};
+        entries.forEach(e => {
+          grandIn += e.total_input || 0;
+          grandOut += e.total_output || 0;
+          Object.entries(e.models || {}).forEach(([m, c]) => {
+            if (!modelTotals[m]) modelTotals[m] = { input: 0, output: 0 };
+            modelTotals[m].input += c.input || 0;
+            modelTotals[m].output += c.output || 0;
+          });
+        });
+        const fmt = n => n.toLocaleString();
+        let totHtml = '<strong>Totals (' + entries.length + ' entries):</strong> ' + fmt(grandIn) + ' in / ' + fmt(grandOut) + ' out';
+        const mtParts = Object.entries(modelTotals).sort().map(([m, c]) => m + ': ' + fmt(c.input) + ' in / ' + fmt(c.output) + ' out');
+        if (mtParts.length > 1) totHtml += '<br><span style="color:#666;">' + mtParts.join(' · ') + '</span>';
+        totalsEl.innerHTML = totHtml;
+        totalsEl.style.display = 'block';
+
+        // Build table (most recent first)
+        let html = '<table style="width:100%;border-collapse:collapse;"><thead><tr>' +
+          '<th style="text-align:left;padding:0.25rem 0.4rem;border-bottom:1px solid #ddd;">Time</th>' +
+          '<th style="text-align:left;padding:0.25rem 0.4rem;border-bottom:1px solid #ddd;">Step</th>' +
+          '<th style="text-align:left;padding:0.25rem 0.4rem;border-bottom:1px solid #ddd;">Collection</th>' +
+          '<th style="text-align:left;padding:0.25rem 0.4rem;border-bottom:1px solid #ddd;">Solution</th>' +
+          '<th style="text-align:right;padding:0.25rem 0.4rem;border-bottom:1px solid #ddd;">Input</th>' +
+          '<th style="text-align:right;padding:0.25rem 0.4rem;border-bottom:1px solid #ddd;">Output</th>' +
+          '<th style="text-align:left;padding:0.25rem 0.4rem;border-bottom:1px solid #ddd;">Models</th>' +
+          '</tr></thead><tbody>';
+        const reversed = [...entries].reverse();
+        reversed.forEach(e => {
+          const mdl = Object.entries(e.models || {}).map(([m, c]) => m + ': ' + fmt(c.input) + '/' + fmt(c.output)).join(', ');
+          html += '<tr>' +
+            '<td style="padding:0.2rem 0.4rem;border-bottom:1px solid #eee;white-space:nowrap;">' + (e.timestamp || '') + '</td>' +
+            '<td style="padding:0.2rem 0.4rem;border-bottom:1px solid #eee;">' + (e.step || '') + '</td>' +
+            '<td style="padding:0.2rem 0.4rem;border-bottom:1px solid #eee;">' + (e.collection || '-') + '</td>' +
+            '<td style="padding:0.2rem 0.4rem;border-bottom:1px solid #eee;">' + (e.solution || '-') + '</td>' +
+            '<td style="padding:0.2rem 0.4rem;border-bottom:1px solid #eee;text-align:right;">' + fmt(e.total_input || 0) + '</td>' +
+            '<td style="padding:0.2rem 0.4rem;border-bottom:1px solid #eee;text-align:right;">' + fmt(e.total_output || 0) + '</td>' +
+            '<td style="padding:0.2rem 0.4rem;border-bottom:1px solid #eee;font-size:0.75rem;color:#666;">' + mdl + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table>';
+        tableEl.innerHTML = html;
+      } catch(e) {
+        tableEl.innerHTML = '<em style="color:#c00;">Error loading log: ' + (e.message || e) + '</em>';
       }
     }
 
@@ -5777,7 +5948,7 @@ _INDEX_HTML = """
       if (stepBtn) _btnRunning(stepBtn);
       setLog(buildLog, stepLabelMap[step] || 'Running…', false);
       try {
-        const res = await api('/api/workflow/step', { step, state_update: getStateUpdate() });
+        const res = await api('/api/workflow/step', { step, state_update: getStateUpdate(), solution_id: _currentSolutionId || '' });
         const msg = res.message || res.detail || JSON.stringify(res);
         const isError = msg.includes('Error') || !!res.detail;
         if (stepBtn) { isError ? _btnDone(stepBtn) : _btnSuccess(stepBtn); }
@@ -6119,7 +6290,7 @@ _INDEX_HTML = """
 
       try {
         const _lc = _buildLoginConfig();
-        await api('/api/workflow/fetch', { step: 'fetch', state_update: getStateUpdate(), ...(_lc ? {login_config: _lc} : {}) });
+        await api('/api/workflow/fetch', { step: 'fetch', state_update: getStateUpdate(), solution_id: _currentSolutionId || '', ...(_lc ? {login_config: _lc} : {}) });
       } catch (e) {
         setLog(buildLog, e.message || String(e), true);
         es.close();
@@ -6193,7 +6364,7 @@ _INDEX_HTML = """
       try {
         const stateUpdate = getStateUpdate();
         if (skipUrls && skipUrls.length > 0) stateUpdate.skip_urls = skipUrls;
-        await api('/api/workflow/push', { step: 'push_to_qdrant', state_update: stateUpdate });
+        await api('/api/workflow/push', { step: 'push_to_qdrant', state_update: stateUpdate, solution_id: _currentSolutionId || '' });
       } catch (e) {
         setLog(buildLog, e.message || String(e), true);
         es.close();
@@ -6240,7 +6411,7 @@ _INDEX_HTML = """
 
       // Kick off translate in background thread (returns immediately)
       try {
-        await api('/api/workflow/translate', { step: 'translate_and_clean', state_update: getStateUpdate() });
+        await api('/api/workflow/translate', { step: 'translate_and_clean', state_update: getStateUpdate(), solution_id: _currentSolutionId || '' });
       } catch (e) {
         setLog(buildLog, e.message || String(e), true);
         es.close();
@@ -6318,7 +6489,7 @@ _INDEX_HTML = """
       try {
         const embeddingModel = (document.getElementById('chatEmbeddingModel') || {}).value || 'text-embedding-ada-002';
         const body = { collection_name: collection, question, company, embedding_model: embeddingModel };
-        if (collection === '__all__' && solId) body.solution_id = solId;
+        if (solId) body.solution_id = solId;
         const res = await api('/api/qa', body);
 
         // Render answer text

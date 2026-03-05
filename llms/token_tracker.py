@@ -64,7 +64,7 @@ class TokenTracker:
             "session": self.get_session_usage(),
         }
 
-    def log_step(self, step_name: str, collection_name: str = ""):
+    def log_step(self, step_name: str, collection_name: str = "", solution_id: str = ""):
         """Append per-step token usage to .token_usage.log and persist session."""
         task = self.get_task_usage()
         if not task:
@@ -79,7 +79,8 @@ class TokenTracker:
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         coll_label = f" ({collection_name})" if collection_name else ""
-        line = f"{timestamp} | {step_name}{coll_label} | {tokens_str} | total: {total_in:,} in / {total_out:,} out"
+        sol_label = f" [{solution_id}]" if solution_id else ""
+        line = f"{timestamp} | {step_name}{coll_label}{sol_label} | {tokens_str} | total: {total_in:,} in / {total_out:,} out"
 
         try:
             with open(_LOG_FILE, "a", encoding="utf-8") as f:
