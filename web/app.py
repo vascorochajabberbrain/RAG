@@ -2903,6 +2903,7 @@ _INDEX_HTML = """
     .wiz-modal-cancel { display: block; text-align: center; margin-top: 0.9rem; font-size: 0.85rem; color: #888; cursor: pointer; background: none; border: none; }
     .wiz-modal-cancel:hover { color: #333; text-decoration: underline; }
     /* ── Help icon & tooltip ── */
+    .step-status { font-size: 0.85rem; flex-shrink: 0; user-select: none; line-height: 1; }
     .help-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; border-radius: 50%; background: #e3effd; color: #1976d2; font-size: 0.7rem; font-weight: 700; cursor: pointer; border: 1px solid #bbdefb; line-height: 1; vertical-align: middle; margin-left: 0.3rem; flex-shrink: 0; user-select: none; transition: background 0.15s; }
     .help-icon:hover { background: #bbdefb; }
     .help-tip { display: none; background: #e8e8e8; border: 1px solid #ccc; border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.35rem; margin-bottom: 0.6rem; font-size: 0.82rem; color: #333; line-height: 1.5; font-weight: 400; }
@@ -3161,13 +3162,15 @@ _INDEX_HTML = """
             ⚠️ Locked at collection creation — all sources pushed to the same collection must use the same model.
           </p>
         </div>
-        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+          <span class="step-status" id="stepStatus-fetch" title="Not started">⬜</span>
           <button type="button" class="btn-primary" id="runFetch">1. Ingest</button>
           <button type="button" id="btnStopIngest" style="display:none;background:#c62828;color:#fff;border:none;padding:0.35rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600;" onclick="_cancelWorkflow('ingest')">⛔ Stop</button>
           <span class="help-icon" onclick="toggleHelp('help-fetch')" title="Help">?</span>
         </div>
         <div id="help-fetch" class="help-tip">Extracts content from your sources: scrapes web pages or reads files (PDF, TXT, CSV). State is auto-saved to <code>.rag_state.json</code> after completion so you can resume later. <a href="/help#ingest" target="_blank">Learn more &rarr;</a></div>
-        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+          <span class="step-status" id="stepStatus-translate_and_clean" title="Not started">⬜</span>
           <button type="button" class="btn-translate" id="runTranslate">1b. Translate &amp; Clean (PT) 🇵🇹</button>
           <span class="help-icon" onclick="toggleHelp('help-translate')" title="Help">?</span>
         </div>
@@ -3176,39 +3179,35 @@ _INDEX_HTML = """
           <div class="progress-bar-bg"><div class="progress-bar-fill" id="translateBar"></div></div>
           <div class="progress-label" id="translateLabel">Starting…</div>
         </div>
-        <div style="margin-top:0.75rem;margin-bottom:0.5rem;border:1px solid #ccc;border-radius:8px;padding:0.75rem 1rem;background:#fafafa;">
-          <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+        <div style="margin-top:0.75rem;margin-bottom:0.7rem;border:1px solid #ccc;border-radius:8px;padding:0.75rem 1rem;background:#fafafa;">
+          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+            <span class="step-status" id="stepStatus-chunk" title="Not started">⬜</span>
             <button type="button" class="btn-primary" id="runChunk">2. Chunk</button>
-            <span style="font-size:0.9rem;font-weight:500;color:#333;">Mode: <span class="help-icon" onclick="toggleHelp('help-chunk')" title="Help">?</span></span>
+            <span style="font-size:0.9rem;font-weight:500;color:#333;">Mode:</span>
+            <select id="chunkMode" onchange="onChunkModeChange()" style="flex:1;max-width:380px;">
+              <option value="simple">Simple — fast, free. Best for most cases</option>
+              <option value="hierarchical">Hierarchical — free, best quality. Structured docs</option>
+              <option value="proposition">Proposition — slow, costs $. Atomic facts</option>
+            </select>
+            <span class="help-icon" onclick="toggleHelp('help-chunk')" title="Help">?</span>
           </div>
           <div id="help-chunk" class="help-tip">Start with <strong>Simple</strong> for testing. Use <strong>Hierarchical</strong> for production (best quality-to-cost ratio). Use <strong>Proposition</strong> only when maximum precision is needed (LLM cost applies). <a href="/help#chunk" target="_blank">Learn more &rarr;</a></div>
-          <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.9rem;padding-left:0.25rem;">
-            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
-              <input type="radio" name="chunkMode" value="simple" checked style="margin-top:0.2rem;width:auto;">
-              <span><strong>Simple</strong> <span style="color:#888;font-size:0.82rem;">— fast, free. Splits by character count. Best for most cases.</span></span>
-            </label>
-            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
-              <input type="radio" name="chunkMode" value="hierarchical" style="margin-top:0.2rem;width:auto;">
-              <span><strong>Hierarchical</strong> <span style="color:#888;font-size:0.82rem;">— free, best quality. Large parent context + small child passages. Great for structured docs (recipes, manuals).</span></span>
-            </label>
-            <label style="margin:0;font-weight:400;cursor:pointer;display:flex;align-items:flex-start;gap:0.5rem;">
-              <input type="radio" name="chunkMode" value="proposition" style="margin-top:0.2rem;width:auto;">
-              <span><strong>Proposition</strong> <span style="color:#888;font-size:0.82rem;">— slow, costs $. LLM rewrites each chunk into atomic facts. Best for dense academic text.</span></span>
-            </label>
-          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+          <span class="step-status" id="stepStatus-create_collection" title="Not started">⬜</span>
           <button type="button" class="btn-primary" id="runCreate">3. Create Qdrant Collection</button>
           <span class="help-icon" onclick="toggleHelp('help-create')" title="Help">?</span>
         </div>
         <div id="help-create" class="help-tip">Creates the Qdrant vector collection with the selected embedding model dimensions. Skipped if it already exists. Must be done before Push. <a href="/help#create-collection" target="_blank">Learn more &rarr;</a></div>
-        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+          <span class="step-status" id="stepStatus-push_to_qdrant" title="Not started">⬜</span>
           <button type="button" class="btn-primary" id="runPush">4. Push to Qdrant</button>
           <button type="button" id="btnStopPush" style="display:none;background:#c62828;color:#fff;border:none;padding:0.35rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600;" onclick="_cancelWorkflow('push')">⛔ Stop</button>
           <span class="help-icon" onclick="toggleHelp('help-push')" title="Help">?</span>
         </div>
         <div id="help-push" class="help-tip">Embeds all chunks using OpenAI and uploads them to Qdrant. New points are appended — existing data is not overwritten. <a href="/help#push" target="_blank">Learn more &rarr;</a></div>
-        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+          <span class="step-status" id="stepStatus-sync" title="Not started">⬜</span>
           <button type="button" class="btn-sync hidden" id="runSync">5. Sync (check for changes)</button>
           <span class="help-icon" onclick="toggleHelp('help-sync')" title="Help">?</span>
         </div>
@@ -5485,6 +5484,8 @@ _INDEX_HTML = """
 
     function doStartFresh() {
       hideBanner();
+      _resetAllStepStatus();
+      _clearDone();
       document.getElementById('pipelineCard').style.display = 'block';
     }
 
@@ -5502,6 +5503,9 @@ _INDEX_HTML = """
           const cn = document.getElementById('collectionName');
           if (cn && !cn.value.trim()) cn.value = res.state.collection_name;
         }
+        if (res.state && res.state.completed_steps) {
+          _markStepsFromList(res.state.completed_steps);
+        }
         hideBanner();
         document.getElementById('pipelineCard').style.display = 'block';
       } catch(e) {
@@ -5513,7 +5517,7 @@ _INDEX_HTML = """
       const st = document.getElementById('sourceType').value;
       const path = document.getElementById('sourcePath').value.trim();
       const scraper = document.getElementById('scraperName').value.trim();
-      const chunkMode = document.querySelector('input[name="chunkMode"]:checked').value;
+      const chunkMode = document.getElementById('chunkMode').value;
       let source_config = {};
       if (st === 'url') {
         const engine = (document.getElementById('scraperEngine') || {}).value || 'playwright';
@@ -5538,6 +5542,38 @@ _INDEX_HTML = """
       };
     };
 
+    // ── Chunk mode dropdown with confirm ──
+    let _prevChunkMode = 'simple';
+    function onChunkModeChange() {
+      const sel = document.getElementById('chunkMode');
+      const mode = sel.value;
+      if (mode !== _prevChunkMode) {
+        const label = sel.options[sel.selectedIndex].text.split(' —')[0];
+        if (!confirm('Change chunking mode to "' + label + '"?')) {
+          sel.value = _prevChunkMode; return;
+        }
+        _prevChunkMode = mode;
+      }
+    }
+
+    // ── Step completion indicators ──
+    const _stepBtnMap = {
+      fetch: 'runFetch', translate_and_clean: 'runTranslate',
+      chunk: 'runChunk', create_collection: 'runCreate',
+      push_to_qdrant: 'runPush', sync: 'runSync'
+    };
+    function _setStepStatus(stepName, done) {
+      const el = document.getElementById('stepStatus-' + stepName);
+      if (el) { el.textContent = done ? '✅' : '⬜'; el.title = done ? 'Completed' : 'Not started'; }
+    }
+    function _resetAllStepStatus() {
+      Object.keys(_stepBtnMap).forEach(s => _setStepStatus(s, false));
+    }
+    function _markStepsFromList(completedSteps) {
+      _resetAllStepStatus();
+      (completedSteps || []).forEach(s => _setStepStatus(s, true));
+    }
+
     const _pipelineBtns = () => ['runCreate','runFetch','runTranslate','runChunk','runPush','runSync'].map(id => document.getElementById(id)).filter(Boolean);
     const _clearDone    = () => _pipelineBtns().forEach(b => { if (b.dataset.done) { b.style.background = ''; b.style.color = ''; delete b.dataset.done; } });
     const _btnRunning   = (btn) => { _clearDone(); btn.disabled = true; btn.style.background = '#e65c00'; btn.style.color = '#fff'; };
@@ -5555,6 +5591,7 @@ _INDEX_HTML = """
         const msg = res.message || res.detail || JSON.stringify(res);
         const isError = msg.includes('Error') || !!res.detail;
         if (stepBtn) { isError ? _btnDone(stepBtn) : _btnSuccess(stepBtn); }
+        if (!isError) _setStepStatus(step, true);
         setLog(buildLog, msg, isError);
         // After chunk step: render collection metadata card if available
         if (step === 'chunk' && res.state && res.state.collection_metadata) {
@@ -5787,6 +5824,7 @@ _INDEX_HTML = """
           es.close();
           _hideStopBtn('btnStopIngest');
           _btnSuccess(btn); btn.textContent = '1. Ingest';
+          _setStepStatus('fetch', true);
           // Fetch updated state to render relevance report card (if check ran)
           api('/api/workflow/state').then(st => {
             if (st && st.relevance_report) renderRelevanceCard(st.relevance_report);
@@ -5860,6 +5898,7 @@ _INDEX_HTML = """
           es.close();
           _hideStopBtn('btnStopPush');
           _btnSuccess(btn);
+          _setStepStatus('push_to_qdrant', true);
           // Refresh collection view to update status badges
           if (_currentSolutionId) loadSolutionCollections(_currentSolutionId);
         } else if (data.startsWith('CANCELLED:')) {
@@ -5916,6 +5955,7 @@ _INDEX_HTML = """
           setLog(buildLog, msg, false);
           es.close();
           _btnSuccess(btn);
+          _setStepStatus('translate_and_clean', true);
         } else if (data.startsWith('ERROR') || data === 'TIMEOUT') {
           es.close();
           _btnDone(btn);
@@ -5979,6 +6019,8 @@ _INDEX_HTML = """
 
     document.getElementById('runReset').onclick = async () => {
       await api('/api/workflow/reset', {});
+      _resetAllStepStatus();
+      _clearDone();
       setLog(buildLog, 'State reset.', false);
     };
 
