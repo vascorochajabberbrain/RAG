@@ -5021,15 +5021,10 @@ _INDEX_HTML = """
           const actionText = data.action === 'created' ? 'Created in' : 'Updated in';
           const msg = `✅ ${actionText} jBKE: ${data.message}`;
           setLog(buildLog, msg, false);
-          _jbkeFlash(btn, msg, false);
-          // Update status badge
-          if (statusEl && data.rcm_id) {
-            statusEl.textContent = 'jBKE #' + data.rcm_id;
-            statusEl.style.background = '#e8f5e9';
-            statusEl.style.color = '#2e7d32';
-          }
-          // Reload to get updated jbke_rcm_id
+          // Reload to get updated jbke_rcm_id (this re-renders the panel)
           await loadSolutionCollections(solId);
+          // Show flash AFTER reload so it's not destroyed by re-render
+          _jbkeFlash(document.getElementById('btnPushJBKE'), msg, false);
         } else {
           const msg = 'Push to jBKE failed: ' + (data.message || 'Unknown error');
           setLog(buildLog, msg, true);
