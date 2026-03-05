@@ -45,7 +45,7 @@ class JBKEClient:
     def _parse_response(resp) -> dict:
         """Parse jBKE response, handling PHP errors that return HTML instead of JSON."""
         try:
-            return resp.json()
+            data = resp.json()
         except Exception:
             body = resp.text.strip()
             # PHP fatal errors come back as HTML
@@ -54,6 +54,11 @@ class JBKEClient:
                 msg = re.sub(r"<[^>]+>", "", body).strip()
                 raise RuntimeError(f"jBKE PHP error: {msg[:300]}")
             raise RuntimeError(f"jBKE returned non-JSON response: {body[:300]}")
+        # PHP empty array() serializes as [] — normalize to dict
+        if isinstance(data, list):
+            log.warning("jBKE returned array instead of object: %s", resp.url)
+            return {"success": False, "data": data}
+        return data
 
     def _auth_params(self, version_id: int) -> dict:
         return {
@@ -119,8 +124,10 @@ class JBKEClient:
         resp = requests.get(url, params=params, timeout=30)
         resp.raise_for_status()
         result = self._parse_response(resp)
-        if result.get("success"):
-            return result.get("data", [])
+        if isinstance(result, dict) and result.get("success"):
+            data = result.get("data", [])
+            return data if isinstance(data, list) else []
+        log.warning("list_collections: unexpected response: %s", type(result))
         return []
 
     def find_collection_by_name(
@@ -129,7 +136,7 @@ class JBKEClient:
         """Find a RAG collection by its rcd_name. Returns the record dict or None."""
         all_colls = self.list_collections(version_id)
         for coll in all_colls:
-            if coll.get("rcd_name") == collection_name:
+            if isinstance(coll, dict) and coll.get("rcd_name") == collection_name:
                 return coll
         return None
 
