@@ -556,6 +556,7 @@ def solution_collections(solution_id: str):
                 "name": cname,
                 "id": c.get("id", cname),
                 "display_name": c.get("display_name", cname),
+                "collection_type": c.get("collection_type", "scs"),
                 "scraper_name": c.get("scraper_name", ""),
                 "scraper_config": c.get("scraper_config"),
                 "sources": sources,
@@ -6261,6 +6262,17 @@ _INDEX_HTML = """
       _updatePipelineWarning();
     }
 
+    function _isFaqCollection() {
+      const collSelect = document.getElementById('collectionSelect');
+      const val = collSelect ? collSelect.value : '';
+      if (!val || val === '__new__') return false;
+      const coll = _currentCollections[val];
+      // Check routing doc_type or collection name
+      if (coll && coll.routing && coll.routing.doc_type === 'faq') return true;
+      if (val.toLowerCase().includes('faq')) return true;
+      return false;
+    }
+
     function _updatePipelineWarning() {
       const warn = document.getElementById('pipelineWarning');
       if (!warn) return;
@@ -6268,15 +6280,20 @@ _INDEX_HTML = """
       const chunkDone = document.getElementById('stepStatus-chunk')?.textContent === '✅';
       const pushDone = document.getElementById('stepStatus-push_to_qdrant')?.textContent === '✅';
       const createDone = document.getElementById('stepStatus-create_collection')?.textContent === '✅';
+      const isFaq = _isFaqCollection();
 
       if (fetchDone && !chunkDone) {
         warn.textContent = '⚠️ Data ingested but not yet chunked. Run Chunk to continue.';
         warn.style.display = 'block';
       } else if (chunkDone && !createDone) {
-        warn.textContent = '⚠️ Data chunked but Qdrant collection not yet created. Run Create Qdrant Collection to continue.';
+        warn.textContent = isFaq
+          ? '⚠️ Data chunked. Run Create Qdrant Collection to continue, or generate the FAQ table below.'
+          : '⚠️ Data chunked but Qdrant collection not yet created. Run Create Qdrant Collection to continue.';
         warn.style.display = 'block';
       } else if (chunkDone && createDone && !pushDone) {
-        warn.textContent = '⚠️ Chunks ready but not yet pushed to Qdrant. Run Push to Qdrant to finish.';
+        warn.textContent = isFaq
+          ? '⚠️ Chunks ready but not yet pushed to Qdrant. Run Push to Qdrant to finish, or generate the FAQ table below.'
+          : '⚠️ Chunks ready but not yet pushed to Qdrant. Run Push to Qdrant to finish.';
         warn.style.display = 'block';
       } else {
         warn.style.display = 'none';
