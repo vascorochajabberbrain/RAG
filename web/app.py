@@ -6470,6 +6470,16 @@ _INDEX_HTML = """
       const open = body.style.display !== 'none';
       body.style.display = open ? 'none' : '';
       if (chev) chev.textContent = open ? '▶' : '▼';
+      // Show/hide config viewer alongside source config body
+      const cfgPanel = document.getElementById('configViewerPanel');
+      const rawEditor = document.getElementById('rawConfigEditor');
+      if (open) {
+        if (cfgPanel) cfgPanel.style.display = 'none';
+        if (rawEditor) rawEditor.style.display = 'none';
+      } else {
+        // Re-show config viewer if we have resolved config (for URL sources)
+        if (cfgPanel && _resolvedConfig && _resolvedConfig.config) cfgPanel.style.display = 'block';
+      }
     }
     function _collapseSourceConfig() {
       const body = document.getElementById('sourceConfigBody');
@@ -6477,6 +6487,11 @@ _INDEX_HTML = """
       const summary = document.getElementById('sourceConfigSummary');
       if (body) body.style.display = 'none';
       if (chev) chev.textContent = '▶';
+      // Hide config viewer + raw editor when collapsed
+      const cfgPanel = document.getElementById('configViewerPanel');
+      const rawEditor = document.getElementById('rawConfigEditor');
+      if (cfgPanel) cfgPanel.style.display = 'none';
+      if (rawEditor) rawEditor.style.display = 'none';
       // Build summary from source type + engine/file
       const st = (document.getElementById('sourceType') || {}).value || '';
       const scraper = (document.getElementById('scraperName') || {}).value || '';
