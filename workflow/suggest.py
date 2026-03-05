@@ -143,9 +143,16 @@ def save_routing_metadata(solution_id: str, collection_id: str, metadata: dict) 
                         # Build routing block from metadata (keep only routing-relevant keys)
                         routing = {
                             k: metadata[k] for k in
-                            ("description", "keywords", "typical_questions", "not_covered", "language", "doc_type")
+                            ("description", "keywords", "typical_questions", "not_covered", "language", "doc_type",
+                             "sequence", "additional_prompt")
                             if k in metadata and metadata[k] is not None
                         }
+                        # Preserve existing sequence/additional_prompt if not in new metadata
+                        # (these are user-configured, not LLM-generated)
+                        existing = coll.get("routing", {})
+                        for keep_key in ("sequence", "additional_prompt"):
+                            if keep_key not in routing and keep_key in existing:
+                                routing[keep_key] = existing[keep_key]
                         coll["routing"] = routing
                         saved = True
                         break

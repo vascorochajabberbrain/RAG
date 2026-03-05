@@ -4899,16 +4899,23 @@ _INDEX_HTML = """
           ${isEmpty
             ? '<p style="font-size:0.84rem;color:#888;margin:0;">No routing metadata yet. Will be auto-generated after chunking.</p>'
             : `<div style="font-size:0.84rem;color:#333;line-height:1.7;">
-                <div style="margin-bottom:0.35rem;"><strong>Type:</strong> ${routing.doc_type || '—'} &nbsp;·&nbsp; <strong>Language:</strong> ${routing.language || '—'}</div>
+                <div style="margin-bottom:0.35rem;">
+                  <strong>Type:</strong> ${routing.doc_type || '—'} &nbsp;·&nbsp; <strong>Language:</strong> ${routing.language || '—'}
+                  &nbsp;·&nbsp; <strong>Sequence:</strong> <input id="routingSeqInput" type="number" min="0" value="${routing.sequence || 0}" style="width:3.5rem;font-size:0.82rem;padding:0.1rem 0.3rem;border:1px solid #ccc;border-radius:3px;text-align:center;" title="Processing order in jBKE (lower = first)">
+                </div>
                 <div style="margin-bottom:0.4rem;font-style:italic;color:#555;">${routing.description || ''}</div>
                 ${topics ? '<div style="margin-bottom:0.35rem;"><strong>Topics:</strong> ' + topics + '</div>' : ''}
                 <div style="margin-bottom:0.35rem;color:#555;"><strong>Keywords:</strong> ${keywords || '—'}</div>
                 ${typicalQs ? '<div style="margin-bottom:0.35rem;"><strong>Typical questions:</strong><ul style="margin:0.2rem 0 0 1.2rem;padding:0;">' + typicalQs + '</ul></div>' : ''}
-                ${notCovered ? '<div style="color:#555;"><strong>Not covered:</strong> ${notCovered}</div>' : ''}
+                ${notCovered ? '<div style="margin-bottom:0.35rem;color:#555;"><strong>Not covered:</strong> ' + notCovered + '</div>' : ''}
+                <div style="margin-top:0.5rem;">
+                  <strong>Additional Prompt:</strong>
+                  <textarea id="routingAdditionalPrompt" rows="3" placeholder="Optional text appended to the LLM prompt when generating RAG responses…" style="width:100%;box-sizing:border-box;font-size:0.82rem;padding:0.3rem 0.4rem;border:1px solid #ccc;border-radius:4px;margin-top:0.2rem;resize:vertical;">${routing.additional_prompt || ''}</textarea>
+                </div>
                </div>`
           }
           <div id="routingEditArea" style="display:none;margin-top:0.6rem;">
-            <textarea id="routingJsonInput" rows="10" style="width:100%;background:#fff;border:1px solid #90caf9;color:#333;font-family:monospace;font-size:0.78rem;padding:0.4rem;border-radius:4px;box-sizing:border-box;">${isEmpty ? JSON.stringify({description:'',keywords:[],typical_questions:[],not_covered:[],language:'',doc_type:''}, null, 2) : JSON.stringify(routing, null, 2)}</textarea>
+            <textarea id="routingJsonInput" rows="10" style="width:100%;background:#fff;border:1px solid #90caf9;color:#333;font-family:monospace;font-size:0.78rem;padding:0.4rem;border-radius:4px;box-sizing:border-box;">${isEmpty ? JSON.stringify({description:'',keywords:[],typical_questions:[],not_covered:[],language:'',doc_type:'',sequence:0,additional_prompt:''}, null, 2) : JSON.stringify(routing, null, 2)}</textarea>
             <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
               <button type="button" onclick="saveRoutingMetadata('${solId}','${coll.id || coll.name}')" style="padding:0.3rem 0.8rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;font-size:0.82rem;">Save</button>
               <button type="button" onclick="document.getElementById('routingEditArea').style.display='none'" style="padding:0.3rem 0.8rem;background:#eee;border:1px solid #ccc;color:#555;border-radius:4px;cursor:pointer;font-size:0.82rem;">Cancel</button>
@@ -4926,6 +4933,29 @@ _INDEX_HTML = """
       document.getElementById('btnPushJBKE').onclick = () => {
         pushToJBKE(solId, coll.id || coll.name);
       };
+      // Auto-save sequence and additional_prompt on change
+      const _collId = coll.id || coll.name;
+      const seqInput = document.getElementById('routingSeqInput');
+      if (seqInput) {
+        seqInput.onchange = async () => {
+          const val = parseInt(seqInput.value) || 0;
+          routing.sequence = val;
+          await _saveRoutingField(solId, _collId, routing);
+          setLog(buildLog, 'Sequence updated to ' + val, false);
+        };
+      }
+      const promptInput = document.getElementById('routingAdditionalPrompt');
+      if (promptInput) {
+        let _promptTimer = null;
+        promptInput.oninput = () => {
+          clearTimeout(_promptTimer);
+          _promptTimer = setTimeout(async () => {
+            routing.additional_prompt = promptInput.value.trim();
+            await _saveRoutingField(solId, _collId, routing);
+            setLog(buildLog, 'Additional prompt saved.', false);
+          }, 1500);
+        };
+      }
     }
 
     async function regenerateRoutingMetadata(solId, collId, collName) {
@@ -4986,6 +5016,18 @@ _INDEX_HTML = """
       }
     }
 
+    async function _saveRoutingField(solId, collId, routing) {
+      try {
+        await fetch(`/api/solutions/${encodeURIComponent(solId)}/collections/${encodeURIComponent(collId)}/routing`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routing })
+        });
+      } catch(e) {
+        setLog(buildLog, 'Failed to save: ' + e.message, true);
+      }
+    }
+
     async function saveRoutingMetadata(solId, collId) {
       try {
         const raw = document.getElementById('routingJsonInput').value;
@@ -5006,7 +5048,7 @@ _INDEX_HTML = """
     async function autoSaveRoutingMetadata(solId, collId, meta) {
       // Strip topics (not used for routing) and save the routing-relevant fields
       const routing = {};
-      for (const k of ['description', 'keywords', 'typical_questions', 'not_covered', 'language', 'doc_type']) {
+      for (const k of ['description', 'keywords', 'typical_questions', 'not_covered', 'language', 'doc_type', 'sequence', 'additional_prompt']) {
         if (meta[k] != null) routing[k] = meta[k];
       }
       if (!routing.description) return;  // nothing meaningful to save

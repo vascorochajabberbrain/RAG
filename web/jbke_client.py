@@ -215,6 +215,11 @@ class JBKEClient:
             # Embedding config (crucial — always populate)
             "rcd_llm_model_embedding": settings.get("embedding_model", ""),
             "rcd_embedding_dimensions": "1536",
+            # Sequence: controls processing order in jBKE
+            "rcd_sequence": str(routing.get("sequence", 0)),
+            # Additional prompt: appended to LLM prompt for RAG responses
+            "rcd_prompt_rag": routing.get("additional_prompt", ""),
+            "rcd_append_prompt": "1" if routing.get("additional_prompt") else "0",
             # Leave these empty so jBKE uses its defaults:
             # rcd_vector_store_url, rcd_llm_model_answer,
             # rcd_llm_model_query_rewrite, rcd_qdrant_collection_name
