@@ -195,38 +195,51 @@ def generate_scraper_config(collection: dict, domain_url: str) -> dict:
     high_js = {"product_catalog", "recipe_book"}
     engine = "playwright" if doc_type in high_js else "httpx"
 
-    cfg = {
-        "name": coll_name,
-        "engine": engine,
-        "scrape_mode": "sitemap",
-    }
+    extra_pages = collection.get("extra_pages") or []
+    has_categories = any(cat.get("sitemap_url") for cat in categories)
 
-    if len(categories) == 1:
-        cat = categories[0]
-        if cat.get("sitemap_url"):
-            cfg["sitemap_url"] = cat["sitemap_url"]
-        if cat.get("url_filter"):
-            cfg["url_filter"] = cat["url_filter"]
-    elif len(categories) > 1:
-        for cat in categories:
+    # If only extra_pages (no sitemap categories), use url_list mode
+    if extra_pages and not has_categories:
+        cfg = {
+            "name": coll_name,
+            "engine": engine,
+            "scrape_mode": "url_list",
+            "urls": list(extra_pages),
+        }
+    else:
+        cfg = {
+            "name": coll_name,
+            "engine": engine,
+            "scrape_mode": "sitemap",
+        }
+
+        if len(categories) == 1:
+            cat = categories[0]
             if cat.get("sitemap_url"):
                 cfg["sitemap_url"] = cat["sitemap_url"]
-                break
-        filters = [cat["url_filter"] for cat in categories if cat.get("url_filter")]
-        if filters:
-            cfg["url_allowlist"] = filters
+            if cat.get("url_filter"):
+                cfg["url_filter"] = cat["url_filter"]
+        elif len(categories) > 1:
+            for cat in categories:
+                if cat.get("sitemap_url"):
+                    cfg["sitemap_url"] = cat["sitemap_url"]
+                    break
+            filters = [cat["url_filter"] for cat in categories if cat.get("url_filter")]
+            if filters:
+                cfg["url_allowlist"] = filters
+
+        all_excluded = []
+        for cat in categories:
+            if cat.get("excluded_urls"):
+                all_excluded.extend(cat["excluded_urls"])
+        if all_excluded:
+            cfg["excluded_urls"] = all_excluded
+
+        # extra_pages added alongside sitemap categories
+        if extra_pages:
+            cfg["extra_urls"] = list(extra_pages)
 
     cfg["text_selector"] = "main, article, .entry-content, body"
-
-    all_excluded = []
-    for cat in categories:
-        if cat.get("excluded_urls"):
-            all_excluded.extend(cat["excluded_urls"])
-    if all_excluded:
-        cfg["excluded_urls"] = all_excluded
-
-    if collection.get("extra_pages"):
-        cfg["extra_urls"] = list(collection["extra_pages"])
 
     return cfg
 

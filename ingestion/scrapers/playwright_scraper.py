@@ -51,6 +51,12 @@ def run_playwright_scraper(config: dict, cancel_check=None) -> tuple:
 
             if mode == "sitemap":
                 result = _sitemap_scrape(page, config, cancel_check=cancel_check)
+            elif mode == "url_list":
+                urls = config.get("urls", [])
+                if not urls:
+                    result = ("Error: urls list required for scrape_mode=url_list.", [])
+                else:
+                    result = _scrape_url_list(page, urls, config, cancel_check=cancel_check)
             elif mode == "single_page":
                 result = _single_page_scrape(page, config)
             elif mode == "crawl":

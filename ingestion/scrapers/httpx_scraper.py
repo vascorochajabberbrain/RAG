@@ -36,6 +36,12 @@ def run_httpx_scraper(config: dict, cancel_check=None) -> tuple:
     with httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=30) as client:
         if mode == "sitemap":
             result = _sitemap_scrape(client, config, cancel_check=cancel_check)
+        elif mode == "url_list":
+            urls = config.get("urls", [])
+            if not urls:
+                result = ("Error: urls list required for scrape_mode=url_list.", [])
+            else:
+                result = _scrape_url_list(client, urls, config, cancel_check=cancel_check)
         elif mode == "single_page":
             result = _single_page_scrape(client, config)
         elif mode == "crawl":
