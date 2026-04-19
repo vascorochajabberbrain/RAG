@@ -66,6 +66,10 @@ def reset_state():
 
 app = FastAPI(title="RAG Workflow API")
 
+# ── Stateless execution endpoints (called by jBKB orchestrator) ──
+from web.execute import router as execute_router
+app.include_router(execute_router, prefix="/api/execute")
+
 # Serve PDF files so the browser can open them with #page=N fragment
 _PDF_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         "ingestion", "data_to_ingest", "pdfs")
@@ -98,6 +102,11 @@ class QARequest(BaseModel):
     solution_id: Optional[str] = None
     embedding_model: str = "text-embedding-ada-002"  # must match model used at ingestion time
 
+
+# API prefix — all /api/* endpoints are served under /api/rag/* so the React
+# frontend can proxy to this server without colliding with the jBKB Fastify API.
+# The embedded HTML UI still works standalone via the root "/" page.
+API_PREFIX = "/api/rag"
 
 @app.get("/")
 def root():
@@ -891,6 +900,19 @@ def resolve_scraper_config(scraper_name: str = "", collection_name: str = ""):
     return resolve_config(scraper_name or "", inline_config)
 
 
+@app.get("/api/scraper/raw-config/{scraper_name}")
+def get_raw_config(scraper_name: str):
+    """Get raw YAML text for a scraper config file (for library suggestion detection)."""
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "ingestion", "scrapers", "configs")
+    yaml_path = os.path.join(config_dir, f"{scraper_name}.yaml")
+    if not os.path.isfile(yaml_path):
+        raise HTTPException(404, f"Config file '{scraper_name}.yaml' not found")
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    return {"ok": True, "raw": raw}
+
+
 class UpdateScraperConfigRequest(BaseModel):
     scraper_config: dict
 
@@ -919,6 +941,259 @@ def update_scraper_config(solution_id: str, collection_name: str, req: UpdateScr
     from solution_specs.loader import reload
     reload()
     return {"ok": True, "message": "Scraper config saved."}
+
+
+class CreateCustomJsConfigRequest(BaseModel):
+    scraper_name: str
+    collection_name: str
+    solution_id: str
+
+
+@app.post("/api/scraper/create-custom-js-config")
+def create_custom_js_config(req: CreateCustomJsConfigRequest):
+    """Create a YAML config file with a custom_js_extraction template.
+
+    Merges existing inline config (engine, sitemap_url, url_filter, etc.)
+    with a skeleton custom_js_extraction function and chunk_template.
+    """
+    import yaml as _yaml
+    from solution_specs.loader import list_solutions
+
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "ingestion", "scrapers", "configs")
+    os.makedirs(config_dir, exist_ok=True)
+
+    # Derive filename from scraper_name or collection_name
+    base_name = req.scraper_name.strip() or req.collection_name.strip()
+    if not base_name:
+        raise HTTPException(400, "scraper_name or collection_name required")
+    # Sanitise: lowercase, replace spaces/hyphens with underscores
+    safe_name = base_name.lower().replace("-", "_").replace(" ", "_")
+    yaml_path = os.path.join(config_dir, f"{safe_name}.yaml")
+
+    if os.path.isfile(yaml_path):
+        return {
+            "ok": True,
+            "created": False,
+            "file_path": yaml_path,
+            "file_name": f"{safe_name}.yaml",
+            "message": f"Config file already exists: {safe_name}.yaml",
+        }
+
+    # Gather existing inline config from solutions.yaml
+    inline_config = {}
+    for sol in list_solutions():
+        if sol.get("id") != req.solution_id:
+            continue
+        for c in sol.get("collections", []):
+            if c.get("collection_name") == req.collection_name:
+                inline_config = c.get("scraper_config") or {}
+                break
+        break
+
+    # Build YAML content
+    lines = [
+        "# ── About this extraction ──",
+        "# Mode:        custom_js",
+        "# Good for:    Sites with complex layouts (Elementor, page builders, SPAs) where",
+        "#              content lives in dynamic containers that CSS selectors can't reach.",
+        "#              A JS function runs in the browser and returns structured fields.",
+        "# Data:        Returns a structured object with named fields per page.",
+        "#              Fields are mapped into a chunk_template for the final chunk text.",
+        "# Not for:     Simple pages where generic text grab works fine.",
+        "#              Static HTML where CSS selectors are sufficient (use structured).",
+        "# Limitations: Requires Playwright engine (browser-based JS execution).",
+        "#              Function must be updated if the site redesigns its HTML.",
+        "#              Cannot handle content behind login walls or infinite scroll.",
+        "# ──",
+        f"description: \"Custom JS extraction for {req.collection_name} — TODO: update this description\"",
+        f"name: {safe_name}",
+        f"engine: {inline_config.get('engine', 'playwright')}",
+    ]
+    if inline_config.get("scrape_mode"):
+        lines.append(f"scrape_mode: \"{inline_config['scrape_mode']}\"")
+    if inline_config.get("sitemap_url"):
+        lines.append(f"sitemap_url: \"{inline_config['sitemap_url']}\"")
+    if inline_config.get("url_filter"):
+        lines.append(f"url_filter: \"{inline_config['url_filter']}\"")
+    if inline_config.get("url_allowlist"):
+        for url in inline_config["url_allowlist"]:
+            if inline_config["url_allowlist"].index(url) == 0:
+                lines.append("url_allowlist:")
+            lines.append(f"  - \"{url}\"")
+
+    # Add custom_js_extraction template
+    lines.append("custom_js_extraction: |")
+    lines.append("  () => {")
+    lines.append("    // This function runs in the browser on each page.")
+    lines.append("    // It must return an object with the fields you want to extract.")
+    lines.append("    // Example: return { title: '...', content: '...', category: '...' };")
+    lines.append("    //")
+    lines.append("    // Tips:")
+    lines.append("    //   - Use document.querySelector / querySelectorAll to find elements")
+    lines.append("    //   - Check for JSON-LD schema: document.querySelector('script[type=\"application/ld+json\"]')")
+    lines.append("    //   - Return empty strings for missing fields (don't throw errors)")
+    lines.append("    //")
+    lines.append("    return {")
+    lines.append("      title: document.querySelector('h1')?.innerText?.trim() || '',")
+    lines.append("      content: ''  // TODO: extract main content")
+    lines.append("    };")
+    lines.append("  }")
+
+    # Add chunk_template
+    lines.append("chunk_template: |")
+    lines.append("  {title}")
+    lines.append("  {content}")
+    lines.append("  URL: {url}")
+
+    yaml_content = "\n".join(lines) + "\n"
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.write(yaml_content)
+
+    return {
+        "ok": True,
+        "created": True,
+        "file_path": yaml_path,
+        "file_name": f"{safe_name}.yaml",
+        "message": f"Config file created: {safe_name}.yaml",
+    }
+
+
+# ── Library extractors API ──────────────────────────────────────────
+
+@app.get("/api/scraper/library")
+def list_library():
+    """List all library extractors."""
+    from ingestion.scrapers.runner import list_library_extractors
+    return {"ok": True, "extractors": list_library_extractors()}
+
+
+@app.get("/api/scraper/library/{name}")
+def get_library_extractor(name: str):
+    """Get full config for a library extractor."""
+    import yaml as _yaml
+    lib_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "ingestion", "scrapers", "configs", "library")
+    yaml_path = os.path.join(lib_dir, f"{name}.yaml")
+    if not os.path.isfile(yaml_path):
+        raise HTTPException(404, f"Library extractor '{name}' not found")
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        config = _yaml.safe_load(f) or {}
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        raw_text = f.read()
+    return {"ok": True, "name": name, "config": config, "raw": raw_text}
+
+
+class PromoteToLibraryRequest(BaseModel):
+    source_config_name: str     # e.g. "peixe_fresco_faq"
+    library_name: str           # e.g. "jsonld_faq"
+    description: str = ""
+
+
+@app.post("/api/scraper/library")
+def promote_to_library(req: PromoteToLibraryRequest):
+    """Promote a site-specific extraction to a reusable library extractor.
+
+    Copies extraction fields (custom_js_extraction, chunk_template, etc.) from
+    the source config into a new library YAML, then updates the source config
+    to reference the library via library_extractor field.
+    """
+    import yaml as _yaml
+
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "ingestion", "scrapers", "configs")
+    lib_dir = os.path.join(config_dir, "library")
+    os.makedirs(lib_dir, exist_ok=True)
+
+    # Load source config
+    source_path = os.path.join(config_dir, f"{req.source_config_name}.yaml")
+    if not os.path.isfile(source_path):
+        raise HTTPException(404, f"Source config '{req.source_config_name}' not found")
+
+    with open(source_path, "r", encoding="utf-8") as f:
+        source_cfg = _yaml.safe_load(f) or {}
+
+    # Check if library extractor already exists
+    lib_path = os.path.join(lib_dir, f"{req.library_name}.yaml")
+    if os.path.isfile(lib_path):
+        return {
+            "ok": True,
+            "created": False,
+            "message": f"Library extractor '{req.library_name}' already exists.",
+        }
+
+    # Extract HOW fields (extraction logic) for library
+    extraction_fields = {}
+    for key in ("custom_js_extraction", "chunk_template", "structured_extraction",
+                "attribute_rows", "text_selector"):
+        if key in source_cfg:
+            extraction_fields[key] = source_cfg[key]
+
+    if not extraction_fields:
+        raise HTTPException(400, "Source config has no extraction fields to promote.")
+
+    # Build library YAML
+    lib_lines = [
+        "# ── Library Extractor ──",
+        "# Reusable extraction method — provides the HOW (JS function + template).",
+        "# Link to a collection config that provides the WHERE (sitemap, URL filter).",
+        "# ──",
+        "library: true",
+        f"description: \"{req.description or source_cfg.get('description', '')}\"",
+        f"engine: {source_cfg.get('engine', 'playwright')}",
+    ]
+
+    # Dump extraction fields as YAML
+    for key, value in extraction_fields.items():
+        dumped = _yaml.dump({key: value}, default_flow_style=False, allow_unicode=True)
+        lib_lines.append(dumped.rstrip())
+
+    lib_content = "\n".join(lib_lines) + "\n"
+    with open(lib_path, "w", encoding="utf-8") as f:
+        f.write(lib_content)
+
+    # Update source config to reference library
+    # Remove extraction fields, add library_extractor reference
+    # Remove LIBRARY_SUGGESTION comment if present
+    with open(source_path, "r", encoding="utf-8") as f:
+        source_text = f.read()
+
+    # Remove LIBRARY_SUGGESTION comment line
+    import re
+    source_text = re.sub(r"# LIBRARY_SUGGESTION:.*\n?", "", source_text)
+
+    # Parse, update, rewrite
+    source_cfg_updated = _yaml.safe_load(source_text) or {}
+    for key in extraction_fields:
+        source_cfg_updated.pop(key, None)
+    source_cfg_updated["library_extractor"] = req.library_name
+
+    # Rebuild with header comments preserved
+    # Extract leading comments
+    header_lines = []
+    for line in source_text.split("\n"):
+        if line.startswith("#") or line.strip() == "":
+            header_lines.append(line)
+        else:
+            break
+
+    header = "\n".join(header_lines) + "\n" if header_lines else ""
+    body = _yaml.dump(source_cfg_updated, default_flow_style=False,
+                      allow_unicode=True, sort_keys=False)
+    with open(source_path, "w", encoding="utf-8") as f:
+        f.write(header + body)
+
+    return {
+        "ok": True,
+        "created": True,
+        "library_name": req.library_name,
+        "library_path": lib_path,
+        "message": f"Library extractor '{req.library_name}' created. Source config updated.",
+    }
+
+
+# ── End library extractors API ─────────────────────────────────────
 
 
 class AddSourceRequest(BaseModel):
@@ -1857,6 +2132,134 @@ def _faq_generate_table_impl(req: FaqTableRequest):
         return {"table": "\n".join(lines), "count": len(lines), "source": source_label}
     except Exception as e:
         return {"table": "", "count": 0, "error": str(e)}
+
+
+class FaqSaveRequest(BaseModel):
+    solution_id: str
+    collection_name: str
+    faq_table: str  # tab-separated Q\tA lines
+
+
+@app.post("/api/faq/save-table")
+def faq_save_table(req: FaqSaveRequest):
+    """Save the FAQ table to the collection's routing block in solutions.yaml."""
+    import yaml as _yaml
+    specs_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "solution_specs", "solutions.yaml")
+    with open(specs_path, "r", encoding="utf-8") as f:
+        data = _yaml.safe_load(f) or {}
+    saved = False
+    for sol in data.get("solutions", []):
+        if sol.get("id") != req.solution_id:
+            continue
+        for coll in sol.get("collections", []):
+            if coll.get("collection_name") == req.collection_name:
+                routing = coll.setdefault("routing", {})
+                routing["faq_table"] = req.faq_table
+                saved = True
+                break
+        break
+    if not saved:
+        raise HTTPException(404, "Collection not found")
+    with open(specs_path, "w", encoding="utf-8") as f:
+        _yaml.dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    from solution_specs.loader import reload
+    reload()
+    lines = [ln for ln in req.faq_table.strip().splitlines() if "\t" in ln]
+    return {"ok": True, "count": len(lines)}
+
+
+@app.get("/api/faq/load-table/{solution_id}/{collection_name}")
+def faq_load_table(solution_id: str, collection_name: str):
+    """Load saved FAQ table from solutions.yaml routing block."""
+    from solution_specs.loader import list_solutions
+    for sol in list_solutions():
+        if sol.get("id") != solution_id:
+            continue
+        for coll in sol.get("collections", []):
+            if coll.get("collection_name") == collection_name:
+                routing = coll.get("routing") or {}
+                faq_table = routing.get("faq_table", "")
+                lines = [ln for ln in faq_table.strip().splitlines() if "\t" in ln] if faq_table else []
+                return {"ok": True, "faq_table": faq_table, "count": len(lines)}
+        break
+    return {"ok": True, "faq_table": "", "count": 0}
+
+
+class FaqPushJBKERequest(BaseModel):
+    solution_id: str
+    faq_table: str  # tab-separated Q\tA lines
+
+
+@app.post("/api/faq/push-to-jbke")
+def faq_push_to_jbke(req: FaqPushJBKERequest):
+    """Push FAQ table to jBKE content environment (ced_faq_table field)."""
+    from solution_specs.loader import get_solution
+    sol = get_solution(req.solution_id)
+    if not sol:
+        raise HTTPException(status_code=404, detail=f"Solution '{req.solution_id}' not found")
+
+    version_id = sol.get("jbke_version_id")
+    if not version_id:
+        raise HTTPException(
+            status_code=400,
+            detail="jbke_version_id not set for this solution. Configure it in Solution Settings first."
+        )
+
+    cem_id = sol.get("jbke_cem_id")
+    if not cem_id:
+        raise HTTPException(
+            status_code=400,
+            detail="jbke_cem_id not set for this solution. Add the environment ID in solutions.yaml."
+        )
+
+    if not req.faq_table.strip():
+        raise HTTPException(status_code=400, detail="FAQ table is empty")
+
+    try:
+        from web.jbke_client import JBKEClient
+        client = JBKEClient()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    result = client.push_faq_table(
+        version_id=int(version_id),
+        cem_id=int(cem_id),
+        faq_table=req.faq_table,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=502, detail=result.get("message", "Push failed"))
+    return result
+
+
+@app.get("/api/debug/chat-env/{version_id}")
+def debug_chat_env(version_id: int):
+    """DEBUG: Try multiple approaches to fetch chat environment record."""
+    import requests as req
+    try:
+        from web.jbke_client import JBKEClient
+        client = JBKEClient()
+        results = {}
+        url = client._endpoint("chat_environment_process.php")
+
+        # Try 1: GetAll without ced_v_id
+        params1 = {**client._auth_params(version_id), "UserAction": "GetAll"}
+        r1 = req.get(url, params=params1, timeout=30)
+        results["getall_no_filter"] = r1.text[:2000]
+
+        # Try 2: GetData with cem_id
+        params2 = {**client._auth_params(version_id), "UserAction": "GetData", "cem_id": str(version_id)}
+        r2 = req.get(url, params=params2, timeout=30)
+        results["getdata_cem_id"] = r2.text[:2000]
+
+        # Try 3: GetData with ced_v_id
+        params3 = {**client._auth_params(version_id), "ced_v_id": str(version_id), "UserAction": "GetData"}
+        r3 = req.get(url, params=params3, timeout=30)
+        results["getdata_ced_v_id"] = r3.text[:2000]
+
+        return {"ok": True, "results": results}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 @app.get("/api/workflow/state")
@@ -3517,17 +3920,34 @@ _INDEX_HTML = """
             <strong>Custom JS</strong> &mdash; runs a JavaScript function in the browser that returns a fields dict. Needed for complex layouts like Elementor. Define in <code>custom_js_extraction</code> in the raw config.<br>
             <strong>Shopify</strong> &mdash; fetches product data via Shopify JSON API. No HTML scraping needed.
           </div>
+          <!-- Extraction mode description (from YAML or built-in) -->
+          <div id="extractionModeDesc" style="display:none;margin-top:0.35rem;font-size:0.78rem;color:#666;line-height:1.4;font-style:italic;padding-left:0.15rem;"></div>
+          <!-- Library extractor picker -->
+          <div id="libraryExtractorRow" style="display:none;margin-top:0.5rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <label style="margin:0;white-space:nowrap;">📚 Library extractor</label>
+              <select id="libraryExtractorSelect" onchange="onLibraryExtractorChange()" style="flex:1;max-width:320px;">
+                <option value="">(none — custom)</option>
+              </select>
+            </div>
+            <div id="libraryExtractorDesc" style="display:none;margin-top:0.25rem;font-size:0.76rem;color:#555;line-height:1.4;padding-left:0.15rem;font-style:italic;"></div>
+          </div>
+          <!-- Library suggestion banner -->
+          <div id="librarySuggestionBanner" style="display:none;margin-top:0.5rem;padding:0.6rem 0.75rem;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;font-size:0.82rem;line-height:1.5;"></div>
+          <!-- Custom JS creation feedback -->
+          <div id="customJsMessage" style="display:none;margin-top:0.5rem;padding:0.6rem 0.75rem;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;font-size:0.82rem;line-height:1.5;"></div>
         </div>
-        </div><!-- /sourceConfigBody -->
-        <!-- Config viewer + raw editor — OUTSIDE sourceConfigBody so visible when collapsed -->
+        <!-- Config viewer + raw editor -->
         <div id="configViewerPanel" style="display:none;margin-top:0.6rem;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:0.6rem 0.75rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
             <span style="font-weight:600;font-size:0.82rem;color:#555;">Effective config</span>
             <div style="display:flex;align-items:center;gap:0.4rem;">
               <span id="configSourceTag" style="font-size:0.7rem;padding:0.1rem 0.35rem;border-radius:8px;background:#fff3e0;color:#e65100;"></span>
+              <button type="button" id="promoteToLibraryBtn" onclick="_promptPromoteToLibrary()" style="display:none;font-size:0.76rem;padding:0.15rem 0.5rem;background:none;border:1px solid #2a5caa;border-radius:4px;color:#2a5caa;cursor:pointer;">📚 Save to library</button>
               <button type="button" onclick="openRawConfigEditor()" style="font-size:0.76rem;padding:0.15rem 0.5rem;background:none;border:1px solid #999;border-radius:4px;color:#555;cursor:pointer;">Edit raw config</button>
             </div>
           </div>
+          <div id="configDescriptionBlock" style="display:none;margin-bottom:0.5rem;padding:0.5rem 0.65rem;background:#fff;border-left:3px solid #2a5caa;border-radius:0 4px 4px 0;font-size:0.8rem;line-height:1.45;color:#444;"></div>
           <pre id="configViewerContent" style="font-size:0.78rem;font-family:monospace;white-space:pre-wrap;max-height:280px;overflow-y:auto;color:#333;margin:0;line-height:1.5;"></pre>
         </div>
         <div id="rawConfigEditor" style="display:none;margin-top:0.6rem;">
@@ -3543,6 +3963,7 @@ _INDEX_HTML = """
           </div>
           <textarea id="rawConfigTextarea" style="width:100%;min-height:200px;font-family:monospace;font-size:0.78rem;border:1px solid #ccc;border-radius:5px;padding:0.5rem;resize:vertical;box-sizing:border-box;"></textarea>
         </div>
+        </div><!-- /sourceConfigBody -->
         <!-- Resume banners — OUTSIDE sourceConfigBody so always visible -->
         <div id="resumeBanner" style="display:none;margin-top:0.75rem;">
           <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:0.6rem 0.9rem;font-size:0.9rem;">
@@ -3633,6 +4054,7 @@ _INDEX_HTML = """
         <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.7rem;">
           <span class="step-status" id="stepStatus-create_collection" title="Not started">⬜</span>
           <button type="button" class="btn-primary" id="runCreate">3. Create Qdrant Collection</button>
+          <button type="button" id="btnFaqTablePipeline" style="display:none;background:#1565c0;color:#fff;border:none;padding:0.35rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600;" onclick="_openFaqTableFromPipeline()">📋 FAQ Table</button>
           <span class="help-icon" onclick="toggleHelp('help-create')" title="Help">?</span>
         </div>
         <div id="help-create" class="help-tip">Creates the Qdrant vector collection with the selected embedding model dimensions. Skipped if it already exists. Must be done before Push. <a href="/help#create-collection" target="_blank">Learn more &rarr;</a></div>
@@ -5585,6 +6007,7 @@ _INDEX_HTML = """
       const pipelineCard = document.getElementById('pipelineCard');
       configCard.style.display = 'block';
       pipelineCard.style.display = 'block';
+      _updatePipelineWarning();  // refresh FAQ button visibility + warnings
 
       // Set the label
       document.getElementById('sourceConfigLabel').textContent = '— ' + (src.label || src.id);
@@ -5689,6 +6112,8 @@ _INDEX_HTML = """
 
     async function loadSourceConfig(scraperName, collectionName) {
       try {
+        // Load library extractors list on first call
+        if (!_libraryExtractors.length) await _loadLibraryExtractors();
         const params = new URLSearchParams({ scraper_name: scraperName || '', collection_name: collectionName || '' });
         const res = await fetch('/api/scraper/resolve-config?' + params).then(r => r.json());
         _resolvedConfig = res;
@@ -5721,7 +6146,54 @@ _INDEX_HTML = """
       sourceTag.style.color = _resolvedConfig.source === 'yaml_file' ? '#2e7d32' : '#e65100';
       // YAML warning
       document.getElementById('yamlFileWarning').style.display = _resolvedConfig.yaml_file_exists ? 'block' : 'none';
-      // Render formatted config
+      // Custom JS message: show next-steps when mode is custom_js + YAML exists, hide otherwise
+      const cjMsg = document.getElementById('customJsMessage');
+      if (cjMsg) {
+        const isCustomJs = (_resolvedConfig.extraction_mode || 'generic') === 'custom_js';
+        if (isCustomJs && _resolvedConfig.yaml_file_exists) {
+          const cfgName = (_resolvedConfig.config.name || 'config') + '.yaml';
+          const filePath = 'ingestion/scrapers/configs/' + cfgName;
+          cjMsg.innerHTML = '<strong>📁 Custom JS config:</strong> <code>' + cfgName + '</code>' +
+            _buildCustomJsNextSteps(cfgName, filePath);
+          cjMsg.style.display = 'block';
+        } else if (!isCustomJs) {
+          cjMsg.style.display = 'none';
+          cjMsg.innerHTML = '';
+        }
+      }
+      // Extraction mode description near dropdown — show only for built-in modes (no YAML)
+      const descEl = document.getElementById('extractionModeDesc');
+      if (descEl) {
+        if (!_resolvedConfig.yaml_file_exists && _resolvedConfig.description) {
+          descEl.textContent = _resolvedConfig.description;
+          descEl.style.display = 'block';
+        } else {
+          descEl.style.display = 'none';
+        }
+      }
+      // Config description block (visually separated from technical config)
+      const descBlock = document.getElementById('configDescriptionBlock');
+      if (descBlock) {
+        const desc = _resolvedConfig.description || '';
+        if (desc) {
+          descBlock.innerHTML = '<strong style="color:#2a5caa;">ℹ️ ' +
+            (_resolvedConfig.config.name || 'Config') + '</strong><br>' + desc;
+          descBlock.style.display = 'block';
+        } else {
+          descBlock.style.display = 'none';
+        }
+      }
+      // Library extractor UI (dropdown + suggestion banner)
+      _updateLibraryUI();
+      // "Save to library" button — show for custom_js/structured configs that aren't already library-backed
+      const promoteBtn = document.getElementById('promoteToLibraryBtn');
+      if (promoteBtn) {
+        const mode = _resolvedConfig.extraction_mode || 'generic';
+        const hasExtraction = (mode === 'custom_js' || mode === 'structured');
+        const alreadyLibrary = !!(_resolvedConfig.library_extractor || _resolvedConfig.config.library_extractor);
+        promoteBtn.style.display = (hasExtraction && !alreadyLibrary && _resolvedConfig.yaml_file_exists) ? 'inline-block' : 'none';
+      }
+      // Render formatted config (technical fields only)
       document.getElementById('configViewerContent').textContent = formatConfigForViewer(_resolvedConfig.config, _resolvedConfig.extraction_mode);
       panel.style.display = 'block';
     }
@@ -5729,6 +6201,7 @@ _INDEX_HTML = """
     function formatConfigForViewer(config, mode) {
       const lines = [];
       if (config.name) lines.push('Name:         ' + config.name);
+      if (config.library_extractor) lines.push('Library:      📚 ' + config.library_extractor);
       if (config.engine) lines.push('Engine:       ' + config.engine);
       if (config.scrape_mode) lines.push('Scrape mode:  ' + config.scrape_mode);
       if (config.sitemap_url) lines.push('Sitemap URL:  ' + config.sitemap_url);
@@ -5769,8 +6242,70 @@ _INDEX_HTML = """
       return lines.join('\\n') || 'No config fields found.';
     }
 
-    function onExtractionModeChange() {
+    async function onExtractionModeChange() {
       const mode = document.getElementById('extractionMode').value;
+      const prevMode = _resolvedConfig ? (_resolvedConfig.extraction_mode || 'generic') : 'generic';
+
+      // --- Custom JS: confirm + auto-create YAML ---
+      if (mode === 'custom_js' && prevMode !== 'custom_js') {
+        const ok = confirm(
+          'Custom JS extraction requires a JavaScript function that runs in the browser ' +
+          'to extract structured data from each page.\\n\\n' +
+          'A template YAML config file will be created for you in ingestion/scrapers/configs/. ' +
+          'You will need to customise the JS function for this site\\'s HTML structure.\\n\\n' +
+          'See peixe_fresco_recipes.yaml for a working example.\\n\\n' +
+          'Continue?'
+        );
+        if (!ok) {
+          document.getElementById('extractionMode').value = prevMode;
+          return;
+        }
+        // Create the YAML config file
+        const scraperName = document.getElementById('scraperName').value.trim();
+        const collName = document.getElementById('collectionSelect').value;
+        try {
+          const res = await fetch('/api/scraper/create-custom-js-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              scraper_name: scraperName,
+              collection_name: collName,
+              solution_id: _currentSolutionId
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Failed to create config');
+          // Show success message with next steps
+          const msgDiv = document.getElementById('customJsMessage');
+          const filePath = data.file_path || ('ingestion/scrapers/configs/' + data.file_name);
+          const nextStepsHtml = _buildCustomJsNextSteps(data.file_name, filePath);
+          if (data.created) {
+            msgDiv.innerHTML = '<strong>✅ Config file created:</strong> <code>' + data.file_name + '</code>' + nextStepsHtml;
+          } else {
+            msgDiv.innerHTML = '<strong>📁 Config file already exists:</strong> <code>' + data.file_name + '</code>' + nextStepsHtml;
+          }
+          msgDiv.style.display = 'block';
+          // Update scraper name input to match the created YAML file
+          const createdName = data.file_name.replace('.yaml', '');
+          if (createdName && createdName !== scraperName) {
+            document.getElementById('scraperName').value = createdName;
+          }
+          // Reload config to pick up the new YAML file
+          await loadSourceConfig(createdName || scraperName, collName);
+        } catch(e) {
+          setLog(buildLog, '❌ ' + e.message, true);
+          document.getElementById('extractionMode').value = prevMode;
+          return;
+        }
+        return;
+      }
+
+      // --- Leaving Custom JS: hide message ---
+      if (prevMode === 'custom_js' && mode !== 'custom_js') {
+        const msgDiv = document.getElementById('customJsMessage');
+        if (msgDiv) msgDiv.style.display = 'none';
+      }
+
       if (_resolvedConfig) _resolvedConfig.extraction_mode = mode;
       const engineSel = document.getElementById('scraperEngine');
       if (mode === 'shopify' && engineSel.value !== 'shopify') {
@@ -5788,6 +6323,273 @@ _INDEX_HTML = """
         _autoSaveConfig();
       }
     }
+
+    function _buildCustomJsNextSteps(cfgName, filePath) {
+      return (
+        '<div style="margin-top:0.5rem;font-size:0.82rem;">' +
+          '<strong>Next step:</strong> Customise the <code>custom_js_extraction</code> function for your site\\'s HTML.' +
+          '<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:#f5f5f5;border-radius:4px;border:1px solid #ddd;">' +
+            '<div style="margin-bottom:0.3rem;font-weight:600;">Option A — Edit the file yourself</div>' +
+            '<div>Open <code>' + cfgName + '</code> in your editor and write the JS extraction function.</div>' +
+            '<div style="margin-top:0.15rem;">📄 Reference: <code>peixe_fresco_recipes.yaml</code></div>' +
+          '</div>' +
+          '<div style="margin-top:0.4rem;padding:0.4rem 0.6rem;background:#f5f5f5;border-radius:4px;border:1px solid #ddd;">' +
+            '<div style="margin-bottom:0.3rem;font-weight:600;">Option B — Get help from Claude</div>' +
+            '<div>Click the button below to copy a ready-to-paste prompt for Claude Code with the file path, a sample URL, and instructions.</div>' +
+            '<div style="margin-top:0.3rem;">' +
+              '<button type="button" onclick="_copyClaudePrompt(\\'' + filePath.replace(/'/g, "\\\\'") + '\\')" ' +
+                'id="_cjsCopyBtn" style="font-size:0.8rem;padding:0.3rem 0.75rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;">' +
+                '📋 Copy prompt for Claude</button>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:0.5rem;">' +
+            '<button type="button" onclick="_reloadYamlConfig()" ' +
+              'id="_cjsReloadBtn" style="font-size:0.8rem;padding:0.3rem 0.75rem;background:#fff;border:1px solid #999;border-radius:4px;cursor:pointer;">' +
+              '🔄 Reload config from file</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function _copyClaudePrompt(filePath) {
+      // Build a sample URL from config
+      let sampleUrl = '';
+      if (_resolvedConfig && _resolvedConfig.config) {
+        const cfg = _resolvedConfig.config;
+        if (cfg.sitemap_url) {
+          // Extract domain from sitemap URL
+          try {
+            const u = new URL(cfg.sitemap_url);
+            sampleUrl = u.origin + '/';
+            if (cfg.url_filter) sampleUrl = u.origin + cfg.url_filter;
+            if (cfg.url_allowlist && cfg.url_allowlist.length) {
+              sampleUrl = u.origin + '/' + cfg.url_allowlist[0];
+            }
+          } catch(e) {}
+        }
+      }
+
+      const prompt = [
+        'I need help writing a custom_js_extraction function for a web scraper config.',
+        '',
+        'Config file: ' + filePath,
+        'Sample page URL: ' + (sampleUrl || '[paste a sample page URL here]'),
+        '',
+        'Please:',
+        '1. Look at the page HTML structure (fetch the URL or I can paste it)',
+        '2. Write a JS function that extracts the relevant structured data',
+        '3. Update the custom_js_extraction and chunk_template in the YAML config',
+        '',
+        'See ingestion/scrapers/configs/peixe_fresco_recipes.yaml for a working example of how these extraction functions work.',
+        '',
+        'If this extraction function is generic (works on any site with the same data structure,',
+        'not specific to this site\\'s HTML), add this comment at the top of the YAML file:',
+        '# LIBRARY_SUGGESTION: suggested_name | One-line description of what it extracts',
+      ].join('\\n');
+
+      navigator.clipboard.writeText(prompt).then(() => {
+        const btn = document.getElementById('_cjsCopyBtn');
+        if (btn) { const orig = btn.innerHTML; btn.innerHTML = '✅ Copied! Paste into Claude Code'; setTimeout(() => btn.innerHTML = orig, 3000); }
+      });
+    }
+
+    async function _reloadYamlConfig() {
+      const scraperName = document.getElementById('scraperName').value.trim();
+      const collName = document.getElementById('collectionSelect').value;
+      const btn = document.getElementById('_cjsReloadBtn');
+      if (btn) btn.textContent = '⏳ Reloading...';
+      await loadSourceConfig(scraperName, collName);
+      if (btn) { btn.textContent = '✅ Reloaded!'; setTimeout(() => btn.textContent = '🔄 Reload config from file', 2000); }
+    }
+
+    // ── Library extractor functions ──────────────────────────────────
+    let _libraryExtractors = [];  // cached list from API
+
+    async function _loadLibraryExtractors() {
+      try {
+        const res = await fetch('/api/scraper/library');
+        const data = await res.json();
+        _libraryExtractors = data.extractors || [];
+      } catch(e) {
+        _libraryExtractors = [];
+      }
+      _populateLibraryDropdown();
+    }
+
+    function _populateLibraryDropdown() {
+      const sel = document.getElementById('libraryExtractorSelect');
+      if (!sel) return;
+      // Keep "none" option, add library extractors
+      sel.innerHTML = '<option value="">(none — custom)</option>';
+      for (const ext of _libraryExtractors) {
+        const opt = document.createElement('option');
+        opt.value = ext.name;
+        opt.textContent = ext.name + ' — ' + (ext.description || '').substring(0, 60);
+        sel.appendChild(opt);
+      }
+    }
+
+    function _updateLibraryUI() {
+      const row = document.getElementById('libraryExtractorRow');
+      const sel = document.getElementById('libraryExtractorSelect');
+      const descEl = document.getElementById('libraryExtractorDesc');
+      if (!row || !_resolvedConfig) { if (row) row.style.display = 'none'; return; }
+
+      const mode = _resolvedConfig.extraction_mode || 'generic';
+      // Show library picker for custom_js and structured modes
+      if (mode === 'custom_js' || mode === 'structured') {
+        row.style.display = 'block';
+        // Set current value
+        const libName = _resolvedConfig.library_extractor || _resolvedConfig.config.library_extractor || '';
+        sel.value = libName;
+        // Show description of selected library extractor
+        if (libName && descEl) {
+          const ext = _libraryExtractors.find(e => e.name === libName);
+          if (ext) {
+            descEl.textContent = ext.description;
+            descEl.style.display = 'block';
+          } else {
+            descEl.style.display = 'none';
+          }
+        } else if (descEl) {
+          descEl.style.display = 'none';
+        }
+      } else {
+        row.style.display = 'none';
+      }
+
+      // Library suggestion banner
+      _checkLibrarySuggestion();
+    }
+
+    async function onLibraryExtractorChange() {
+      const libName = document.getElementById('libraryExtractorSelect').value;
+      if (!_resolvedConfig || !_resolvedConfig.config) return;
+
+      if (libName) {
+        _resolvedConfig.config.library_extractor = libName;
+      } else {
+        delete _resolvedConfig.config.library_extractor;
+      }
+
+      // Save and reload to get the merged config
+      await _autoSaveConfig();
+      const scraperName = document.getElementById('scraperName').value.trim();
+      const collName = document.getElementById('collectionSelect').value;
+      await loadSourceConfig(scraperName, collName);
+    }
+
+    async function _checkLibrarySuggestion() {
+      const banner = document.getElementById('librarySuggestionBanner');
+      if (!banner) return;
+
+      // Only check if we have a YAML file config and no library extractor already set
+      if (!_resolvedConfig || !_resolvedConfig.yaml_file_exists ||
+          _resolvedConfig.library_extractor || _resolvedConfig.config.library_extractor) {
+        banner.style.display = 'none';
+        return;
+      }
+
+      // Read the raw YAML to check for LIBRARY_SUGGESTION comment
+      const scraperName = _resolvedConfig.config.name || document.getElementById('scraperName').value.trim();
+      if (!scraperName) { banner.style.display = 'none'; return; }
+
+      try {
+        const res = await fetch('/api/scraper/resolve-config?scraper_name=' + encodeURIComponent(scraperName));
+        const data = await res.json();
+        // We need the raw file — use library/{name} or read from raw editor
+        // Actually, let's check via a simple endpoint or parse the config viewer
+        // For now, check if the config file has the suggestion by fetching raw
+        const rawRes = await fetch('/api/scraper/raw-config/' + encodeURIComponent(scraperName));
+        if (!rawRes.ok) { banner.style.display = 'none'; return; }
+        const rawData = await rawRes.json();
+        const rawText = rawData.raw || '';
+        const match = rawText.match(/# LIBRARY_SUGGESTION:\\s*(.+?)\\s*\\|\\s*(.+)/);
+        if (match) {
+          const sugName = match[1].trim();
+          const sugDesc = match[2].trim();
+          banner.innerHTML =
+            '💡 <strong>This extraction looks reusable!</strong> Save as library extractor <strong>' + sugName + '</strong>?' +
+            '<div style="margin-top:0.15rem;font-size:0.78rem;color:#666;">' + sugDesc + '</div>' +
+            '<div style="margin-top:0.4rem;display:flex;gap:0.4rem;">' +
+              '<button type="button" onclick="_acceptLibrarySuggestion(\\'' + sugName.replace(/'/g, "\\\\'") + '\\', \\'' + sugDesc.replace(/'/g, "\\\\'") + '\\')" ' +
+                'style="font-size:0.8rem;padding:0.25rem 0.65rem;background:#2a5caa;border:none;color:#fff;border-radius:4px;cursor:pointer;">📚 Save to library</button>' +
+              '<button type="button" onclick="document.getElementById(\\'librarySuggestionBanner\\').style.display=\\'none\\'" ' +
+                'style="font-size:0.8rem;padding:0.25rem 0.65rem;background:#fff;border:1px solid #999;border-radius:4px;cursor:pointer;">Dismiss</button>' +
+            '</div>';
+          banner.style.display = 'block';
+        } else {
+          banner.style.display = 'none';
+        }
+      } catch(e) {
+        banner.style.display = 'none';
+      }
+    }
+
+    async function _acceptLibrarySuggestion(libName, libDesc) {
+      const scraperName = _resolvedConfig.config.name || document.getElementById('scraperName').value.trim();
+      try {
+        const res = await fetch('/api/scraper/library', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_config_name: scraperName,
+            library_name: libName,
+            description: libDesc
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        document.getElementById('librarySuggestionBanner').style.display = 'none';
+        // Refresh library list and reload config
+        await _loadLibraryExtractors();
+        const collName = document.getElementById('collectionSelect').value;
+        await loadSourceConfig(scraperName, collName);
+        setLog(buildLog, '📚 Library extractor "' + libName + '" created!', false);
+      } catch(e) {
+        setLog(buildLog, '❌ ' + e.message, true);
+      }
+    }
+    async function _promptPromoteToLibrary() {
+      if (!_resolvedConfig || !_resolvedConfig.config) return;
+      const scraperName = _resolvedConfig.config.name || document.getElementById('scraperName').value.trim();
+      const suggestedName = prompt(
+        'Save this extraction as a reusable library extractor.\\n\\n' +
+        'Enter a short, generic name (e.g. "jsonld_faq", "woocommerce_product", "elementor_recipe"):',
+        scraperName
+      );
+      if (!suggestedName) return;
+      const desc = prompt(
+        'Enter a description for this library extractor:',
+        _resolvedConfig.description || ''
+      );
+      if (desc === null) return;
+      try {
+        const res = await fetch('/api/scraper/library', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_config_name: scraperName,
+            library_name: suggestedName,
+            description: desc
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        if (!data.created) {
+          alert(data.message || 'Library extractor already exists.');
+          return;
+        }
+        // Refresh library list and reload config
+        await _loadLibraryExtractors();
+        const collName = document.getElementById('collectionSelect').value;
+        await loadSourceConfig(scraperName, collName);
+        setLog(buildLog, '📚 Library extractor "' + suggestedName + '" created!', false);
+      } catch(e) {
+        setLog(buildLog, '❌ ' + e.message, true);
+      }
+    }
+    // ── End library extractor functions ──────────────────────────────
 
     function openRawConfigEditor() {
       if (!_resolvedConfig) return;
@@ -6631,6 +7433,41 @@ _INDEX_HTML = """
       return false;
     }
 
+    function _openFaqTableFromPipeline() {
+      const collSelect = document.getElementById('collectionSelect');
+      const collName = collSelect ? collSelect.value : '';
+      if (!collName || collName === '__new__') return;
+      const sol = _allSolutions.find(s => s.id === _currentSolutionId);
+      const company = sol ? sol.company : '';
+      const coll = _currentCollections[collName];
+      const lang = (coll && coll.routing && coll.routing.language) || 'en';
+      openFaqTableModal(collName, company, lang);
+    }
+
+    function openFaqTableModal(collName, company, lang) {
+      const modal = document.getElementById('faqTableModal');
+      const status = document.getElementById('faqTableStatus');
+      const content = document.getElementById('faqTableContent');
+      const copyBtn = document.getElementById('btnCopyFaq');
+      const saveBtn = document.getElementById('btnSaveFaq');
+      const loadBtn = document.getElementById('btnLoadFaq');
+      const genBtn = document.getElementById('btnGenerateFaq');
+      _faqModalCollName = collName;
+      document.getElementById('faqTableCollName').textContent = collName;
+      // Reset to initial state — show action buttons, hide results
+      status.style.color = '#666';
+      status.textContent = 'Choose an action below.';
+      content.style.display = 'none';
+      content.value = '';
+      copyBtn.style.display = 'none';
+      saveBtn.style.display = 'none';
+      loadBtn.style.display = 'inline-block';
+      genBtn.style.display = 'inline-block';
+      document.getElementById('btnPushFaqJBKE').style.display = 'none';
+      genBtn.onclick = () => generateFaqTable(collName, company, lang);
+      modal.style.display = 'flex';
+    }
+
     function _updatePipelineWarning() {
       const warn = document.getElementById('pipelineWarning');
       if (!warn) return;
@@ -6640,17 +7477,21 @@ _INDEX_HTML = """
       const createDone = document.getElementById('stepStatus-create_collection')?.textContent === '✅';
       const isFaq = _isFaqCollection();
 
+      // Show/hide FAQ table button next to Create
+      const faqBtn = document.getElementById('btnFaqTablePipeline');
+      if (faqBtn) faqBtn.style.display = isFaq ? '' : 'none';
+
       if (fetchDone && !chunkDone) {
         warn.textContent = '⚠️ Data ingested but not yet chunked. Run Chunk to continue.';
         warn.style.display = 'block';
       } else if (chunkDone && !createDone) {
-        warn.textContent = isFaq
-          ? '⚠️ Data chunked. Run Create Qdrant Collection to continue, or generate the FAQ table below.'
+        warn.innerHTML = isFaq
+          ? '⚠️ Data chunked. Run Create Qdrant Collection to continue, or <a href="#" onclick="_openFaqTableFromPipeline();return false;" style="color:#1565c0;font-weight:600;">generate the FAQ table</a>.'
           : '⚠️ Data chunked but Qdrant collection not yet created. Run Create Qdrant Collection to continue.';
         warn.style.display = 'block';
       } else if (chunkDone && createDone && !pushDone) {
-        warn.textContent = isFaq
-          ? '⚠️ Chunks ready but not yet pushed to Qdrant. Run Push to Qdrant to finish, or generate the FAQ table below.'
+        warn.innerHTML = isFaq
+          ? '⚠️ Chunks ready but not yet pushed to Qdrant. Run Push to Qdrant to finish, or <a href="#" onclick="_openFaqTableFromPipeline();return false;" style="color:#1565c0;font-weight:600;">generate the FAQ table</a>.'
           : '⚠️ Chunks ready but not yet pushed to Qdrant. Run Push to Qdrant to finish.';
         warn.style.display = 'block';
       } else {
@@ -6738,7 +7579,7 @@ _INDEX_HTML = """
           const row = document.createElement('div');
           row.style.cssText = 'display:flex;align-items:center;gap:0.6rem;margin-bottom:0.45rem;padding:0.4rem 0.55rem;background:#f8f9fa;border-radius:6px;border:1px solid #eee;';
           row.innerHTML = `<span style="flex:1;font-size:0.83rem;"><strong>${fc.display_name}</strong> <span style="color:#888;font-size:0.76rem;">(${fc.solution})</span></span>
-            <button onclick="generateFaqTable(${JSON.stringify(fc.collection_name)},${JSON.stringify(fc.company)},${JSON.stringify(fc.language)})" style="font-size:0.8rem;padding:0.22rem 0.6rem;">Generate Table</button>`;
+            <button onclick="openFaqTableModal(${JSON.stringify(fc.collection_name)},${JSON.stringify(fc.company)},${JSON.stringify(fc.language)})" style="font-size:0.8rem;padding:0.22rem 0.6rem;">FAQ Table</button>`;
           container.appendChild(row);
         }
       } catch(e) {
@@ -6746,16 +7587,26 @@ _INDEX_HTML = """
       }
     }
 
+    let _faqModalCollName = '';  // track which collection the FAQ modal is showing
+
     async function generateFaqTable(collName, company, lang) {
       const modal = document.getElementById('faqTableModal');
       const status = document.getElementById('faqTableStatus');
       const content = document.getElementById('faqTableContent');
       const copyBtn = document.getElementById('btnCopyFaq');
+      const saveBtn = document.getElementById('btnSaveFaq');
+      const loadBtn = document.getElementById('btnLoadFaq');
+      const genBtn = document.getElementById('btnGenerateFaq');
+      _faqModalCollName = collName;
       document.getElementById('faqTableCollName').textContent = collName;
-      status.style.color = '#666';  // reset from any previous error
+      status.style.color = '#666';
       status.textContent = 'Generating… (this may take 10-20 seconds)';
       content.style.display = 'none';
       copyBtn.style.display = 'none';
+      saveBtn.style.display = 'none';
+      loadBtn.style.display = 'none';
+      genBtn.style.display = 'none';
+      document.getElementById('btnPushFaqJBKE').style.display = 'none';
       modal.style.display = 'flex';
       try {
         const res = await fetch('/api/faq/generate-table', {
@@ -6769,6 +7620,8 @@ _INDEX_HTML = """
         content.value = data.table;
         content.style.display = '';
         copyBtn.style.display = '';
+        saveBtn.style.display = '';
+        document.getElementById('btnPushFaqJBKE').style.display = '';
         const sourceNote = data.source ? ` (from ${data.source})` : '';
         status.style.color = '#2e7d32';
         status.textContent = `✅ ${data.count} Q&A pair${data.count !== 1 ? 's' : ''} extracted${sourceNote}`;
@@ -6785,6 +7638,80 @@ _INDEX_HTML = """
         const btn = document.getElementById('btnCopyFaq');
         if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
       }).catch(() => { ta.select(); document.execCommand('copy'); });
+    }
+
+    async function saveFaqTable() {
+      const content = document.getElementById('faqTableContent');
+      const btn = document.getElementById('btnSaveFaq');
+      if (!content || !content.value.trim() || !_currentSolutionId || !_faqModalCollName) return;
+      btn.textContent = '⏳ Saving…';
+      try {
+        const res = await fetch('/api/faq/save-table', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ solution_id: _currentSolutionId, collection_name: _faqModalCollName, faq_table: content.value })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Save failed');
+        btn.textContent = '✅ Saved! (' + data.count + ' pairs)';
+        setTimeout(() => btn.textContent = '💾 Save', 2000);
+      } catch(e) {
+        btn.textContent = '❌ ' + e.message;
+        setTimeout(() => btn.textContent = '💾 Save', 3000);
+      }
+    }
+
+    async function loadFaqTable() {
+      const status = document.getElementById('faqTableStatus');
+      const content = document.getElementById('faqTableContent');
+      const copyBtn = document.getElementById('btnCopyFaq');
+      const saveBtn = document.getElementById('btnSaveFaq');
+      const btn = document.getElementById('btnLoadFaq');
+      if (!_currentSolutionId || !_faqModalCollName) return;
+      btn.textContent = '⏳ Loading…';
+      try {
+        const res = await fetch('/api/faq/load-table/' + encodeURIComponent(_currentSolutionId) + '/' + encodeURIComponent(_faqModalCollName));
+        const data = await res.json();
+        if (!data.faq_table || !data.count) {
+          btn.textContent = '📂 No saved table';
+          setTimeout(() => btn.textContent = '📂 Load saved', 2000);
+          return;
+        }
+        content.value = data.faq_table;
+        content.style.display = '';
+        copyBtn.style.display = '';
+        saveBtn.style.display = '';
+        document.getElementById('btnPushFaqJBKE').style.display = '';
+        status.style.color = '#2a5caa';
+        status.textContent = '📂 Loaded saved table: ' + data.count + ' Q&A pair' + (data.count !== 1 ? 's' : '');
+        btn.textContent = '📂 Load saved';
+      } catch(e) {
+        btn.textContent = '❌ ' + e.message;
+        setTimeout(() => btn.textContent = '📂 Load saved', 3000);
+      }
+    }
+
+    async function pushFaqToJBKE() {
+      const content = document.getElementById('faqTableContent');
+      const btn = document.getElementById('btnPushFaqJBKE');
+      if (!content || !_currentSolutionId) return;
+      if (!content.value.trim()) { alert('No FAQ table content. Generate or load a table first.'); return; }
+      if (!confirm('Push this FAQ table to jBKE environment?\\n\\nThis will update the ced_faq_table field in the content environment configured for this solution.')) return;
+      btn.textContent = '⏳ Pushing…';
+      try {
+        const res = await fetch('/api/faq/push-to-jbke', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ solution_id: _currentSolutionId, faq_table: content.value })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Push failed');
+        btn.textContent = '✅ Pushed!';
+        btn.style.background = '#2e7d32';
+      } catch(e) {
+        btn.textContent = '❌ ' + e.message;
+        btn.style.background = '#c62828';
+      }
     }
 
     function renderRelevanceCard(report) {
@@ -6845,16 +7772,6 @@ _INDEX_HTML = """
       const open = body.style.display !== 'none';
       body.style.display = open ? 'none' : '';
       if (chev) chev.textContent = open ? '▶' : '▼';
-      // Show/hide config viewer alongside source config body
-      const cfgPanel = document.getElementById('configViewerPanel');
-      const rawEditor = document.getElementById('rawConfigEditor');
-      if (open) {
-        if (cfgPanel) cfgPanel.style.display = 'none';
-        if (rawEditor) rawEditor.style.display = 'none';
-      } else {
-        // Re-show config viewer if we have resolved config (for URL sources)
-        if (cfgPanel && _resolvedConfig && _resolvedConfig.config) cfgPanel.style.display = 'block';
-      }
     }
     function _collapseSourceConfig() {
       const body = document.getElementById('sourceConfigBody');
@@ -6862,11 +7779,6 @@ _INDEX_HTML = """
       const summary = document.getElementById('sourceConfigSummary');
       if (body) body.style.display = 'none';
       if (chev) chev.textContent = '▶';
-      // Hide config viewer + raw editor when collapsed
-      const cfgPanel = document.getElementById('configViewerPanel');
-      const rawEditor = document.getElementById('rawConfigEditor');
-      if (cfgPanel) cfgPanel.style.display = 'none';
-      if (rawEditor) rawEditor.style.display = 'none';
       // Build summary from source type + engine/file
       const st = (document.getElementById('sourceType') || {}).value || '';
       const scraper = (document.getElementById('scraperName') || {}).value || '';
@@ -6929,12 +7841,17 @@ _INDEX_HTML = """
       };
     }
 
-    document.getElementById('runCreate').onclick = () => runStep('create_collection');
-    document.getElementById('runFetch').onclick = () => runFetchWithProgress();
-    document.getElementById('runTranslate').onclick = () => runTranslateWithProgress();
-    document.getElementById('runChunk').onclick = () => runStep('chunk');
-    document.getElementById('runPush').onclick = () => runPushWithProgress();
-    document.getElementById('runSync').onclick = () => runSync();
+    function _confirmStep(stepLabel) {
+      const collName = document.getElementById('collectionSelect')?.value || '(unknown)';
+      return confirm(stepLabel + ' for collection "' + collName + '"?');
+    }
+
+    document.getElementById('runCreate').onclick = () => { if (_confirmStep('Create Qdrant collection')) runStep('create_collection'); };
+    document.getElementById('runFetch').onclick = () => { if (_confirmStep('Ingest')) runFetchWithProgress(); };
+    document.getElementById('runTranslate').onclick = () => { if (_confirmStep('Translate & Clean')) runTranslateWithProgress(); };
+    document.getElementById('runChunk').onclick = () => { if (_confirmStep('Chunk')) runStep('chunk'); };
+    document.getElementById('runPush').onclick = () => { if (_confirmStep('Push to Qdrant')) runPushWithProgress(); };
+    document.getElementById('runSync').onclick = () => { if (_confirmStep('Sync')) runSync(); };
 
     // Disable Push + Sync in DEV mode (don't set .disabled — it swallows click events)
     if ("__DEV_MODE__" === "1") {
@@ -9260,7 +10177,7 @@ _INDEX_HTML = """
               const sol = (_allSolutions || []).find(s => s.id === solId);
               const company = (sol && (sol.company_name || sol.display_name)) || 'the company';
               const lang = (sol && sol.language) || document.getElementById('wizardLang').value || 'en';
-              generateFaqTable(collName, company, lang);
+              openFaqTableModal(collName, company, lang);
             };
             btnWrap.appendChild(faqBtn);
           }
@@ -10490,11 +11407,15 @@ _INDEX_HTML = """
     <div style="background:#fff;border-radius:12px;padding:1.5rem;max-width:700px;width:92%;box-shadow:0 8px 24px rgba(0,0,0,0.2);max-height:85vh;display:flex;flex-direction:column;">
       <div style="font-weight:600;font-size:1rem;margin-bottom:0.5rem;">📋 FAQ Table — <span id="faqTableCollName"></span></div>
       <div id="faqTableStatus" style="font-size:0.82rem;color:#666;margin-bottom:0.4rem;">Generating…</div>
-      <textarea id="faqTableContent" style="flex:1;width:100%;min-height:260px;font-family:monospace;font-size:0.77rem;border:1px solid #ddd;border-radius:6px;padding:0.5rem;box-sizing:border-box;display:none;resize:vertical;" readonly></textarea>
+      <textarea id="faqTableContent" style="flex:1;width:100%;min-height:260px;font-family:monospace;font-size:0.77rem;border:1px solid #ddd;border-radius:6px;padding:0.5rem;box-sizing:border-box;display:none;resize:vertical;"></textarea>
       <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <button id="btnGenerateFaq" style="display:none;">▶ Generate</button>
+        <button id="btnLoadFaq" onclick="loadFaqTable()" style="display:none;">📂 Load saved</button>
         <button id="btnCopyFaq" onclick="copyFaqTable()" style="display:none;">📋 Copy all</button>
+        <button id="btnSaveFaq" onclick="saveFaqTable()" style="display:none;">💾 Save</button>
+        <button id="btnPushFaqJBKE" onclick="pushFaqToJBKE()" style="display:none;background:#6a1b9a;color:#fff;">🚀 Push to jBKE</button>
         <button onclick="document.getElementById('faqTableModal').style.display='none'">Close</button>
-        <span style="font-size:0.75rem;color:#999;margin-left:auto;">Tab-separated · Paste into jBKE Knowledge Editor</span>
+        <span id="faqTableHint" style="font-size:0.75rem;color:#999;margin-left:auto;">Tab-separated · Paste into jBKE Knowledge Editor</span>
       </div>
     </div>
   </div>
