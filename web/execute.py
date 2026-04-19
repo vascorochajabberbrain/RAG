@@ -356,8 +356,9 @@ def get_collection_info(collection_name: str):
         )
 
     try:
-        from qdrant_utils import qdrant_client
-        info = qdrant_client.get_collection(collection_name)
+        from qdrant_utils import get_qdrant_connection
+        client = get_qdrant_connection()
+        info = client.get_collection(collection_name)
         return CollectionInfoResponse(
             collection_name=collection_name,
             exists=True,
