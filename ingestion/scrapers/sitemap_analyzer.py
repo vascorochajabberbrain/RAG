@@ -124,24 +124,25 @@ def suggest_collections(categories: list) -> list:
     system_prompt = (
         "You are helping set up a RAG (Retrieval-Augmented Generation) chatbot for a website.\n"
         "Given the sitemap categories discovered on the site, suggest how to group them into "
-        "RAG collections. Each collection should have a clear, distinct purpose for a chatbot.\n\n"
+        "RAG collections OR a FAQ table. Each group should have a clear, distinct purpose.\n\n"
         "Return ONLY a valid JSON array. Each element:\n"
         "{\n"
         '  "collection_name": "snake_case (2-3 words max)",\n'
         '  "display_name": "Human readable name",\n'
         '  "doc_type": "product_catalog | recipe_book | faq | manual | legal | general",\n'
+        '  "destination": "rag_collection | faq_table",\n'
         '  "categories": ["list of category ids"],\n'
         '  "rationale": "One sentence why this collection makes sense for a chatbot"\n'
         "}\n\n"
         "Rules:\n"
-        "- Products must always be their own collection (doc_type: product_catalog)\n"
-        "- FAQ, terms, returns, about, contact, legal pages → ALWAYS their own separate collection "
-        "named 'customer_support' (doc_type: faq). Never merge with products, recipes, or other content.\n"
-        "- If both FAQ/about AND legal/terms sections exist, keep them together in customer_support "
-        "unless they are each very large (>50 pages), in which case split legal out separately.\n"
-        "- Recipe/how-to content → recipe_book\n"
+        "- Products must always be their own collection (doc_type: product_catalog, destination: rag_collection)\n"
+        "- Pages that contain FAQ / frequently asked questions (Q&A pairs) -> destination: faq_table.\n"
+        "  These will be imported as structured Q&A pairs, NOT as RAG chunks.\n"
+        "- Other support pages (about, contact, returns, shipping, terms, legal) that are NOT Q&A format\n"
+        "  -> destination: rag_collection, doc_type: general or faq.\n"
+        "- Recipe/how-to content -> destination: rag_collection, doc_type: recipe_book\n"
         "- If a category has <3 pages it can be merged into a related collection\n"
-        "- Categories with unclear value for a chatbot should still be listed but with doc_type: general\n"
+        "- Categories with unclear value for a chatbot should still be listed with doc_type: general\n"
         "- No markdown, no explanation — ONLY the JSON array"
     )
     content = f"Site categories:\n{json.dumps(summary, ensure_ascii=False, indent=2)}"
@@ -514,21 +515,32 @@ def _fallback_suggest(categories: list) -> list:
 
     for cat in categories:
         cid = cat["id"].lower()
+        preview = (cat.get("preview") or "").lower()
+        # Detect FAQ pages by checking for Q&A patterns in preview
+        has_qa = any(k in preview for k in ["perguntas frequentes", "faq", "frequently asked"])
         if any(k in cid for k in PRODUCT_KEYS):
             name = "products"
             doc_type = "product_catalog"
+            destination = "rag_collection"
         elif any(k in cid for k in RECIPE_KEYS):
             name = "recipes"
             doc_type = "recipe_book"
+            destination = "rag_collection"
+        elif has_qa or "faq" in cid:
+            name = "faq"
+            doc_type = "faq"
+            destination = "faq_table"
         elif any(k in cid for k in FAQ_KEYS):
             name = "customer_support"
-            doc_type = "faq"
+            doc_type = "general"
+            destination = "rag_collection"
         else:
             name = re.sub(r"[-_]sitemap$", "", cid).replace("-", "_")
             doc_type = "general"
+            destination = "rag_collection"
 
         if name not in name_to_cats:
-            name_to_cats[name] = {"doc_type": doc_type, "cats": []}
+            name_to_cats[name] = {"doc_type": doc_type, "destination": destination, "cats": []}
         name_to_cats[name]["cats"].append(cat["id"])
 
     result = []
@@ -537,6 +549,7 @@ def _fallback_suggest(categories: list) -> list:
             "collection_name": name,
             "display_name": name.replace("_", " ").title(),
             "doc_type": info["doc_type"],
+            "destination": info["destination"],
             "categories": info["cats"],
             "rationale": f"Auto-suggested from {len(info['cats'])} category(s).",
         })
