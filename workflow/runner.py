@@ -294,11 +294,84 @@ def _run_chunk(state: WorkflowState) -> str:
     if not text:
         return "Error: No text to chunk. Run FETCH (and optionally CLEAN) first."
 
-    # Fast path for URL/scraper sources: scraped_items already has exactly 1 entry per page,
-    # each pre-rendered by the chunk_template. Use them directly — no splitting needed.
+    # URL/scraper sources: scraped_items has 1 entry per page.
+    # If items were produced by structured extraction (chunk_template), use them as-is.
+    # Otherwise, clean the text and apply the chunking config.
     if state.scraped_items:
-        state.chunks = [item["text"] for item in state.scraped_items]
-        return f"Chunked into {len(state.chunks)} chunks (1 per scraped page — no splitting needed)."
+        # Detect structured extraction: these items have short, template-formatted text
+        # starting with "Product:", "Recipe:", etc.
+        first_text = (state.scraped_items[0].get("text") or "")[:50].strip()
+        is_structured = any(first_text.startswith(p) for p in ("Product:", "Recipe:", "Item:"))
+
+        if is_structured:
+            # Structured extraction — already clean, 1 chunk per page
+            state.chunks = [item["text"] for item in state.scraped_items]
+            return f"Chunked into {len(state.chunks)} chunks (structured extraction — 1 per page)."
+
+        # Generic text scrape — clean each page then apply chunking config
+        from ingestion.text_cleaner import clean_scraped_text
+
+        cleaned_items = []
+        for item in state.scraped_items:
+            raw = item.get("text", "")
+            cleaned = clean_scraped_text(raw)
+            if cleaned:
+                cleaned_items.append({**item, "text": cleaned, "text_raw": raw})
+
+        if not cleaned_items:
+            return "Error: All pages were empty after cleaning."
+
+        # If pages are small enough, keep 1 chunk per page (with cleaned text)
+        avg_len = sum(len(it["text"]) for it in cleaned_items) / len(cleaned_items)
+        max_chunk = cfg.hierarchical_parent_size if cfg.use_hierarchical_chunking else cfg.simple_chunk_size
+
+        if avg_len <= max_chunk:
+            # Pages are small — 1 cleaned chunk per page
+            state.chunks = [it["text"] for it in cleaned_items]
+            state.scraped_items = cleaned_items
+            return f"Chunked into {len(state.chunks)} chunks (1 per cleaned page, avg {int(avg_len)} chars)."
+
+        # Pages are large — concatenate and apply hierarchical/simple chunking
+        # Keep URL attribution by marking chunk boundaries
+        all_chunks = []
+        for item in cleaned_items:
+            page_text = item["text"]
+            page_url = item.get("url", "")
+
+            if cfg.use_hierarchical_chunking:
+                from langchain_text_splitters import CharacterTextSplitter
+                parent_splitter = CharacterTextSplitter(
+                    separator="\n", chunk_size=cfg.hierarchical_parent_size,
+                    chunk_overlap=cfg.hierarchical_parent_overlap, length_function=len,
+                )
+                child_splitter = CharacterTextSplitter(
+                    separator="\n", chunk_size=cfg.hierarchical_child_size,
+                    chunk_overlap=cfg.hierarchical_child_overlap, length_function=len,
+                )
+                parents = parent_splitter.split_text(page_text)
+                for parent in parents:
+                    children = child_splitter.split_text(parent)
+                    for child in children:
+                        all_chunks.append({
+                            "text": f"Context:\n{parent}\n\nPassage:\n{child}",
+                            "url": page_url,
+                        })
+            else:
+                from langchain_text_splitters import CharacterTextSplitter
+                splitter = CharacterTextSplitter(
+                    separator="\n", chunk_size=cfg.simple_chunk_size,
+                    chunk_overlap=cfg.simple_chunk_overlap, length_function=len,
+                )
+                page_chunks = splitter.split_text(page_text)
+                for ch in page_chunks:
+                    all_chunks.append({"text": ch, "url": page_url})
+
+        state.chunks = [ch["text"] for ch in all_chunks]
+        state.scraped_items = [{"text": ch["text"], "url": ch["url"]} for ch in all_chunks]
+        return (
+            f"Chunked {len(cleaned_items)} cleaned pages into {len(all_chunks)} chunks "
+            f"(avg page {int(avg_len)} chars, {'hierarchical' if cfg.use_hierarchical_chunking else 'simple'} chunking)."
+        )
 
     if cfg.use_hierarchical_chunking:
         msg = _run_chunk_hierarchical(state, cfg, text)
