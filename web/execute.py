@@ -157,9 +157,11 @@ def execute_fetch(req: FetchRequest):
     if req.source_type == "url":
         if req.scraper_config:
             sc = req.scraper_config
-            source_config["scraper_name"] = sc.name
+            # Use the scraper name if provided, otherwise generate one from the sitemap URL
+            scraper_name = sc.name or f"sitemap_{hash(sc.sitemap_url or sc.start_url or 'default') & 0xFFFF:04x}"
+            source_config["scraper_name"] = scraper_name
             source_config["scraper_config"] = {
-                "name": sc.name,
+                "name": scraper_name,
                 "engine": sc.engine,
                 "scrape_mode": sc.scrape_mode,
                 "sitemap_url": sc.sitemap_url,
