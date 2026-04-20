@@ -1,7 +1,7 @@
 """
 Site Analysis Wizard — backend utilities.
 
-Fetches sitemap structure, samples pages, suggests RAG collection groupings,
+Fetches sitemap structure, samples pages, suggests RAG collections,
 and generates scraper YAML configs.
 
 Used by POST /api/wizard/analyse and POST /api/wizard/confirm in web/app.py.
@@ -100,8 +100,8 @@ def fetch_sitemap_structure(domain_url: str, login_config: dict | None = None) -
 
 def suggest_collections(categories: list) -> list:
     """
-    Ask GPT-4o-mini to group categories into suggested RAG collections.
-    Falls back to rule-based grouping on any failure.
+    Ask GPT-4o-mini to suggest RAG collections from sitemap categories.
+    Falls back to rule-based suggestions on any failure.
     """
     from llms.openai_utils import openai_chat_completion
 
@@ -131,7 +131,7 @@ def suggest_collections(categories: list) -> list:
         '  "display_name": "Human readable name",\n'
         '  "doc_type": "product_catalog | recipe_book | faq | manual | legal | general",\n'
         '  "categories": ["list of category ids"],\n'
-        '  "rationale": "One sentence why this grouping makes sense for a chatbot"\n'
+        '  "rationale": "One sentence why this collection makes sense for a chatbot"\n'
         "}\n\n"
         "Rules:\n"
         "- Products must always be their own collection (doc_type: product_catalog)\n"
