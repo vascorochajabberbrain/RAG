@@ -1,6 +1,16 @@
-# Peixe Fresco — static pages (sobre-nos, FAQ, termos, informacoes-legais)
-# Uses httpx (fast) — these are plain static WordPress pages, no JS needed
-# Raw text returned → normal CHUNK step handles splitting
+# ── About this extraction ──
+# Mode:        generic
+# Good for:    Simple static pages (about us, terms, legal, FAQ) where grabbing
+#              all visible text from a container is sufficient. No field extraction
+#              needed — raw text goes through the normal CHUNK step for splitting.
+# Data:        Full text content from .entry-content container. One or more chunks
+#              per page depending on length and chunking config.
+# Not for:     Pages with structured data you want to extract into named fields.
+#              JS-heavy pages that need browser rendering (use Playwright instead).
+# Limitations: Uses httpx engine (no JS) — only works for server-rendered HTML.
+#              Text includes all visible content, no filtering of boilerplate.
+# ──
+description: "Grabs full text from static WordPress pages — about, FAQ, terms, legal"
 name: peixe_fresco_pages
 engine: httpx
 scrape_mode: sitemap

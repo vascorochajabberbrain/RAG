@@ -1,0 +1,51 @@
+# ── Library Extractor ──
+# Reusable extraction method — provides the HOW (JS function + template).
+# Link to a collection config that provides the WHERE (sitemap, URL filter).
+#
+# Returns an ARRAY of dicts — one per Q&A pair — so each becomes a separate
+# chunk in Qdrant. This gives better RAG retrieval (specific answers) while
+# still working for FAQ table generation (all chunks combined).
+# ──
+library: true
+description: "Extracts FAQ Q&A pairs from JSON-LD FAQPage schema embedded in the page. Returns one chunk per Q&A pair for granular RAG retrieval."
+engine: playwright
+custom_js_extraction: |
+  () => {
+    // Extract FAQ Q&A pairs from JSON-LD FAQPage schema
+    // Returns an ARRAY — each element becomes a separate chunk
+    const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+    const pairs = [];
+
+    for (const script of scripts) {
+      try {
+        const data = JSON.parse(script.textContent);
+        // Handle both direct FAQPage and @graph arrays
+        const candidates = data['@graph'] ? data['@graph'] : [data];
+        for (const item of candidates) {
+          if (item['@type'] === 'FAQPage' && Array.isArray(item.mainEntity)) {
+            for (const q of item.mainEntity) {
+              if (q['@type'] === 'Question') {
+                const question = q.name || '';
+                const answer = (q.acceptedAnswer && q.acceptedAnswer.text) || '';
+                if (question) pairs.push({ question, answer });
+              }
+            }
+          }
+        }
+      } catch(e) { /* skip malformed JSON-LD */ }
+    }
+
+    const title = document.querySelector('h1')?.innerText?.trim() || 'FAQ';
+
+    // Return array of dicts — one chunk per Q&A pair
+    return pairs.map(p => ({
+      title,
+      question: p.question,
+      answer: p.answer
+    }));
+  }
+chunk_template: |
+  FAQ: {title}
+  Q: {question}
+  A: {answer}
+  URL: {url}

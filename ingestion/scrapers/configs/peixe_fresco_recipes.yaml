@@ -1,8 +1,18 @@
-# Peixe Fresco — recipe collection (11 recipes via sitemap)
-# 1 structured chunk per recipe with ingredients, steps, cross-link to product
-# Uses custom_js_extraction because the site uses Elementor page builder:
-#   - Content is in sibling Elementor widgets, not siblings of the H2
-#   - Products are listed as H2 elements, not WooCommerce loop classes
+# ── About this extraction ──
+# Mode:        custom_js
+# Good for:    Sites with complex layouts (Elementor, page builders) where content
+#              lives in separate widget containers, not standard HTML hierarchy.
+#              Each page has a consistent structure but CSS selectors alone can't
+#              navigate between sibling widgets.
+# Data:        Returns structured object per page — title, ingredients, preparation
+#              steps, and linked product with URL. One chunk per recipe.
+# Not for:     Simple static pages where generic text grab works fine.
+#              Sites that need login or user interaction to reveal content.
+# Limitations: Requires Playwright engine (needs JS execution in browser).
+#              JS function must be updated if the site redesigns its layout.
+#              Cannot handle content behind login walls or lazy-loaded content.
+# ──
+description: "Extracts recipe data from Elementor widgets — title, ingredients, preparation, linked product"
 name: peixe_fresco_recipes
 engine: playwright
 scrape_mode: sitemap

@@ -200,12 +200,16 @@ def _extract_text(page, config: dict) -> str:
             return ""
 
 
-def _extract_custom_js(page, url: str, config: dict) -> str:
+def _extract_custom_js(page, url: str, config: dict) -> str | list[str]:
     """
-    Run a custom JavaScript function in the browser context that returns a dict of fields.
-    The JS must be a function expression: '() => { ... return { field1, field2, ... }; }'
+    Run a custom JavaScript function in the browser context.
+
+    The JS function can return:
+      - A dict of fields → rendered as a single chunk via chunk_template
+      - An array of dicts → each rendered as a separate chunk (one per item)
+
     config keys:
-      custom_js_extraction: str  — JS function expression returning a dict of fields
+      custom_js_extraction: str  — JS function expression returning a dict or array of dicts
       chunk_template: str        — template rendered with the returned fields + {url}
     """
     js_fn = config.get("custom_js_extraction", "")
@@ -213,13 +217,30 @@ def _extract_custom_js(page, url: str, config: dict) -> str:
         return ""
 
     try:
-        fields = page.evaluate(js_fn)
-        if not isinstance(fields, dict):
-            print(f"[playwright_scraper] WARNING: custom_js_extraction did not return a dict for {url}")
-            return ""
-        fields["url"] = url  # always inject url
+        result = page.evaluate(js_fn)
         template = config.get("chunk_template", "{url}")
-        return template.format_map(fields).strip()
+
+        # Array of dicts → multiple chunks from one page
+        if isinstance(result, list):
+            chunks = []
+            for item in result:
+                if not isinstance(item, dict):
+                    continue
+                item["url"] = url
+                try:
+                    chunks.append(template.format_map(item).strip())
+                except KeyError as e:
+                    print(f"[playwright_scraper] WARNING: chunk_template missing key {e} in array item")
+            print(f"[playwright_scraper] custom_js returned {len(chunks)} items for {url}")
+            return chunks if chunks else ""
+
+        # Single dict → one chunk
+        if isinstance(result, dict):
+            result["url"] = url
+            return template.format_map(result).strip()
+
+        print(f"[playwright_scraper] WARNING: custom_js_extraction returned unexpected type {type(result).__name__} for {url}")
+        return ""
     except Exception as e:
         print(f"[playwright_scraper] WARNING: custom_js_extraction failed for {url}: {e}")
         return ""
@@ -342,7 +363,10 @@ def _filter_urls(urls: list, config: dict) -> list:
 
 
 def _scrape_url_list(page, urls: list, config: dict, cancel_check=None) -> tuple:
-    """Scrape a list of URLs. Returns (joined_text, scraped_items)."""
+    """Scrape a list of URLs. Returns (joined_text, scraped_items).
+
+    When custom_js_extraction returns an array, each element becomes a separate item.
+    """
     results = []
     items = []
     for i, url in enumerate(urls, 1):
@@ -351,7 +375,13 @@ def _scrape_url_list(page, urls: list, config: dict, cancel_check=None) -> tuple
             break
         print(f"[playwright_scraper] Scraping {i}/{len(urls)}: {url}")
         text = _fetch_and_extract(page, url, config)
-        if text:
+        if isinstance(text, list):
+            # custom_js returned multiple chunks from one page
+            for chunk in text:
+                if chunk:
+                    results.append(chunk)
+                    items.append({"url": url, "text": chunk})
+        elif text:
             results.append(text)
             items.append({"url": url, "text": text})
         else:
@@ -359,5 +389,5 @@ def _scrape_url_list(page, urls: list, config: dict, cancel_check=None) -> tuple
         if i < len(urls):
             time.sleep(config.get("page_delay", 0.5))
 
-    print(f"[playwright_scraper] Done. {len(results)}/{len(urls)} pages extracted.")
+    print(f"[playwright_scraper] Done. {len(items)} items from {len(urls)} pages.")
     return "\n\n---\n\n".join(results), items

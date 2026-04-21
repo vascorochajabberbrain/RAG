@@ -1,0 +1,12 @@
+# ── About this extraction ──
+# Mode:        library (jsonld_faq)
+# Good for:    FAQ pages that embed structured Q&A data in JSON-LD schema
+#              (FAQPage type). Uses the jsonld_faq library extractor.
+# Data:        Returns all Q&A pairs from JSON-LD FAQPage schema as formatted text.
+# ──
+description: "Peixe Fresco FAQ — uses jsonld_faq library extractor"
+name: peixe_fresco_faq
+library_extractor: jsonld_faq
+scrape_mode: sitemap
+sitemap_url: "https://store.peixefresco.com.pt/page-sitemap.xml"
+url_filter: "/perguntas-frequentes"

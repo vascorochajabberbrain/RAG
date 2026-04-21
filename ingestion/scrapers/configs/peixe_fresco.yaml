@@ -1,5 +1,14 @@
-# Peixe Fresco — recipe blog scraper (rebuilt with Playwright, replaces Selenium legacy)
-# Keeps name: peixefresco for backward compat with existing solutions.yaml entry.
+# ── About this extraction ──
+# Mode:        structured (legacy)
+# Good for:    This was the original recipe scraper using CSS selectors. Replaced by
+#              peixe_fresco_recipes.yaml which uses custom_js_extraction for better
+#              Elementor compatibility. Kept for backward compat with existing data.
+# Data:        Recipe title, ingredients, preparation, linked product.
+# Not for:     New recipe scraping — use peixe_fresco_recipes.yaml instead.
+# Limitations: CSS selectors don't reliably work with Elementor widget structure.
+#              Superseded by custom_js approach.
+# ──
+description: "Legacy recipe scraper using CSS selectors — superseded by peixe_fresco_recipes"
 name: peixe_fresco
 engine: playwright
 scrape_mode: sitemap

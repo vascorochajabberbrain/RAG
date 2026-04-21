@@ -1,5 +1,16 @@
-# Peixe Fresco — product catalog (101 products via sitemap)
-# 1 structured chunk per product with name, price, attributes, description, URL
+# ── About this extraction ──
+# Mode:        structured
+# Good for:    E-commerce product pages with consistent HTML structure.
+#              Uses CSS selectors to extract specific fields (name, price, etc.)
+#              into a chunk template. One chunk per product page.
+# Data:        Product name, price, cooking purpose, preparation type, description.
+#              WooCommerce attribute rows extracted via row_name matching.
+# Not for:     Pages without consistent CSS selectors or with JS-rendered content
+#              that standard selectors can't reach (use custom_js instead).
+# Limitations: Selectors are site-specific — won't work on other stores without
+#              updating. Elementor overrides some default WooCommerce classes.
+# ──
+description: "Extracts product catalog data via CSS selectors — name, price, attributes, description"
 name: peixe_fresco_products
 engine: playwright
 scrape_mode: sitemap
