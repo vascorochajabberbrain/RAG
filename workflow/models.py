@@ -56,7 +56,7 @@ class WorkflowState:
     # Source
     source_type: Optional[str] = None  # pdf | url | txt | csv
     source_config: Optional[dict] = None  # path, url, scraper_name, etc.
-    source_id: Optional[str] = None  # id from solutions.yaml sources list (for per-source state files)
+    source_id: Optional[str] = None  # rag_sources.id from jBKB (for per-source state files)
 
     # Fetched / cleaned text
     raw_text: Optional[str] = None

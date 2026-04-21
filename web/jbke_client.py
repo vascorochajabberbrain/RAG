@@ -208,7 +208,7 @@ class JBKEClient:
 
     @staticmethod
     def _doc_type_to_rcd_type(doc_type: str) -> str:
-        """Map solutions.yaml doc_type to jBKE rcd_type values."""
+        """Map routing doc_type (product_catalog | recipe_book | faq | ...) to jBKE rcd_type values."""
         mapping = {
             "product_catalog": "Product",
             "recipe_book": "Recipe",
@@ -229,7 +229,7 @@ class JBKEClient:
         version_id: int | None = None,
     ) -> dict:
         """
-        Transform solutions.yaml routing + settings into jBKE POST fields.
+        Transform a routing + settings dict into jBKE POST fields.
 
         Array fields (keywords, typical_questions, not_covered) are joined
         with comma or pipe separators to match jBKE's expected format.

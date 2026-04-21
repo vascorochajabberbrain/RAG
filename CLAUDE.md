@@ -94,10 +94,9 @@ User question → improve query → embed → similarity search → LLM → answ
 | `workflow/runner.py` | Executes each workflow step (FETCH, CLEAN, CHUNK, GROUP, PUSH…) |
 | `workflow/cli.py` | Guided CLI for the full workflow |
 | `workflow/suggest.py` | LLM suggests chunking params + generates collection metadata (topics, keywords, description, language, doc_type) |
-| `web/app.py` | FastAPI web UI — Build RAG + Chat tabs |
-| `run_app.py` | Launch web UI (opens browser at localhost:8000) |
-| `solution_specs/solutions.yaml` | Single source of truth for all RAG solutions (collection name, type, scraper, aliases) |
-| `solution_specs/loader.py` | Load/list/resolve solutions; designed to move to DB later |
+| `web/app.py` | Legacy FastAPI web UI (not used by jBKB — kept for offline debugging / reference) |
+| `web/execute.py` | Stateless `/api/execute/*` endpoints called by jBKB (fetch, chunk, push, qa, delete-points, collection-info, scrapers) |
+| `run_app.py` | Launch FastAPI server at localhost:8000 |
 | `ingestion/pdf_ingestion.py` | PDF text extraction via PyPDF2 |
 | `ingestion/url_ingestion_legacy.py` | Archived Selenium crawlers (peixefresco, heyharper) — do not use for new work |
 | `ingestion/scrapers/playwright_scraper.py` | Playwright engine — default for all sites (JS + SSR) |
@@ -174,7 +173,14 @@ Standard CSS selectors often don't work — content lives in separate Elementor 
 
 ## Collection Routing Metadata
 
-Each collection in `solutions.yaml` has a `routing` block used by the Session Engine for two-step collection selection:
+> **Unification note (2026-04-21)**: jBKB is the authoritative control plane
+> for routing metadata. Collections live in jBKB's `rag_collections` table;
+> routing fields (description, keywords, typical_questions, not_covered) are
+> columns on that table. jBKB passes them to Python per-request via the
+> `/api/execute/fetch` body, and `workflow.runner._get_collection_routing`
+> reads them from `state.routing`. The old `solutions.yaml` is gone.
+
+Each collection in jBKB has a `routing` block used by the Session Engine for two-step collection selection:
 
 **Step 1 — HIRS keyword match** (fast, free, deterministic):
 - `routing.keywords`: matched against user input; high confidence → route directly, skip Step 2
@@ -191,9 +197,9 @@ Each collection in `solutions.yaml` has a `routing` block used by the Session En
 - `language`: ISO 639-1 code
 - `doc_type`: `product_catalog | recipe_book | faq | manual | legal | general`
 
-**Saving**: After chunking, routing metadata is auto-saved to `solutions.yaml` via `save_routing_metadata(solution_id, collection_id, metadata)`. The web UI shows the metadata with an Edit button for manual tuning.
+**Saving**: Routing metadata is stored on jBKB's `rag_collections` table (columns `rcd_routing_description`, `rcd_routing_keywords`, `rcd_routing_typical_questions`, `rcd_routing_not_covered`). Edited via the jBKB RAG Collections panel.
 
-**`solutions.yaml` is the contract** between this RAG builder and the Session Engine — the Session Engine reads routing metadata to build HIRS rules and the LLM routing prompt.
+**jBKB is the contract** between this RAG builder and the Session Engine — the Session Engine reads routing metadata from jBKB to build HIRS rules and the LLM routing prompt.
 
 ---
 
@@ -201,8 +207,8 @@ Each collection in `solutions.yaml` has a `routing` block used by the Session En
 
 - `WorkflowState` is the central object flowing through all pipeline steps
 - Auto-saves to `.rag_state.json` at key steps (FETCH, TRANSLATE_AND_CLEAN, CHUNK)
-- Can be resumed from saved state (web UI: "Load saved state")
-- `solution_specs/solutions.yaml` is the registry of all collections
+- Can be resumed from saved state (legacy web UI: "Load saved state")
+- jBKB's `rag_collections` + `rag_sources` tables are the registry of all collections
 
 ---
 
@@ -220,7 +226,7 @@ python -m workflow.cli     # Guided CLI workflow
 - [x] Run Phase C: full Peixe Fresco product sitemap scrape → 96/101 chunks pushed to Qdrant
 - [x] Run Phase D: recipes (11 web + PDF caderno de receitas) and pages collections — DONE
 - [ ] Define API contract: how Session Engine calls this RAG layer (HTTP endpoint? direct Python import?)
-- [ ] Future: integrate two-step routing in Session Engine using `solutions.yaml` routing metadata
+- [ ] Future: integrate two-step routing in Session Engine using jBKB routing metadata
 - [ ] Future: migrate Hey Harper collections to new scraper (currently legacy Selenium data)
 - [ ] **Source grouping in Analyse Site wizard** — Add a "Source" layer inside collections so pages/URLs are grouped by source (e.g. one source per sitemap, PDF, or external website). Each source carries its own scraper config, engine, and login credentials. Enables multi-website collections with different auth. Auto-create a "Default" source when first assigning pages. Migration: wrap existing flat `collection.pages` arrays in a default source object in `.wizard_state_*.json`. No Qdrant reprocessing needed — data model change only. *(Parked 2026-03-04, revisit Saturday 2026-03-07)*
 
@@ -246,7 +252,7 @@ wiping existing ones — used for Run 2 (PDF) after Run 1 (website scrape).
 
 ## Conventions & Patterns
 
-- **One solution = one or more Qdrant collections**, each with a `routing` block in `solution_specs/solutions.yaml`
+- **One solution = one or more Qdrant collections**, each with a `routing` block on its jBKB `rag_collections` record
 - **Solution id maps 1:1** to a solution in the jabberBrain Session Engine
 - **Chunking default**: hierarchical (free, good quality). Use proposition only when quality matters and cost is acceptable.
 - **New scrapers**: add a YAML in `ingestion/scrapers/configs/`, use Playwright (default) unless site is confirmed SSR.

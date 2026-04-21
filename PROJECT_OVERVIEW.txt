@@ -42,11 +42,11 @@ This is a project that creates and maintains RAG (Retrieval-Augmented Generation
 
 - **initial_menu.py**: Main CLI for creating/opening collections, ingesting data, running grouping, and managing the Qdrant setup.
 
-### 7. Solution specifications (solution_specs/)
+### 7. Solution / collection config
 
-- **solution_specs/solutions.yaml**: All solution-specific config in one place: collection name, company/assistant name, scraper, optional chunking defaults, aliases (e.g. "1", "FAQ").
-- **solution_specs/loader.py**: Loads specs and exposes get_solution(id), list_solutions(), resolve_alias(alias). Code stays generic; later the same schema can be loaded from a DB.
-- **chatbot.py** (and workflow/API) resolve collection/company via solution_specs so new solutions only require an entry in solutions.yaml.
+- Collection config lives in the **jBKB database** (`rag_collections`, `rag_sources`, `rag_sitemaps`). jBKB is the control plane — Python is a stateless executor called via `/api/execute/*`.
+- Routing metadata (description, keywords, typical_questions, not_covered) is passed per-request from jBKB to Python in the fetch body and read from `state.routing` in `workflow/runner.py`.
+- The legacy `solution_specs/solutions.yaml` file is gone as of 2026-04-21.
 
 ---
 
@@ -70,10 +70,9 @@ User question  →  Rewrite query  →  Embed  →  Similarity search  →  Top 
 | ingestion/url_ingestion.py | Web scraping with Selenium |
 | grouping.py | Semantic grouping of chunks |
 | onboarding_answering.py | Batch Q&A for testing |
-| solution_specs/solutions.yaml | Per-solution config (collection, company, scraper, aliases) |
-| solution_specs/loader.py | Load/list/resolve solutions (file now; DB later) |
-| web/app.py | Web UI: Build RAG + Chat (solution picker, no terminal) |
-| run_app.py | Launch web interface: python run_app.py (opens browser) |
+| web/execute.py | Stateless `/api/execute/*` endpoints called by jBKB (fetch, chunk, push, qa, delete-points) |
+| web/app.py | Legacy web UI routes (not called by jBKB — kept for offline debugging) |
+| run_app.py | Launch FastAPI server: python run_app.py (localhost:8000) |
 
 ---
 

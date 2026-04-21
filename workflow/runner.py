@@ -117,13 +117,13 @@ def _run_fetch(state: WorkflowState, cancel_check=None) -> str:
         scraper_name = config.get("scraper_name") or config.get("scraper")
         if not scraper_name:
             return "Error: source_config must contain 'scraper_name' or 'scraper' for url."
-        inline_cfg = config.get("scraper_config")  # inline config from solutions.yaml
+        inline_cfg = config.get("scraper_config")  # inline config from jBKB rag_sources.config_json
         raw_text, scraped_items = run_scraper(scraper_name, config, inline_config=inline_cfg, cancel_check=cancel_check)
         state.raw_text = raw_text
         state.scraped_items = scraped_items
         state.source_label = config.get("source_label") or scraper_name
 
-        # ── Relevance check (runs if collection has routing metadata in solutions.yaml) ──
+        # ── Relevance check (runs if the request supplied routing via state.routing) ──
         routing = _get_collection_routing(state)
         if routing and scraped_items:
             # Reuse the SSE progress queue from the web app if running in that context

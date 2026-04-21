@@ -20,7 +20,7 @@ def _load_config(scraper_name: str, inline_config: dict = None) -> dict:
     """
     Load scraper config. Priority:
     1. Named YAML file in configs/ (for customized scrapers)
-    2. inline_config dict (stored in solutions.yaml scraper_config field)
+    2. inline_config dict (passed from jBKB via rag_sources.config_json)
     3. Bare dict with just the name
     """
     config_dir = os.path.join(os.path.dirname(__file__), "configs")
@@ -44,7 +44,7 @@ def run_scraper(scraper_name: str, options: dict = None, inline_config: dict = N
 
     options: optional overrides (engine, start_url, etc.) from the workflow/UI.
              options take priority over YAML config values.
-    inline_config: fallback config dict from solutions.yaml scraper_config field.
+    inline_config: fallback config dict from jBKB rag_sources.config_json.
                    Used when no named YAML file exists. Named YAML takes precedence.
     cancel_check: optional callable returning True when the user wants to stop.
     """

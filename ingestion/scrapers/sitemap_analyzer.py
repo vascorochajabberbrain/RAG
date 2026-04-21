@@ -182,7 +182,7 @@ def fetch_all_pages(sitemap_url: str, url_filter: str = None) -> list:
 def generate_scraper_config(collection: dict, domain_url: str) -> dict:
     """
     Generate a scraper config dict for a confirmed collection.
-    Used for inline storage in solutions.yaml (no YAML file needed).
+    Returned to jBKB for inline storage on rag_sources.config_json (no YAML file needed).
 
     collection: {
       collection_name, display_name, doc_type,
