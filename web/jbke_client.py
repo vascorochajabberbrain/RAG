@@ -381,3 +381,81 @@ class JBKEClient:
                     else f"Failed to create: {result.get('errors', result)}"
                 ),
             }
+
+    # ── Content Environment operations ─────────────────────────────
+
+    def _ced_auth_params(self, version_id: int) -> dict:
+        """Auth params for chat_environment_process — uses ced_v_id instead of version_id."""
+        return {
+            "user_name": self.user_name,
+            "ced_v_id": str(version_id),
+            "auth_token": self.auth_token,
+        }
+
+    def update_content_environment(
+        self, version_id: int, cem_id: int, fields: dict
+    ) -> dict:
+        """Update fields on the chat_environments table.
+
+        version_id: jBKE version (for auth via ced_v_id)
+        cem_id: chat_environments record ID
+        """
+        url = self._endpoint("chat_environment_process.php")
+        payload = {
+            **self._auth_params(version_id),
+            "ced_v_id": str(version_id),
+            "UserAction": "Update",
+            "cem_id": str(cem_id),
+            **fields,
+        }
+        resp = requests.post(url, data=payload, timeout=30)
+        resp.raise_for_status()
+        return self._parse_response(resp)
+
+    @staticmethod
+    def _tab_to_csv(faq_table: str) -> str:
+        """Convert tab-separated Q\\tA lines to CSV with Question | Answer header."""
+        lines = []
+        for line in faq_table.strip().splitlines():
+            if "\t" not in line:
+                continue
+            q, a = line.split("\t", 1)
+            q = q.strip()
+            a = a.strip()
+            if q:
+                lines.append(f"{q} | {a}")
+        if not lines:
+            return ""
+        return "Question | Answer\n" + "\n".join(lines)
+
+    def push_faq_table(
+        self, version_id: int, cem_id: int, faq_table: str
+    ) -> dict:
+        """
+        Push a FAQ table to the content environment's ced_faq_table field.
+
+        version_id: jBKE version (for auth)
+        cem_id: chat_environments record ID
+        Input: tab-separated Q\\tA lines (internal format).
+        Output to jBKE: CSV with "Question | Answer" header, pipe-delimited rows.
+
+        Returns {"success": bool, "message": str}
+        """
+        csv_table = self._tab_to_csv(faq_table)
+        if not csv_table:
+            return {"success": False, "message": "No valid Q&A pairs to push"}
+        try:
+            result = self.update_content_environment(
+                version_id, cem_id, {"ced_faq_table": csv_table}
+            )
+            success = result.get("success", False)
+            return {
+                "success": success,
+                "message": (
+                    f"FAQ table pushed to jBKE environment (version_id={version_id})"
+                    if success
+                    else f"Failed to push FAQ table: {result.get('errors', result)}"
+                ),
+            }
+        except Exception as e:
+            return {"success": False, "message": f"jBKE request failed: {e}"}

@@ -147,10 +147,9 @@ def save_routing_metadata(solution_id: str, collection_id: str, metadata: dict) 
                              "sequence", "additional_prompt")
                             if k in metadata and metadata[k] is not None
                         }
-                        # Preserve existing sequence/additional_prompt if not in new metadata
-                        # (these are user-configured, not LLM-generated)
+                        # Preserve user-configured keys that are NOT LLM-generated
                         existing = coll.get("routing", {})
-                        for keep_key in ("sequence", "additional_prompt"):
+                        for keep_key in ("sequence", "additional_prompt", "faq_table"):
                             if keep_key not in routing and keep_key in existing:
                                 routing[keep_key] = existing[keep_key]
                         coll["routing"] = routing
