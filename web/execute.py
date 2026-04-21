@@ -210,6 +210,10 @@ def execute_fetch(req: FetchRequest):
 
     state.source_config = source_config
 
+    # Routing metadata supplied by jBKB — used by the fetch-time relevance filter.
+    # When present, runner._get_collection_routing prefers this over solutions.yaml.
+    state.routing = req.routing
+
     # Run fetch
     from workflow.runner import _run_fetch
     msg = _run_fetch(state)

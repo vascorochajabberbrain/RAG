@@ -88,6 +88,12 @@ class WorkflowState:
     # Shape: {relevant_count, mismatch_count, irrelevant_count,
     #         mismatch_urls: [str], irrelevant_urls: [str]}
 
+    # Collection routing metadata supplied per-request (jBKB is authoritative).
+    # Shape: {description, keywords, typical_questions, not_covered, ...}
+    # When present, the fetch-time relevance filter uses this instead of
+    # looking up solutions.yaml.
+    routing: Optional[dict] = None
+
     # Push guard: URLs to skip during re-push (manually edited chunks preserved)
     skip_urls: list = field(default_factory=list)
     # URLs excluded from push (chunks deleted from Qdrant) — persistent until restored

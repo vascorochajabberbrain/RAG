@@ -598,14 +598,26 @@ def _run_push(state: WorkflowState, cancel_check=None) -> str:
 
 def _get_collection_routing(state: WorkflowState) -> dict | None:
     """
-    Look up the routing block for the current collection in solutions.yaml.
-    Returns the routing dict if it has a description or keywords, otherwise None.
+    Return the routing block for this fetch, or None if no usable routing exists.
+
+    Preferred source: state.routing (supplied by the jBKB /api/execute/fetch call
+    and authoritative in the unified architecture). Falls back to solutions.yaml
+    for legacy callers that don't set state.routing.
     """
+    # Preferred: jBKB-supplied routing (unified pipeline)
+    if state.routing:
+        if state.routing.get("description") or state.routing.get("keywords"):
+            return state.routing
+
+    # Fallback: solutions.yaml (legacy callers only — ignored once file is removed)
     collection_name = state.collection_name
     if not collection_name:
         return None
     try:
         from solution_specs.loader import list_solutions
+    except Exception:
+        return None
+    try:
         for sol in list_solutions():
             for coll in sol.get("collections", []):
                 if (
