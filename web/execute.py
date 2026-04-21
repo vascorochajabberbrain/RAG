@@ -113,6 +113,20 @@ class PushResponse(BaseModel):
     message: str = ""
 
 
+class DeletePointsRequest(BaseModel):
+    """Request to delete all points for specific source URLs from a Qdrant collection."""
+    collection_name: str
+    urls: list[str] = Field(default_factory=list)
+
+
+class DeletePointsResponse(BaseModel):
+    """Result of a delete-points call."""
+    collection_name: str
+    deleted_urls: list[str] = Field(default_factory=list)
+    errors: list[dict] = Field(default_factory=list)  # [{url, error}]
+    collection_existed: bool = True
+
+
 class QARequest(BaseModel):
     """Ask a question against a Qdrant collection."""
     collection_name: str
@@ -317,6 +331,37 @@ def execute_push(req: PushRequest):
         points_pushed=len(points),
         collection_name=name,
         message=f"Pushed {len(points)} points to '{name}' (model={embedding_model})",
+    )
+
+
+@router.post("/delete-points", response_model=DeletePointsResponse)
+def execute_delete_points(req: DeletePointsRequest):
+    """Delete all Qdrant points whose source_url matches any of the given URLs."""
+    from QdrantTracker import QdrantTracker
+
+    tracker = QdrantTracker()
+    if not tracker._existing_collection_name(req.collection_name):
+        return DeletePointsResponse(
+            collection_name=req.collection_name,
+            deleted_urls=[],
+            errors=[],
+            collection_existed=False,
+        )
+
+    deleted: list[str] = []
+    errors: list[dict] = []
+    for url in req.urls:
+        try:
+            tracker._delete_points_by_url(req.collection_name, url)
+            deleted.append(url)
+        except Exception as e:
+            errors.append({"url": url, "error": str(e)})
+
+    return DeletePointsResponse(
+        collection_name=req.collection_name,
+        deleted_urls=deleted,
+        errors=errors,
+        collection_existed=True,
     )
 
 
