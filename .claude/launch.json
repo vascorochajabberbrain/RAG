@@ -6,6 +6,13 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["run_app.py"],
       "port": 8000
+    },
+    {
+      "name": "kb-frontend",
+      "runtimeExecutable": "/opt/homebrew/Cellar/node/25.2.1/bin/node",
+      "runtimeArgs": ["/Users/johanahlund/PROGRAMMING/knowledge_builder/node_modules/vite/bin/vite.js", "--host"],
+      "port": 5173,
+      "cwd": "/Users/johanahlund/PROGRAMMING/knowledge_builder/frontend"
     }
   ]
 }
