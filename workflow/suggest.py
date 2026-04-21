@@ -116,66 +116,6 @@ def suggest_collection_metadata(chunks: list, source_label: str = "document", la
         return {}
 
 
-def save_routing_metadata(solution_id: str, collection_id: str, metadata: dict) -> bool:
-    """
-    Save routing metadata for a specific collection to solutions.yaml.
-    The routing block in solutions.yaml is the contract between this RAG builder
-    and the Session Engine — it is used to decide which collection(s) to query.
-
-    metadata keys used for routing: description, keywords, typical_questions, not_covered, language, doc_type
-    Other keys (e.g. topics) are stored but not used for routing.
-
-    Returns True on success, False on failure.
-    """
-    import yaml
-    specs_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "solution_specs", "solutions.yaml")
-    try:
-        with open(specs_file, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-
-        solutions = data.get("solutions", [])
-        saved = False
-        for sol in solutions:
-            if sol.get("id") == solution_id:
-                for coll in sol.get("collections", []):
-                    if coll.get("id") == collection_id:
-                        # Build routing block from metadata (keep only routing-relevant keys)
-                        routing = {
-                            k: metadata[k] for k in
-                            ("description", "keywords", "typical_questions", "not_covered", "language", "doc_type",
-                             "sequence", "additional_prompt")
-                            if k in metadata and metadata[k] is not None
-                        }
-                        # Preserve user-configured keys that are NOT LLM-generated
-                        existing = coll.get("routing", {})
-                        for keep_key in ("sequence", "additional_prompt", "faq_table"):
-                            if keep_key not in routing and keep_key in existing:
-                                routing[keep_key] = existing[keep_key]
-                        coll["routing"] = routing
-                        saved = True
-                        break
-                if saved:
-                    break
-
-        if not saved:
-            print(f"[save_routing_metadata] Collection '{collection_id}' in solution '{solution_id}' not found.")
-            return False
-
-        with open(specs_file, "w", encoding="utf-8") as f:
-            yaml.dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
-
-        # Reload loader cache
-        from solution_specs.loader import reload
-        reload()
-        print(f"[save_routing_metadata] Saved routing metadata for {solution_id}/{collection_id}")
-        return True
-
-    except Exception as e:
-        print(f"[save_routing_metadata] Failed: {e}")
-        return False
-
-
 def suggest_scraper_fix(config_yaml: str, problem_description: str) -> str:
     """
     Ask the LLM to suggest YAML or code changes when a scrape failed or returned too little.
