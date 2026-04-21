@@ -50,44 +50,62 @@ def fetch_sitemap_structure(domain_url: str, login_config: dict | None = None) -
       previews work on gated sites.
     """
     domain_url = _normalise_url(domain_url)
+    print(f"[analyse] Starting analysis of {domain_url}")
 
     with httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=_SITEMAP_TIMEOUT) as client:
         # Detect Shopify early
+        print(f"[analyse] Checking if site is Shopify…")
         if _detect_shopify(client, domain_url):
+            print(f"[analyse] Shopify detected — returning Shopify sentinel")
             return [_shopify_sentinel(domain_url)]
 
         # Try to find the sitemap
+        print(f"[analyse] Looking for sitemap (robots.txt + common paths)…")
         xml_text, sitemap_url_used = _find_sitemap(client, domain_url)
         if not xml_text:
+            print(f"[analyse] No sitemap found")
             return [_no_sitemap_sentinel()]
+        print(f"[analyse] Found sitemap: {sitemap_url_used}")
 
         # Parse
         try:
             root = ET.fromstring(xml_text)
         except ET.ParseError:
+            print(f"[analyse] Sitemap XML parse failed")
             return [_no_sitemap_sentinel()]
 
         tag = root.tag.lower()
 
         if "sitemapindex" in tag:
+            print(f"[analyse] Sitemap index — discovering child sitemaps…")
             categories = _parse_sitemap_index(client, root, domain_url)
+            print(f"[analyse] Found {len(categories)} child sitemap(s)")
         elif "urlset" in tag:
             urls = _extract_locs(root)
+            print(f"[analyse] Flat urlset with {len(urls)} URLs — grouping by path")
             categories = _group_urls_by_path(sitemap_url_used, urls)
         else:
+            print(f"[analyse] Unknown root tag {tag!r}")
             return [_no_sitemap_sentinel()]
 
         if not categories:
+            print(f"[analyse] No categories derived")
             return [_no_sitemap_sentinel()]
 
         # If login credentials provided, attempt httpx login before page sampling
         if login_config and login_config.get("username"):
+            print(f"[analyse] Performing login as {login_config.get('username')}…")
             _httpx_login(client, domain_url, login_config)
 
         # Sample pages for each category
-        for cat in categories:
+        print(f"[analyse] Sampling preview text from {len(categories)} sitemap(s)…")
+        for idx, cat in enumerate(categories, 1):
+            sample_urls = (cat.get("sample_urls") or [])[:_SAMPLE_PAGES]
+            if sample_urls:
+                print(f"[analyse]   [{idx}/{len(categories)}] {cat.get('display_name') or cat.get('id')} "
+                      f"({cat.get('url_count', 0)} URLs) — sampling {len(sample_urls)} page(s)")
             previews = []
-            for url in (cat.get("sample_urls") or [])[:_SAMPLE_PAGES]:
+            for url in sample_urls:
                 text = _sample_page(client, url)
                 if text:
                     previews.append(text)
@@ -95,6 +113,7 @@ def fetch_sitemap_structure(domain_url: str, login_config: dict | None = None) -
 
         # Sort by url_count descending
         categories.sort(key=lambda c: c.get("url_count", 0), reverse=True)
+        print(f"[analyse] Sitemap discovery complete ({len(categories)} sitemap(s))")
         return categories
 
 
@@ -108,7 +127,9 @@ def suggest_collections(categories: list) -> list:
     # Filter out sentinel categories for the LLM
     real_cats = [c for c in categories if not c["id"].startswith("_")]
     if not real_cats:
+        print(f"[analyse] No real categories to cluster — skipping LLM suggestion")
         return []
+    print(f"[analyse] Asking LLM to group {len(real_cats)} sitemap(s) into collections (gpt-4o-mini)…")
 
     # Build a compact summary for the LLM
     summary = [
@@ -157,11 +178,14 @@ def suggest_collections(categories: list) -> list:
             s = s.strip()
         result = json.loads(s)
         if isinstance(result, list) and result:
+            print(f"[analyse] LLM suggested {len(result)} collection(s)")
             return result
     except Exception as e:
-        print(f"[sitemap_analyzer] LLM suggest_collections failed: {e} — using fallback")
+        print(f"[analyse] LLM suggest_collections failed: {e} — using fallback")
 
-    return _fallback_suggest(real_cats)
+    fallback = _fallback_suggest(real_cats)
+    print(f"[analyse] Fallback clustering produced {len(fallback)} collection(s)")
+    return fallback
 
 
 def fetch_all_pages(sitemap_url: str, url_filter: str = None) -> list:
@@ -319,8 +343,9 @@ def _extract_locs(root: ET.Element) -> list:
 def _parse_sitemap_index(client: httpx.Client, root: ET.Element, domain_url: str) -> list:
     """Parse a sitemap index: each child sitemap becomes one category."""
     sub_sitemap_urls = _extract_locs(root)
+    print(f"[analyse] Sitemap index lists {len(sub_sitemap_urls)} child sitemap(s); fetching each…")
     categories = []
-    for sm_url in sub_sitemap_urls:
+    for i, sm_url in enumerate(sub_sitemap_urls, 1):
         cat_id = _derive_category_id(sm_url)
         cat = {
             "id": cat_id,
@@ -340,8 +365,11 @@ def _parse_sitemap_index(client: httpx.Client, root: ET.Element, domain_url: str
                 urls = _extract_locs(sub_root)
                 cat["url_count"] = len(urls)
                 cat["sample_urls"] = urls[:_SAMPLE_PAGES]
-        except Exception:
-            pass
+                print(f"[analyse]   [{i}/{len(sub_sitemap_urls)}] {cat_id}: {len(urls)} URL(s)")
+            else:
+                print(f"[analyse]   [{i}/{len(sub_sitemap_urls)}] {cat_id}: HTTP {r.status_code} — skipping")
+        except Exception as e:
+            print(f"[analyse]   [{i}/{len(sub_sitemap_urls)}] {cat_id}: fetch failed ({e})")
         categories.append(cat)
     return categories
 
