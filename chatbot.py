@@ -147,25 +147,11 @@ Answer the user's question using ONLY the information above."""
 
 
 def main():
-    user_input = input("Which solution should we use (name or alias, e.g. pf, hh, peixefresco): ").strip()
-    try:
-        from solution_specs import resolve_alias, get_solution, get_collections
-        solution = resolve_alias(user_input) or get_solution(user_input)
-        if solution:
-            colls = get_collections(solution["id"])
-            collection_names = [c["collection_name"] for c in colls if c.get("collection_name")]
-            company = solution.get("company_name") or solution.get("display_name")
-        else:
-            # Fallback: treat input as a direct collection name
-            collection_names = [user_input]
-            company = None
-    except Exception:
-        collection_names = [user_input]
-        company = None
-    if company is None:
-        company = "the assistant"
+    user_input = input("Which Qdrant collection should we query? (comma-separated for multiple): ").strip()
+    collection_names = [c.strip() for c in user_input.split(",") if c.strip()]
     if not collection_names:
         collection_names = [user_input]
+    company = "the assistant"
 
     print(f"Querying collections: {', '.join(collection_names)}")
 
