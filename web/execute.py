@@ -498,3 +498,95 @@ def get_scraper(name: str):
                 continue
 
     raise HTTPException(404, f"Scraper config '{name}' not found")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# FAQ extraction — ask an LLM for Q&A pairs from raw text
+# ═══════════════════════════════════════════════════════════════════════
+
+class FaqExtractRequest(BaseModel):
+    """Extract Q&A pairs from a block of text (one rag_sources row's content)."""
+    text: str
+    language: str = "en"
+    company_name: str = "the assistant"
+    max_items: int = 50
+    # Optional: source URL echoed back in each pair for traceability
+    source_url: Optional[str] = None
+
+
+class FaqPair(BaseModel):
+    question: str
+    answer: str
+
+
+class FaqExtractResponse(BaseModel):
+    pairs: list[FaqPair] = Field(default_factory=list)
+    count: int = 0
+    source_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post("/faq-extract", response_model=FaqExtractResponse)
+def execute_faq_extract(req: FaqExtractRequest):
+    """
+    Extract FAQ Q&A pairs from raw text. Stateless: no collection lookup,
+    no disk I/O — just text in, pairs out. Used by jBKB's FAQ pipeline to
+    turn one rag_sources row (destination='faq_table') into faq_items rows.
+    """
+    from llms.openai_utils import openai_chat_completion
+
+    text = (req.text or "").strip()
+    if not text:
+        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error="empty text")
+
+    # Cap input size to avoid expensive calls on very large pages
+    truncated = text[:40_000]
+
+    system_prompt = (
+        "Extract FAQ-style question-and-answer pairs from the text.\n"
+        "Rules:\n"
+        "  - Output valid JSON: {\"pairs\": [{\"question\": \"...\", \"answer\": \"...\"}]}\n"
+        "  - One pair per distinct topic.\n"
+        "  - Only include pairs where both question and answer are clearly supported by the text.\n"
+        "  - Skip promotional filler, navigation blocks, and duplicates.\n"
+        f"  - Language: {req.language}. Speak as {req.company_name}.\n"
+        f"  - At most {req.max_items} pairs.\n"
+        "Return ONLY the JSON. No prose, no markdown fences."
+    )
+
+    try:
+        raw = openai_chat_completion(system_prompt, f"Text:\n{truncated}", model="gpt-4o-mini")
+    except Exception as e:
+        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error=str(e))
+
+    # Strip accidental code fences / surrounding prose
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:].strip()
+    # Take the JSON object if there's leading/trailing noise
+    lbrace = cleaned.find("{")
+    rbrace = cleaned.rfind("}")
+    if lbrace >= 0 and rbrace > lbrace:
+        cleaned = cleaned[lbrace:rbrace + 1]
+
+    try:
+        parsed = json.loads(cleaned)
+    except Exception as e:
+        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error=f"LLM did not return valid JSON: {e}")
+
+    raw_pairs = parsed.get("pairs") if isinstance(parsed, dict) else None
+    if not isinstance(raw_pairs, list):
+        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error="no 'pairs' array in LLM output")
+
+    pairs: list[FaqPair] = []
+    for p in raw_pairs[:req.max_items]:
+        if not isinstance(p, dict):
+            continue
+        q = (p.get("question") or "").strip()
+        a = (p.get("answer") or "").strip()
+        if q and a:
+            pairs.append(FaqPair(question=q, answer=a))
+
+    return FaqExtractResponse(pairs=pairs, count=len(pairs), source_url=req.source_url)
