@@ -1154,9 +1154,37 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
     except Exception:
         pass
 
-    # ── Strip <script> for safety ───────────────────────────────────
+    # ── Strip everything that makes the sandboxed iframe complain ──
+    # Chrome warns "Blocked script execution in 'about:srcdoc'" for
+    # every <script>, <link rel=preload as=script>, and every inline
+    # event-handler attribute in a sandbox without allow-scripts.
+    # None of these would execute anyway — removing them just quiets
+    # the console.
     for s in soup.find_all("script"):
         s.decompose()
+    # <link rel=preload as=script>, rel=modulepreload, rel=prefetch
+    # (for scripts) — these trigger fetches the sandbox then blocks.
+    for link in soup.find_all("link"):
+        rel_attr = link.get("rel") or []
+        rel_vals = [r.lower() for r in (rel_attr if isinstance(rel_attr, list) else [rel_attr])]
+        as_attr = (link.get("as") or "").lower()
+        if "modulepreload" in rel_vals:
+            link.decompose()
+        elif ("preload" in rel_vals or "prefetch" in rel_vals) and as_attr == "script":
+            link.decompose()
+    # Inline event handlers (onload, onclick, onerror, on*=...) —
+    # strip them from every element so the browser doesn't try to run
+    # anything when hovering / clicking in the preview.
+    for el in soup.find_all(True):
+        # iterate a snapshot of attrs so we can mutate the dict
+        for attr in list(el.attrs.keys()):
+            if attr.lower().startswith("on"):
+                del el.attrs[attr]
+        # javascript: URLs in href/src
+        for url_attr in ("href", "src", "action", "formaction"):
+            val = el.attrs.get(url_attr)
+            if isinstance(val, str) and val.strip().lower().startswith("javascript:"):
+                del el.attrs[url_attr]
 
     # ── Tag matched elements ────────────────────────────────────────
     user_selectors = [s for s in (req.exclude_selectors or []) if s]
