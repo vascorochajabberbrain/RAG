@@ -594,6 +594,48 @@ def _is_hashed_class(name: str) -> bool:
     return bool(_re.search(r"-[0-9a-f]{6,}$", name.lower()))
 
 
+# Known page-builder LAYOUT classes — never boilerplate, always content
+# wrappers. Includes Elementor primitives (columns, sections, widget
+# containers, template roots) and Jet Engine listing primitives. If any
+# of these patterns match, _tag_selector refuses the class so Signal C
+# can't promote it from "repeats across pages" to "strip me".
+#
+# We're deliberately conservative here: stripping a layout wrapper wipes
+# the whole page, but false-negatives just mean the user types the
+# selector by hand or keeps unnecessary chrome.
+import re as _layout_re
+_LAYOUT_CLASS_PATTERNS = [
+    # Elementor — column / section / widget primitives
+    _layout_re.compile(r"^elementor-column(?:-|$)", _layout_re.I),
+    _layout_re.compile(r"^elementor-element-populated$", _layout_re.I),
+    _layout_re.compile(r"^elementor-top-column$", _layout_re.I),
+    _layout_re.compile(r"^elementor-inner-column$", _layout_re.I),
+    _layout_re.compile(r"^elementor-widget-container$", _layout_re.I),
+    _layout_re.compile(r"^elementor-section(?:-|$)", _layout_re.I),
+    _layout_re.compile(r"^elementor-container$", _layout_re.I),
+    _layout_re.compile(r"^elementor-row$", _layout_re.I),
+    # Elementor widget wrappers that by themselves are content hosts
+    _layout_re.compile(r"^elementor-widget-text-editor$", _layout_re.I),
+    _layout_re.compile(r"^elementor-widget-shortcode$", _layout_re.I),
+    _layout_re.compile(r"^elementor-widget-image$", _layout_re.I),
+    _layout_re.compile(r"^elementor-widget-heading$", _layout_re.I),
+    _layout_re.compile(r"^elementor-shortcode$", _layout_re.I),
+    _layout_re.compile(r"^elementor-icon-list(?:--|$)", _layout_re.I),
+    _layout_re.compile(r"^elementor-list-item-link", _layout_re.I),
+    # Elementor template root wrappers (classname is just the numeric id
+    # of the template — e.g. elementor-269). Not useful as a selector.
+    _layout_re.compile(r"^elementor-\d+$", _layout_re.I),
+    # Jet Engine / JetElements listing + dynamic-post primitives
+    _layout_re.compile(r"^jet-listing-dynamic-post(?:-|$)", _layout_re.I),
+    _layout_re.compile(r"^jet-listing-grid(?:$|_)", _layout_re.I),
+    _layout_re.compile(r"^jet-equal-columns", _layout_re.I),
+]
+
+
+def _is_layout_class(name: str) -> bool:
+    return any(p.match(name) for p in _LAYOUT_CLASS_PATTERNS)
+
+
 def _tag_selector(tag) -> Optional[str]:
     """Build a stable selector for this tag — prefer id, then class,
     then None. Used to key elements across pages.
@@ -607,10 +649,14 @@ def _tag_selector(tag) -> Optional[str]:
         return None
     tag_id = tag.get("id")
     if tag_id and " " not in tag_id and "\n" not in tag_id:
-        return f"#{tag_id}"
+        # Elementor template-root IDs ("#elementor-269") aren't useful.
+        if not _layout_re.match(r"^(?:elementor|jet)-?\d+$", tag_id, _layout_re.I):
+            return f"#{tag_id}"
     classes = [
         c for c in (tag.get("class") or [])
-        if not _is_generic_class(c) and not _is_hashed_class(c)
+        if not _is_generic_class(c)
+        and not _is_hashed_class(c)
+        and not _is_layout_class(c)
     ]
     classes.sort(key=len, reverse=True)
     if classes:
