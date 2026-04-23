@@ -531,6 +531,14 @@ class SuggestExcludeRequest(BaseModel):
     max_pages: int = 5
     # Per-request HTTP timeout in seconds.
     timeout: float = 10.0
+    # Content lexicon — raw strings (e.g. routing_keywords,
+    # typical_questions, collection name). Tokenized into a stopword-
+    # filtered word set. Signal C refuses to promote any element whose
+    # text contains at least one lexicon word: those elements almost
+    # certainly hold on-topic content that shouldn't be stripped. When
+    # empty, Signal C falls back to purely structural gates (tag +
+    # text-length + deny list).
+    keywords: list[str] = Field(default_factory=list)
 
 
 class SuggestedSelector(BaseModel):
@@ -636,6 +644,67 @@ def _is_layout_class(name: str) -> bool:
     return any(p.match(name) for p in _LAYOUT_CLASS_PATTERNS)
 
 
+# Stopwords for the content-lexicon filter. Multilingual because the
+# RAG collections we see in jBKB span PT/EN/ES/FR. Purpose: words like
+# "de", "the", "para" shouldn't count as meaningful content terms —
+# they'd short-circuit the filter and let footers through.
+_STOPWORDS: set[str] = {
+    # English
+    "the", "and", "or", "of", "for", "to", "in", "on", "at", "by", "with",
+    "from", "as", "is", "are", "was", "were", "be", "been", "being", "have",
+    "has", "had", "do", "does", "did", "but", "not", "no", "this", "that",
+    "these", "those", "it", "its", "if", "so", "an", "any", "all", "each",
+    "our", "your", "their", "his", "her", "we", "you", "they", "he", "she",
+    "can", "will", "just", "which", "when", "where", "what", "how", "why",
+    "about", "more", "also",
+    # Portuguese
+    "da", "do", "das", "dos", "para", "em", "por", "com", "sem", "mais",
+    "ao", "às", "aos", "ou", "mas", "que", "se", "na", "no", "nas", "nos",
+    "um", "uma", "uns", "umas", "é", "são", "foi", "seu", "sua", "seus",
+    "suas", "este", "esta", "esse", "essa", "isso", "isto", "aquele",
+    "aquela", "aquilo", "muito", "muita",
+    # Spanish
+    "el", "los", "las", "del", "al", "y", "u", "pero", "sí",
+    # French
+    "le", "les", "un", "une", "des", "du", "et", "aux",
+    "pour", "par", "avec", "sans", "sur",
+}
+
+
+def _tokenize(text: str) -> list[str]:
+    """Lowercase Unicode word tokens. Keeps accented characters (PT/ES/FR)
+    and drops punctuation."""
+    import re as _tre
+    return _tre.findall(r"[\w]+", text.lower(), flags=_tre.UNICODE)
+
+
+def _build_lexicon(raw_strings: list[str]) -> set[str]:
+    """Tokenize every string, drop short/stopword/numeric tokens, return
+    the deduplicated content-term set."""
+    out: set[str] = set()
+    for raw in raw_strings or []:
+        if not raw:
+            continue
+        for tok in _tokenize(raw):
+            if len(tok) <= 2:
+                continue
+            if tok.isdigit():
+                continue
+            if tok in _STOPWORDS:
+                continue
+            out.add(tok)
+    return out
+
+
+def _has_lexicon_hit(text: str, lexicon: set[str]) -> bool:
+    """True if ANY token in text overlaps the lexicon. Zero-overlap is a
+    strong "off-topic" signal — almost all real chrome has zero overlap
+    with the collection's routing terms."""
+    if not lexicon:
+        return False
+    return any(t in lexicon for t in _tokenize(text))
+
+
 def _tag_selector(tag) -> Optional[str]:
     """Build a stable selector for this tag — prefer id, then class,
     then None. Used to key elements across pages.
@@ -684,6 +753,8 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
     urls = (req.urls or [])[: max(1, min(req.max_pages, 10))]
     if not urls:
         return SuggestExcludeResponse()
+
+    lexicon = _build_lexicon(req.keywords)
 
     # ── Fetch HTML ──────────────────────────────────────────────────
     htmls: list[tuple[str, str]] = []  # (url, html)
@@ -767,6 +838,12 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
         #     for structural reasons, not because they're chrome).
         #   - _tag_selector already rejects script/style/etc and hashed
         #     classes (elementor-element-4a39687).
+        #   - Content-lexicon veto: if the element's text contains any
+        #     keyword from the collection's routing terms (typical
+        #     questions, doc type, collection name, keywords), it's
+        #     on-topic content and must NOT be promoted. Catches the
+        #     Elementor-widget-container case where layout wrappers
+        #     surround product descriptions with real keywords.
         import hashlib
         for el in soup.find_all(True):
             if el.name not in _BOILERPLATE_CONTAINER_TAGS:
@@ -776,6 +853,8 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
                 continue
             text = _normalize_text(el.get_text(separator=" ", strip=True))
             if len(text) < 100:
+                continue
+            if _has_lexicon_hit(text, lexicon):
                 continue
             h = hashlib.md5(text.encode("utf-8")).hexdigest()[:12]
             text_hash_pages[sel][h] += 1
