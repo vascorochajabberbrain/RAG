@@ -506,6 +506,221 @@ def get_scraper(name: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Suggest exclude_selectors — scan a few URLs, find boilerplate, return
+# CSS selectors the caller can strip before text extraction.
+#
+# Three signals, ranked:
+#   A. Landmark tags/roles (nav, footer, [role=banner], [role=contentinfo])
+#      — always propose if present on any page.
+#   B. class/id match against a small set of boilerplate patterns
+#      (cookie, consent, gdpr, newsletter, subscribe, popup, banner,
+#      modal, notice) — proposed once we've seen the selector on ≥ 1
+#      page, with higher confidence if seen on more pages.
+#   C. Cross-page text repetition — elements with class or id whose
+#      text content hashes identically across ≥ 2 pages. Catches things
+#      like a long footer blurb or a site-wide CTA that signals A/B miss.
+#
+# Output is deduplicated and sorted by "seen_on" count descending, so the
+# UI can present the strongest signals first.
+# ═══════════════════════════════════════════════════════════════════════
+
+class SuggestExcludeRequest(BaseModel):
+    """Sample N URLs and return CSS selectors of likely boilerplate."""
+    urls: list[str]
+    # How many pages to actually fetch. Truncates urls when larger.
+    max_pages: int = 5
+    # Per-request HTTP timeout in seconds.
+    timeout: float = 10.0
+
+
+class SuggestedSelector(BaseModel):
+    selector: str
+    reason: str
+    seen_on: int  # count of pages where this selector was matched
+
+
+class SuggestExcludeResponse(BaseModel):
+    selectors: list[SuggestedSelector] = Field(default_factory=list)
+    sampled: list[str] = Field(default_factory=list)   # URLs successfully fetched
+    errors: list[str] = Field(default_factory=list)    # "url — error message"
+
+
+_BOILERPLATE_PATTERNS = [
+    "cookie", "consent", "gdpr", "newsletter", "subscribe",
+    "popup", "banner", "modal", "notice",
+]
+
+_LANDMARK_RULES: list[tuple[str, str]] = [
+    ("nav", "<nav> element"),
+    ("footer", "<footer> element"),
+    ("header", "<header> element"),
+    ('[role="banner"]', "ARIA role=banner"),
+    ('[role="contentinfo"]', "ARIA role=contentinfo"),
+    ('[role="navigation"]', "ARIA role=navigation"),
+    ('[role="complementary"]', "ARIA role=complementary"),
+]
+
+_GENERIC_CLASSES = {
+    "container", "wrapper", "content", "inner", "outer", "row", "col",
+    "column", "box", "block", "item", "section",
+}
+
+
+def _is_generic_class(name: str) -> bool:
+    n = name.lower()
+    return n in _GENERIC_CLASSES or len(n) <= 2
+
+
+def _tag_selector(tag) -> Optional[str]:
+    """Build a stable selector for this tag — prefer id, then class,
+    then None. Used to key elements across pages."""
+    tag_id = tag.get("id")
+    if tag_id:
+        # CSS.escape is not ideal here but jBKB's DOM won't feed IDs back
+        # so we keep selectors readable. Skip dodgy IDs with spaces.
+        if " " not in tag_id and "\n" not in tag_id:
+            return f"#{tag_id}"
+    classes = [c for c in (tag.get("class") or []) if not _is_generic_class(c)]
+    classes.sort(key=len, reverse=True)
+    if classes:
+        return f"{tag.name}.{classes[0]}"
+    return None
+
+
+def _normalize_text(raw: str) -> str:
+    import re as _re
+    return _re.sub(r"\s+", " ", raw).strip()
+
+
+@router.post("/suggest-exclude-selectors", response_model=SuggestExcludeResponse)
+def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
+    """Fetch up to max_pages URLs, run three heuristics, return selectors."""
+    import re as _re
+    from collections import defaultdict
+
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+    except Exception as e:
+        raise HTTPException(500, f"Missing deps: {e}")
+
+    urls = (req.urls or [])[: max(1, min(req.max_pages, 10))]
+    if not urls:
+        return SuggestExcludeResponse()
+
+    # ── Fetch HTML ──────────────────────────────────────────────────
+    htmls: list[tuple[str, str]] = []  # (url, html)
+    errors: list[str] = []
+    with httpx.Client(
+        timeout=req.timeout,
+        follow_redirects=True,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; jBKB-RAG/1.0)"},
+    ) as client:
+        for url in urls:
+            try:
+                resp = client.get(url)
+                resp.raise_for_status()
+                htmls.append((url, resp.text))
+            except Exception as e:
+                errors.append(f"{url} — {e}")
+
+    if not htmls:
+        return SuggestExcludeResponse(errors=errors)
+
+    # ── Scan each page ──────────────────────────────────────────────
+    boilerplate_re = _re.compile("|".join(_BOILERPLATE_PATTERNS), _re.I)
+
+    # selector -> (reason, seen_on_count)
+    seen_counts: dict[str, int] = defaultdict(int)
+    reasons: dict[str, str] = {}
+    # selector -> {text_hash: pages_with_that_text}
+    text_hash_pages: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+    for (_url, html) in htmls:
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+        except Exception as e:
+            errors.append(f"{_url} — parse failed: {e}")
+            continue
+
+        page_hits: set[str] = set()
+
+        # Signal A — landmarks (always propose if present)
+        for sel, why in _LANDMARK_RULES:
+            try:
+                if soup.select_one(sel):
+                    page_hits.add(sel)
+                    reasons.setdefault(sel, why)
+            except Exception:
+                pass
+
+        # Signal B — class/id contains boilerplate pattern
+        # We scan attributes once rather than re-looping per pattern.
+        for el in soup.find_all(True):
+            cls = el.get("class") or []
+            id_val = el.get("id") or ""
+            matched_via = None
+            for c in cls:
+                if boilerplate_re.search(c):
+                    matched_via = f"class contains {_re.escape(c)!r}"
+                    break
+            if not matched_via and id_val and boilerplate_re.search(id_val):
+                matched_via = f"id contains {id_val!r}"
+            if matched_via:
+                sel = _tag_selector(el)
+                if sel:
+                    page_hits.add(sel)
+                    reasons.setdefault(sel, matched_via)
+
+        # Signal C — cross-page text repetition on elements with a stable
+        # selector and a non-trivial text payload.
+        import hashlib
+        for el in soup.find_all(True):
+            if not (el.get("id") or el.get("class")):
+                continue
+            sel = _tag_selector(el)
+            if not sel:
+                continue
+            text = _normalize_text(el.get_text(separator=" ", strip=True))
+            if len(text) < 60:
+                continue
+            h = hashlib.md5(text.encode("utf-8")).hexdigest()[:12]
+            text_hash_pages[sel][h] += 1
+
+        for s in page_hits:
+            seen_counts[s] += 1
+
+    # Promote any selector whose text appeared identically on ≥ 2 pages
+    # (and we have ≥ 2 pages sampled overall).
+    if len(htmls) >= 2:
+        for sel, hash_counts in text_hash_pages.items():
+            top = max(hash_counts.values()) if hash_counts else 0
+            if top >= 2 and top <= len(htmls):
+                # Already counted by another signal? Don't double-count,
+                # but add a reason note.
+                seen_counts[sel] = max(seen_counts[sel], top)
+                reasons.setdefault(sel, f"identical text on {top}/{len(htmls)} pages")
+
+    # ── Build response ──────────────────────────────────────────────
+    out = [
+        SuggestedSelector(
+            selector=sel,
+            reason=reasons.get(sel, ""),
+            seen_on=cnt,
+        )
+        for sel, cnt in seen_counts.items()
+        if cnt > 0
+    ]
+    # Highest confidence first, then alphabetical for stable order.
+    out.sort(key=lambda s: (-s.seen_on, s.selector))
+    return SuggestExcludeResponse(
+        selectors=out,
+        sampled=[u for (u, _h) in htmls],
+        errors=errors,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # FAQ extraction — ask an LLM for Q&A pairs from raw text
 # ═══════════════════════════════════════════════════════════════════════
 
