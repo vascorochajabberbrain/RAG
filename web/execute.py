@@ -806,9 +806,20 @@ class PreviewExclusionsResponse(BaseModel):
 _PREVIEW_BASELINE = ["script", "style", "noscript", "iframe"]
 
 _PREVIEW_STYLE = """
+/* Matched elements: red diagonal "caution tape" stripes over whatever
+   background they had, plus a solid red outline so the bounds are
+   unambiguous. !important overrides site CSS. */
 .jbkb-ex-hit {
-  outline: 3px dashed #dc2626 !important;
-  background: rgba(220, 38, 38, 0.08) !important;
+  outline: 3px solid #dc2626 !important;
+  outline-offset: -3px !important;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(220, 38, 38, 0.28),
+    rgba(220, 38, 38, 0.28) 10px,
+    rgba(220, 38, 38, 0.08) 10px,
+    rgba(220, 38, 38, 0.08) 20px
+  ) !important;
+  background-color: rgba(220, 38, 38, 0.12) !important;
 }
 .jbkb-ex-hit::before {
   content: "stripped: " attr(data-jbkb-sel);
@@ -821,6 +832,8 @@ _PREVIEW_STYLE = """
   margin: -2px 0 2px -2px;
   max-width: 100%;
   word-break: break-all;
+  position: relative;
+  z-index: 1;
 }
 #__jbkb_legend {
   position: fixed;
