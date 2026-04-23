@@ -945,6 +945,13 @@ class PreviewExclusionsRequest(BaseModel):
     url: str
     exclude_selectors: list[str] = Field(default_factory=list)
     timeout: float = 10.0
+    # When true, the returned HTML includes a small inspector script
+    # that intercepts clicks inside the iframe and posts candidate
+    # CSS selectors back to the parent window via postMessage. The
+    # parent (jBKB) renders a picker so the user can add any of the
+    # suggested selectors to their exclude list. Requires the parent
+    # to mount the iframe with sandbox="allow-same-origin allow-scripts".
+    inspect_mode: bool = False
 
 
 class PreviewExclusionsResponse(BaseModel):
@@ -956,6 +963,100 @@ class PreviewExclusionsResponse(BaseModel):
 
 
 _PREVIEW_BASELINE = ["script", "style", "noscript", "iframe"]
+
+# Inspector script injected when inspect_mode=True. Runs in the iframe
+# with the parent's (jBKB's) origin since the iframe uses srcDoc +
+# sandbox allow-same-origin allow-scripts.
+#
+# Intercepts all clicks, prevents navigation/form submission, computes
+# a short list of candidate CSS selectors for the clicked element,
+# and posts them to the parent. Also highlights the hovered element
+# in blue so users can see what they're about to click.
+_INSPECTOR_SCRIPT = r"""
+(function () {
+  // Candidate builder — prefers stable signals (id, role, landmark tag,
+  // non-generic class names). Hash-suffix classes and 1-2 char classes
+  // are dropped since they're unlikely to be useful across pages.
+  function buildCandidates(el) {
+    var out = [];
+    function addUnique(s) { if (s && out.indexOf(s) === -1) out.push(s); }
+
+    // Walk up to three levels; collect candidates for each.
+    var node = el, depth = 0;
+    while (node && node.nodeType === 1 && depth < 3) {
+      var tag = (node.tagName || '').toLowerCase();
+      if (!tag) break;
+
+      // id (if id has no whitespace or newline)
+      if (node.id && /^[^\s]+$/.test(node.id)) {
+        addUnique('#' + node.id);
+      }
+      // role-based
+      var role = node.getAttribute && node.getAttribute('role');
+      if (role) addUnique('[role="' + role + '"]');
+      // aria-label contains pattern (for cookie/newsletter dialogs)
+      var aria = node.getAttribute && node.getAttribute('aria-label');
+      if (aria) {
+        var lower = aria.toLowerCase();
+        if (/cookie|consent|newsletter|subscribe|banner/.test(lower)) {
+          addUnique('[aria-label*="' + lower.slice(0, 40).replace(/"/g, '') + '" i]');
+        }
+      }
+      // tag+class
+      var classes = [].slice.call(node.classList || []);
+      for (var i = 0; i < classes.length; i++) {
+        var c = classes[i];
+        if (!c || c.length <= 2) continue;
+        if (/-[0-9a-f]{6,}$/.test(c)) continue;          // hashed
+        addUnique(tag + '.' + c);
+      }
+      // bare landmark tag
+      if (['nav','footer','header','aside','main','article'].indexOf(tag) !== -1) {
+        addUnique(tag);
+      }
+
+      node = node.parentElement;
+      depth++;
+    }
+    return out;
+  }
+
+  function outlineOn(el)  { if (!el || !el.style) return; el.__jbkbPrev = el.style.outline; el.style.outline = '2px solid #3b82f6'; el.style.outlineOffset = '-2px'; el.style.cursor = 'crosshair'; }
+  function outlineOff(el) { if (!el || !el.style) return; el.style.outline = el.__jbkbPrev || ''; el.style.outlineOffset = ''; el.style.cursor = ''; }
+
+  var hovered = null;
+  document.addEventListener('mouseover', function (e) {
+    if (hovered && hovered !== e.target) outlineOff(hovered);
+    hovered = e.target;
+    outlineOn(hovered);
+  }, true);
+
+  document.addEventListener('mouseout', function (e) {
+    if (hovered === e.target) { outlineOff(hovered); hovered = null; }
+  }, true);
+
+  function intercept(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var target = e.target;
+    if (!target || target.nodeType !== 1) return;
+    var candidates = buildCandidates(target);
+    var rect = target.getBoundingClientRect();
+    var preview = (target.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+    try {
+      window.parent.postMessage({
+        type: 'jbkb-inspect',
+        tag: (target.tagName || '').toLowerCase(),
+        candidates: candidates,
+        preview: preview,
+        rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+      }, '*');
+    } catch (err) { /* no-op */ }
+  }
+  document.addEventListener('click', intercept, true);
+  document.addEventListener('submit', function (e) { e.preventDefault(); e.stopPropagation(); }, true);
+})();
+"""
 
 _PREVIEW_STYLE = """
 /* Matched elements: red diagonal "caution tape" stripes over whatever
@@ -1112,6 +1213,16 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
             ul.append(li)
         legend.append(ul)
         soup.body.append(legend)
+
+    # Inspector mode — inject a <script> at the end of <body> that
+    # intercepts clicks and posts candidate selectors to the parent.
+    # Only emitted when inspect_mode=true; the parent mounts the iframe
+    # with "allow-same-origin allow-scripts" only while inspecting.
+    if req.inspect_mode:
+        inspector = soup.new_tag("script")
+        inspector.string = _INSPECTOR_SCRIPT
+        target = soup.body if soup.body else soup
+        target.append(inspector)
 
     return PreviewExclusionsResponse(
         url=req.url,
