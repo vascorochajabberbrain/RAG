@@ -565,22 +565,44 @@ _GENERIC_CLASSES = {
     "column", "box", "block", "item", "section",
 }
 
+# Tags whose presence is never useful as a user-facing exclude suggestion:
+# either baseline-stripped server-side (script/style/noscript/iframe), or
+# inline templates that render nothing until JS expands them.
+_SKIP_TAGS = {"script", "style", "noscript", "iframe", "template", "link", "meta"}
+
 
 def _is_generic_class(name: str) -> bool:
     n = name.lower()
     return n in _GENERIC_CLASSES or len(n) <= 2
 
 
+def _is_hashed_class(name: str) -> bool:
+    """Elementor-style classes like `elementor-element-4a39687` — suffix is
+    a random hash, so the selector is neither stable nor meaningful. Treat
+    them as unstable so we don't suggest `div.elementor-element-a492b86`
+    when the same widget shape repeats across pages."""
+    import re as _re
+    return bool(_re.search(r"-[0-9a-f]{6,}$", name.lower()))
+
+
 def _tag_selector(tag) -> Optional[str]:
     """Build a stable selector for this tag — prefer id, then class,
-    then None. Used to key elements across pages."""
+    then None. Used to key elements across pages.
+
+    Skips tags that are baseline-stripped server-side so we don't waste
+    suggestions on them (users would see #wp-emoji-styles-inline-css
+    and friends otherwise). Also rejects hashed classes like
+    `elementor-element-4a39687` — those repeat by accident, not because
+    the element is boilerplate."""
+    if tag.name in _SKIP_TAGS:
+        return None
     tag_id = tag.get("id")
-    if tag_id:
-        # CSS.escape is not ideal here but jBKB's DOM won't feed IDs back
-        # so we keep selectors readable. Skip dodgy IDs with spaces.
-        if " " not in tag_id and "\n" not in tag_id:
-            return f"#{tag_id}"
-    classes = [c for c in (tag.get("class") or []) if not _is_generic_class(c)]
+    if tag_id and " " not in tag_id and "\n" not in tag_id:
+        return f"#{tag_id}"
+    classes = [
+        c for c in (tag.get("class") or [])
+        if not _is_generic_class(c) and not _is_hashed_class(c)
+    ]
     classes.sort(key=len, reverse=True)
     if classes:
         return f"{tag.name}.{classes[0]}"
@@ -654,9 +676,13 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
             except Exception:
                 pass
 
-        # Signal B — class/id contains boilerplate pattern
-        # We scan attributes once rather than re-looping per pattern.
+        # Signal B — class/id contains boilerplate pattern.
+        # Skip script/style/etc up front (baseline-stripped anyway, and on
+        # WordPress sites the plugins inject dozens of them so they drown
+        # out real suggestions).
         for el in soup.find_all(True):
+            if el.name in _SKIP_TAGS:
+                continue
             cls = el.get("class") or []
             id_val = el.get("id") or ""
             matched_via = None
@@ -672,14 +698,18 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
                     page_hits.add(sel)
                     reasons.setdefault(sel, matched_via)
 
-        # Signal C — cross-page text repetition on elements with a stable
-        # selector and a non-trivial text payload.
+        # Signal C — cross-page text repetition. Only considered for
+        # elements that ALREADY look like boilerplate (landmark tag or
+        # class/id already matched by A or B). This catches "we've seen
+        # the same footer on both pages" without promoting every repeated
+        # content widget (elementor-widget-text-editor, etc.) as
+        # boilerplate.
         import hashlib
         for el in soup.find_all(True):
-            if not (el.get("id") or el.get("class")):
+            if el.name in _SKIP_TAGS:
                 continue
             sel = _tag_selector(el)
-            if not sel:
+            if not sel or sel not in page_hits:
                 continue
             text = _normalize_text(el.get_text(separator=" ", strip=True))
             if len(text) < 60:
@@ -690,16 +720,14 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
         for s in page_hits:
             seen_counts[s] += 1
 
-    # Promote any selector whose text appeared identically on ≥ 2 pages
-    # (and we have ≥ 2 pages sampled overall).
+    # Upgrade the reason when a signal-A/B selector also has identical
+    # text across ≥ 2 pages — cleaner signal, no new selectors added.
     if len(htmls) >= 2:
         for sel, hash_counts in text_hash_pages.items():
             top = max(hash_counts.values()) if hash_counts else 0
-            if top >= 2 and top <= len(htmls):
-                # Already counted by another signal? Don't double-count,
-                # but add a reason note.
-                seen_counts[sel] = max(seen_counts[sel], top)
-                reasons.setdefault(sel, f"identical text on {top}/{len(htmls)} pages")
+            if top >= 2:
+                existing = reasons.get(sel, "")
+                reasons[sel] = (existing + f" · identical text on {top}/{len(htmls)} pages").strip(" ·")
 
     # ── Build response ──────────────────────────────────────────────
     out = [
