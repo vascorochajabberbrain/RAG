@@ -565,10 +565,19 @@ _GENERIC_CLASSES = {
     "column", "box", "block", "item", "section",
 }
 
-# Tags whose presence is never useful as a user-facing exclude suggestion:
-# either baseline-stripped server-side (script/style/noscript/iframe), or
-# inline templates that render nothing until JS expands them.
-_SKIP_TAGS = {"script", "style", "noscript", "iframe", "template", "link", "meta"}
+# Tags that are never useful as a user-facing exclude suggestion —
+# baseline-stripped server-side or pure metadata.
+_SKIP_TAGS = {"script", "style", "noscript", "iframe", "link", "meta"}
+
+# Block-level container tags that are plausible wrappers for boilerplate
+# (footers, cookie banners, sidebars). Signal C (text repetition) only
+# promotes an element if its tag is in this set — filters out spans,
+# paragraphs, list items, anchors, headings that repeat for structural
+# reasons but aren't "chrome".
+_BOILERPLATE_CONTAINER_TAGS = {
+    "div", "section", "aside", "nav", "header", "footer",
+    "main", "article", "template",
+}
 
 
 def _is_generic_class(name: str) -> bool:
@@ -698,21 +707,29 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
                     page_hits.add(sel)
                     reasons.setdefault(sel, matched_via)
 
-        # Signal C — cross-page text repetition. Only considered for
-        # elements that ALREADY look like boilerplate (landmark tag or
-        # class/id already matched by A or B). This catches "we've seen
-        # the same footer on both pages" without promoting every repeated
-        # content widget (elementor-widget-text-editor, etc.) as
-        # boilerplate.
+        # Signal C — cross-page text repetition. Catches block-level
+        # wrappers that don't match A (not a landmark tag) or B (no
+        # boilerplate keyword in class/id) but still repeat identically
+        # across pages — e.g., div.elementor-location-footer on
+        # Elementor sites which use a <div> for the footer.
+        #
+        # Gates to keep noise down:
+        #   - tag must be a block-level container (div/section/aside/nav/
+        #     header/footer/main/article/template). Filters span, p, li,
+        #     a, headings, images etc.
+        #   - text >= 100 chars (short labels like "Sort by: …" repeat
+        #     for structural reasons, not because they're chrome).
+        #   - _tag_selector already rejects script/style/etc and hashed
+        #     classes (elementor-element-4a39687).
         import hashlib
         for el in soup.find_all(True):
-            if el.name in _SKIP_TAGS:
+            if el.name not in _BOILERPLATE_CONTAINER_TAGS:
                 continue
             sel = _tag_selector(el)
-            if not sel or sel not in page_hits:
+            if not sel:
                 continue
             text = _normalize_text(el.get_text(separator=" ", strip=True))
-            if len(text) < 60:
+            if len(text) < 100:
                 continue
             h = hashlib.md5(text.encode("utf-8")).hexdigest()[:12]
             text_hash_pages[sel][h] += 1
@@ -720,14 +737,20 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
         for s in page_hits:
             seen_counts[s] += 1
 
-    # Upgrade the reason when a signal-A/B selector also has identical
-    # text across ≥ 2 pages — cleaner signal, no new selectors added.
+    # Finalise Signal C: promote any selector whose text hash was seen
+    # identically on ≥ 2 pages. When the selector was already flagged by
+    # A or B, we keep the original reason; the text-repeat fact gets
+    # appended as an upgrade note.
     if len(htmls) >= 2:
         for sel, hash_counts in text_hash_pages.items():
             top = max(hash_counts.values()) if hash_counts else 0
-            if top >= 2:
-                existing = reasons.get(sel, "")
-                reasons[sel] = (existing + f" · identical text on {top}/{len(htmls)} pages").strip(" ·")
+            if top < 2:
+                continue
+            # Promote (if not already) and upgrade the reason
+            seen_counts[sel] = max(seen_counts[sel], top)
+            existing = reasons.get(sel, "")
+            addendum = f"identical text on {top}/{len(htmls)} pages"
+            reasons[sel] = (existing + " · " + addendum).strip(" ·") if existing else addendum
 
     # ── Build response ──────────────────────────────────────────────
     out = [
