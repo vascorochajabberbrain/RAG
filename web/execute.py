@@ -952,6 +952,14 @@ class PreviewExclusionsRequest(BaseModel):
     # suggested selectors to their exclude list. Requires the parent
     # to mount the iframe with sandbox="allow-same-origin allow-scripts".
     inspect_mode: bool = False
+    # Fetch engine — "playwright" (default) runs the page in a real
+    # headless browser so JS-rendered content (cookie banners, dynamic
+    # menus, Elementor widgets) appears exactly as the actual scrape
+    # sees it. "httpx" is faster (~10× cheaper) but only sees the
+    # initial server-rendered HTML, so JS-injected boilerplate won't
+    # show up — matching the scraper's view is what actually matters
+    # for building exclude_selectors.
+    engine: str = "playwright"
 
 
 class PreviewExclusionsResponse(BaseModel):
@@ -1120,15 +1128,38 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
         return PreviewExclusionsResponse(url="", error="url is required")
 
     # ── Fetch ───────────────────────────────────────────────────────
+    # Engine matches the actual scraper so the preview reflects what
+    # the pipeline sees, including JS-rendered content like cookie
+    # banners. User can override via engine="httpx" for a faster
+    # preview on static pages.
+    engine = (req.engine or "playwright").lower()
     try:
-        with httpx.Client(
-            timeout=req.timeout,
-            follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; jBKB-RAG/1.0)"},
-        ) as client:
-            resp = client.get(req.url)
-            resp.raise_for_status()
-            html = resp.text
+        if engine == "playwright":
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                try:
+                    ctx = browser.new_context(
+                        user_agent="Mozilla/5.0 (compatible; jBKB-RAG/1.0)",
+                        viewport={"width": 1280, "height": 900},
+                    )
+                    page = ctx.new_page()
+                    page.goto(req.url, wait_until="networkidle", timeout=int(req.timeout * 1000))
+                    # Small settle so deferred cookie-consent / newsletter
+                    # widgets have a chance to render before we snapshot.
+                    page.wait_for_timeout(500)
+                    html = page.content()
+                finally:
+                    browser.close()
+        else:
+            with httpx.Client(
+                timeout=req.timeout,
+                follow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; jBKB-RAG/1.0)"},
+            ) as client:
+                resp = client.get(req.url)
+                resp.raise_for_status()
+                html = resp.text
     except Exception as e:
         return PreviewExclusionsResponse(url=req.url, error=f"fetch failed: {e}")
 
