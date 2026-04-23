@@ -63,6 +63,10 @@ class WorkflowState:
     cleaned_text: Optional[str] = None
     scraped_items: list = field(default_factory=list)  # [{url, text}, ...] per scraped page; empty for PDF/TXT/CSV
     pdf_pages: list = field(default_factory=list)  # [{page: int, text: str}, ...] per PDF page; empty for non-PDF sources
+    # Collection's content lexicon — raw strings from jBKB. Passed into
+    # text_cleaner.clean_scraped_text so short lines without keyword
+    # overlap get dropped. Empty = fall back to legacy hardcoded rules.
+    keywords: list = field(default_factory=list)
 
     # Chunks (list of strings)
     chunks: list = field(default_factory=list)

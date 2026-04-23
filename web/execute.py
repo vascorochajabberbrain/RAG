@@ -94,6 +94,12 @@ class ChunkRequest(BaseModel):
     source_type: str = "url"
     source_label: str = "document"
     chunking_config: ChunkingConfig = Field(default_factory=ChunkingConfig)
+    # Collection's content lexicon — raw strings (routing_keywords,
+    # typical_questions, etc.). Tokenized into a stopword-filtered set
+    # and passed to the text_cleaner so short lines without keyword
+    # overlap are dropped. When empty, text_cleaner falls back to its
+    # hardcoded PT/EN pattern list.
+    keywords: list[str] = Field(default_factory=list)
 
 
 class ChunkResponse(BaseModel):
@@ -265,6 +271,7 @@ def execute_chunk(req: ChunkRequest):
     state = WorkflowState()
     state.source_type = req.source_type
     state.source_label = req.source_label
+    state.keywords = req.keywords or []
 
     # Set text or scraped items
     if req.scraped_items:

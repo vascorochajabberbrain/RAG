@@ -268,6 +268,49 @@ def _run_translate_and_clean(state: WorkflowState) -> str:
     return final_msg
 
 
+def _build_lexicon_for_cleaner(raw_strings: list) -> set:
+    """Tokenize + stopword-filter a list of raw strings into a content
+    lexicon that text_cleaner.clean_scraped_text can check lines against.
+
+    Mirrors the logic in execute.py's suggest-exclude-selectors endpoint
+    but kept local so runner.py doesn't depend on the web layer.
+    Multilingual stopword list (EN/PT/ES/FR). Drops tokens <= 2 chars
+    and pure-digit tokens."""
+    import re as _re
+
+    stopwords = {
+        # English
+        "the", "and", "or", "of", "for", "to", "in", "on", "at", "by", "with",
+        "from", "as", "is", "are", "was", "were", "be", "been", "being", "have",
+        "has", "had", "do", "does", "did", "but", "not", "no", "this", "that",
+        "these", "those", "it", "its", "if", "so", "an", "any", "all", "each",
+        "our", "your", "their", "his", "her", "we", "you", "they", "he", "she",
+        "can", "will", "just", "which", "when", "where", "what", "how", "why",
+        "about", "more", "also",
+        # Portuguese
+        "da", "do", "das", "dos", "para", "em", "por", "com", "sem", "mais",
+        "ao", "às", "aos", "ou", "mas", "que", "se", "na", "no", "nas", "nos",
+        "um", "uma", "uns", "umas", "é", "são", "foi", "seu", "sua", "seus",
+        "suas", "este", "esta", "esse", "essa", "isso", "isto", "aquele",
+        "aquela", "aquilo", "muito", "muita",
+        # Spanish
+        "el", "los", "las", "del", "al", "y", "u", "pero", "sí",
+        # French
+        "le", "les", "un", "une", "des", "du", "et", "aux",
+        "pour", "par", "avec", "sans", "sur",
+    }
+
+    out: set = set()
+    for raw in raw_strings or []:
+        if not raw:
+            continue
+        for tok in _re.findall(r"[\w]+", str(raw).lower(), flags=_re.UNICODE):
+            if len(tok) <= 2 or tok.isdigit() or tok in stopwords:
+                continue
+            out.add(tok)
+    return out
+
+
 def _run_chunk(state: WorkflowState) -> str:
     from workflow.models import ChunkingConfig
     # Ensure chunking_config is a ChunkingConfig object, not a plain dict
@@ -308,13 +351,17 @@ def _run_chunk(state: WorkflowState) -> str:
             state.chunks = [item["text"] for item in state.scraped_items]
             return f"Chunked into {len(state.chunks)} chunks (structured extraction — 1 per page)."
 
-        # Generic text scrape — clean each page then apply chunking config
+        # Generic text scrape — clean each page then apply chunking config.
+        # Build the lexicon once from state.keywords (raw routing terms
+        # from jBKB) so each page's cleaner call uses the same filter.
         from ingestion.text_cleaner import clean_scraped_text
+
+        lexicon = _build_lexicon_for_cleaner(getattr(state, "keywords", None) or [])
 
         cleaned_items = []
         for item in state.scraped_items:
             raw = item.get("text", "")
-            cleaned = clean_scraped_text(raw)
+            cleaned = clean_scraped_text(raw, lexicon=lexicon)
             if cleaned:
                 cleaned_items.append({**item, "text": cleaned, "text_raw": raw})
 

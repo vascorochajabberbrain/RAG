@@ -7,15 +7,34 @@ sort controls, breadcrumbs, cookie notices, loading spinners.
 Used between fetch and chunk steps. Does NOT apply to pages with
 structured extraction (product pages, recipe pages) — those already
 produce clean chunks via their chunk_template.
+
+When a `lexicon` set is provided (tokenized collection keywords),
+filtering becomes language-agnostic: short lines with no overlap
+against the lexicon are considered chrome and dropped. The original
+hardcoded PT/EN patterns are retained as a fallback for when the
+lexicon is empty or unavailable.
 """
 
 import re
 
 
-def clean_scraped_text(text: str) -> str:
+# Always-safe universal rules that apply regardless of lexicon:
+#   - whitespace / repeated newlines
+#   - lone star-character strings (leftover rating markers)
+#   - "breadcrumb" lines using » (short lines only)
+# Everything language-specific (cart, cookie, copyright etc.) is
+# handled by either the lexicon check or the legacy pattern fallback.
+
+def clean_scraped_text(text: str, lexicon: set | None = None) -> str:
     """
     Clean raw scraped page text by removing common boilerplate.
     Returns cleaned text suitable for chunking and RAG retrieval.
+
+    lexicon: optional set of lowercased content tokens from the
+             collection's routing terms. When provided, short lines
+             with zero lexicon overlap are dropped as likely chrome.
+             When None/empty, falls back to the hardcoded PT/EN
+             pattern list.
     """
     if not text:
         return ""
@@ -27,9 +46,20 @@ def clean_scraped_text(text: str) -> str:
         stripped = line.strip()
         if not stripped:
             continue
-        if _is_noise_line(stripped):
+        if _is_universal_noise(stripped):
             continue
-        # Clean star ratings in-line
+        if lexicon:
+            # Lexicon mode: the single rule is "short line + zero
+            # keyword overlap = drop". Long lines always pass.
+            # Short lines with a keyword hit pass. Short lines with
+            # no hit are dropped.
+            if len(stripped) < 80 and not _has_lexicon_hit(stripped, lexicon):
+                continue
+        else:
+            # Fallback: the historic PT/EN hardcoded list.
+            if _is_noise_line(stripped):
+                continue
+        # Normalize star ratings in-line for any surviving line.
         stripped = _clean_star_ratings(stripped)
         if stripped:
             cleaned_lines.append(stripped)
@@ -41,6 +71,26 @@ def clean_scraped_text(text: str) -> str:
     result = re.sub(r"  +", " ", result)
 
     return result.strip()
+
+
+def _is_universal_noise(line: str) -> bool:
+    """Language-independent noise patterns that are always safe to drop."""
+    # Pure star characters (no rating value)
+    if re.match(r"^[☆★\s]+$", line):
+        return True
+    # Breadcrumb patterns: "A » B » C" on a short line
+    if "»" in line and len(line.split("»")) >= 2 and len(line) < 100:
+        return True
+    return False
+
+
+def _has_lexicon_hit(line: str, lexicon: set) -> bool:
+    """True if the line contains at least one lexicon token. Case
+    insensitive, Unicode-aware word split."""
+    for tok in re.findall(r"[\w]+", line.lower(), re.UNICODE):
+        if tok in lexicon:
+            return True
+    return False
 
 
 def _is_noise_line(line: str) -> bool:
