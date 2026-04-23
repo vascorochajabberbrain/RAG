@@ -944,7 +944,11 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
 class PreviewExclusionsRequest(BaseModel):
     url: str
     exclude_selectors: list[str] = Field(default_factory=list)
-    timeout: float = 10.0
+    # Bumped from 10s → 30s to match the scraper's timeout. Complex
+    # sites (WP + Elementor + trackers + chat widgets) routinely take
+    # longer than 10s to reach networkidle. Default is generous; actual
+    # goto uses domcontentloaded below so it usually returns much faster.
+    timeout: float = 30.0
     # When true, the returned HTML includes a small inspector script
     # that intercepts clicks inside the iframe and posts candidate
     # CSS selectors back to the parent window via postMessage. The
@@ -1144,10 +1148,21 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
                         viewport={"width": 1280, "height": 900},
                     )
                     page = ctx.new_page()
-                    page.goto(req.url, wait_until="networkidle", timeout=int(req.timeout * 1000))
-                    # Small settle so deferred cookie-consent / newsletter
-                    # widgets have a chance to render before we snapshot.
-                    page.wait_for_timeout(500)
+                    # domcontentloaded is much faster and more reliable
+                    # than networkidle on sites loaded with trackers /
+                    # chat widgets that keep the network busy indefinitely.
+                    # We then settle explicitly for content-rendering JS.
+                    try:
+                        page.goto(req.url, wait_until="domcontentloaded", timeout=int(req.timeout * 1000))
+                    except Exception:
+                        # Fall back to plain goto (no wait) if even DCL
+                        # times out — we may still get usable HTML from
+                        # partial load.
+                        page.goto(req.url, wait_until="commit", timeout=int(req.timeout * 1000))
+                    # Give async widgets (cookie banner, analytics popups,
+                    # Elementor lazy sections) 1.5s to render. Long enough
+                    # for most sites, not so long the preview crawls.
+                    page.wait_for_timeout(1500)
                     # Auto-expand FAQ / <details> / Bootstrap collapsibles
                     # so the preview iframe visually matches what the
                     # scraper actually extracts. Two rounds with a short
