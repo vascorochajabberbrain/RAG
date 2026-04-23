@@ -161,38 +161,66 @@ def _single_page_scrape(page, config: dict) -> tuple:
     url = config.get("url")
     if not url:
         return "Error: url required for scrape_mode=single_page.", []
-    text = _fetch_and_extract(page, url, config) or ""
-    items = [{"url": url, "text": text}] if text else []
+    text, text_baseline = _fetch_and_extract_pair(page, url, config)
+    text = text or ""
+    items = [{"url": url, "text": text, "text_baseline": text_baseline or ""}] if text else []
     return text, items
 
 
 # ── Core fetch + extract ──────────────────────────────────────────────────────
 
 def _fetch_and_extract(page, url: str, config: dict) -> str:
-    """Navigate to URL and extract text (structured or plain)."""
+    """Navigate to URL and extract text (structured or plain).
+
+    Legacy single-return variant kept for the sitemap + crawl modes
+    that don't need the baseline pair. New code should prefer
+    _fetch_and_extract_pair which returns (filtered, baseline)."""
+    filtered, _baseline = _fetch_and_extract_pair(page, url, config)
+    return filtered
+
+
+def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
+    """Navigate + extract text TWICE:
+      - filtered text  (baseline strip + user exclude_selectors applied)
+      - baseline text  (baseline strip only, no user exclude_selectors)
+
+    Both use the same text_selector. Baseline text is the "truly raw"
+    content that jBKB stores in content_raw for change-detection +
+    re-processing when the user edits exclude_selectors."""
     try:
         page.goto(url, wait_until="networkidle", timeout=30000)
     except Exception as e:
         print(f"[playwright_scraper] WARNING: Failed to load {url}: {e}")
-        return ""
+        return "", ""
 
     time.sleep(config.get("page_delay", 0.5))
 
+    # Structured / custom-JS paths don't walk the DOM via text_selector,
+    # so baseline vs filtered doesn't apply. Return the single result
+    # for both so downstream logic always has SOMETHING to hash.
     if config.get("custom_js_extraction"):
-        return _extract_custom_js(page, url, config)
-    elif config.get("structured_extraction"):
-        return _extract_structured(page, url, config)
-    else:
-        return _extract_text(page, config)
+        r = _extract_custom_js(page, url, config) or ""
+        return r, r
+    if config.get("structured_extraction"):
+        r = _extract_structured(page, url, config) or ""
+        return r, r
 
+    # Generic text extraction — two passes with the text_selector.
+    selector = config.get("text_selector", "body")
 
-def _strip_excluded(page, config: dict) -> None:
-    """Remove elements matching exclude_selectors (+ a built-in baseline of
-    non-text elements) from the DOM before extraction. Runs in-page via
-    evaluate so text_selector walks over a pruned tree."""
-    baseline = ["script", "style", "noscript", "iframe"]
+    _strip_selectors(page, ["script", "style", "noscript", "iframe"])
+    baseline_text = _extract_with_selector(page, selector)
+
     user_selectors = [s for s in (config.get("exclude_selectors") or []) if s]
-    selectors = baseline + user_selectors
+    _strip_selectors(page, user_selectors)
+    filtered_text = _extract_with_selector(page, selector)
+
+    return filtered_text, baseline_text
+
+
+def _strip_selectors(page, selectors: list) -> None:
+    """Remove every element matching any selector from the live DOM.
+    Silent on bad selectors so one typo can't break the whole scrape."""
     if not selectors:
         return
     try:
@@ -201,11 +229,33 @@ def _strip_excluded(page, config: dict) -> None:
             selectors,
         )
     except Exception as e:
-        print(f"[playwright_scraper] WARNING: strip_excluded failed: {e}")
+        print(f"[playwright_scraper] WARNING: strip_selectors failed: {e}")
+
+
+def _strip_excluded(page, config: dict) -> None:
+    """DEPRECATED backward-compat shim. Strips baseline + user in one
+    call; left so third-party callers don't break. New code should use
+    _strip_selectors with an explicit list."""
+    baseline = ["script", "style", "noscript", "iframe"]
+    user_selectors = [s for s in (config.get("exclude_selectors") or []) if s]
+    _strip_selectors(page, baseline + user_selectors)
+
+
+def _extract_with_selector(page, selector: str) -> str:
+    try:
+        el = page.locator(selector).first
+        return el.inner_text(timeout=5000).strip()
+    except Exception:
+        try:
+            return page.locator("body").first.inner_text(timeout=5000).strip()
+        except Exception as e:
+            print(f"[playwright_scraper] WARNING: Could not extract via {selector!r}: {e}")
+            return ""
 
 
 def _extract_text(page, config: dict) -> str:
-    """Extract plain text from the page using text_selector."""
+    """DEPRECATED — returns only the filtered text. Use
+    _fetch_and_extract_pair for new code."""
     _strip_excluded(page, config)
     selector = config.get("text_selector", "body")
     try:

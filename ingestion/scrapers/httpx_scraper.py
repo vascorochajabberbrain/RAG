@@ -126,8 +126,12 @@ def _single_page_scrape(client: httpx.Client, config: dict) -> tuple:
         resp = client.get(url)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-        text = _fetch_and_extract_from_soup(soup, url, config) or ""
-        items = [{"url": url, "text": text}] if text else []
+        text, text_baseline = _fetch_and_extract_from_soup_pair(soup, url, config)
+        text = text or ""
+        items = (
+            [{"url": url, "text": text, "text_baseline": text_baseline or ""}]
+            if text else []
+        )
         return text, items
     except Exception as e:
         return f"Error fetching {url}: {e}", []
@@ -136,39 +140,69 @@ def _single_page_scrape(client: httpx.Client, config: dict) -> tuple:
 # ── Core fetch + extract ──────────────────────────────────────────────────────
 
 def _fetch_and_extract_from_soup(soup: BeautifulSoup, url: str, config: dict) -> str:
+    """Legacy single-return variant used by sitemap / crawl modes."""
+    filtered, _baseline = _fetch_and_extract_from_soup_pair(soup, url, config)
+    return filtered
+
+
+def _fetch_and_extract_from_soup_pair(soup: BeautifulSoup, url: str, config: dict) -> tuple:
+    """Extract text twice from the same soup:
+      - filtered  (baseline strip + user exclude_selectors)
+      - baseline  (baseline strip only)
+
+    Structured-extraction paths return the same text for both since they
+    don't walk the DOM via text_selector. Downstream always needs SOMETHING
+    to hash as content_raw."""
     if config.get("structured_extraction"):
-        return _extract_structured(soup, url, config)
-    else:
-        return _extract_text(soup, config)
+        r = _extract_structured(soup, url, config) or ""
+        return r, r
+
+    selector = config.get("text_selector", "body")
+
+    # Baseline strip + extract (soup is mutated in place).
+    _strip_selectors(soup, ["script", "style", "noscript", "iframe"])
+    baseline_text = _extract_via_selector(soup, selector)
+
+    # User strip + extract again (soup mutated further).
+    user_selectors = [s for s in (config.get("exclude_selectors") or []) if s]
+    _strip_selectors(soup, user_selectors)
+    filtered_text = _extract_via_selector(soup, selector)
+
+    return filtered_text, baseline_text
+
+
+def _strip_selectors(soup: BeautifulSoup, selectors: list) -> None:
+    for sel in selectors:
+        if not sel:
+            continue
+        try:
+            for el in soup.select(sel):
+                el.decompose()
+        except Exception as e:
+            print(f"[httpx_scraper] WARNING: bad selector {sel!r}: {e}")
 
 
 def _strip_excluded(soup: BeautifulSoup, config: dict) -> None:
-    """Remove elements matching exclude_selectors (+ a built-in baseline of
-    non-text elements) so they don't pollute the extracted text. Mutates
-    the soup in place. Silent on selector errors so one bad entry can't
-    break the whole fetch."""
+    """DEPRECATED backward-compat shim. New code should use
+    _strip_selectors with an explicit list."""
     baseline = ["script", "style", "noscript", "iframe"]
     user_selectors = config.get("exclude_selectors") or []
-    for selector in baseline + list(user_selectors):
-        if not selector:
-            continue
-        try:
-            for el in soup.select(selector):
-                el.decompose()
-        except Exception as e:
-            print(f"[httpx_scraper] WARNING: bad exclude_selector {selector!r}: {e}")
+    _strip_selectors(soup, baseline + list(user_selectors))
 
 
-def _extract_text(soup: BeautifulSoup, config: dict) -> str:
-    """Extract plain text using text_selector (CSS selector). Default: body."""
-    _strip_excluded(soup, config)
-    selector = config.get("text_selector", "body")
+def _extract_via_selector(soup: BeautifulSoup, selector: str) -> str:
     el = soup.select_one(selector)
     if not el:
         el = soup.find("body")
     if not el:
         return ""
     return el.get_text(separator="\n", strip=True)
+
+
+def _extract_text(soup: BeautifulSoup, config: dict) -> str:
+    """DEPRECATED single-output. Use _fetch_and_extract_from_soup_pair."""
+    _strip_excluded(soup, config)
+    return _extract_via_selector(soup, config.get("text_selector", "body"))
 
 
 def _extract_structured(soup: BeautifulSoup, url: str, config: dict) -> str:

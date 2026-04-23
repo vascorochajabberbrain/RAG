@@ -62,6 +62,13 @@ class FetchRequest(BaseModel):
 class FetchResponse(BaseModel):
     """Result of a fetch step."""
     raw_text: str
+    # Text with ONLY the baseline strip applied (script/style/noscript/
+    # iframe). No user exclude_selectors. Same shape as raw_text. Used
+    # by jBKB to populate rag_sources.content_raw and compute a stable
+    # content hash for change detection. Falls back to raw_text when
+    # the scraper doesn't produce a distinct baseline (structured mode,
+    # sitemap / crawl modes that haven't been upgraded).
+    baseline_text: str = ""
     scraped_items: list[dict] = Field(default_factory=list)  # [{url, text}, ...]
     pdf_pages: list[dict] = Field(default_factory=list)  # [{page, text}, ...]
     source_label: str = ""
@@ -226,8 +233,21 @@ def execute_fetch(req: FetchRequest):
     if msg.startswith("Error"):
         raise HTTPException(400, msg)
 
+    # baseline_text — joined from scraped_items[].text_baseline when the
+    # scraper populated it (single_page mode does; sitemap/crawl/
+    # structured modes don't, so baseline_text falls back to raw_text so
+    # content_raw never ends up empty).
+    baseline_pieces = [
+        (it.get("text_baseline") or it.get("text") or "")
+        for it in (state.scraped_items or [])
+    ]
+    baseline_text = "\n\n".join(p for p in baseline_pieces if p)
+    if not baseline_text:
+        baseline_text = state.raw_text or ""
+
     return FetchResponse(
         raw_text=state.raw_text or "",
+        baseline_text=baseline_text,
         scraped_items=state.scraped_items or [],
         pdf_pages=state.pdf_pages or [],
         source_label=state.source_label or "",
