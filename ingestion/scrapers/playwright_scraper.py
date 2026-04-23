@@ -205,6 +205,18 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
         r = _extract_structured(page, url, config) or ""
         return r, r
 
+    # Expand FAQ accordions / <details> / Bootstrap collapsibles etc.
+    # BEFORE text extraction so Pattern B/C sites (content hidden via
+    # display:none or JS-loaded on click) contribute their answers too.
+    # Pattern A sites (CSS-only max-height collapse) don't need this —
+    # inner_text already reads through max-height clips — but running
+    # the expand step is harmless for them (clicks are no-ops on
+    # already-expanded elements). Config opt-out via
+    # `expand_collapsibles: false` for sites where clicking trips
+    # unwanted behaviour.
+    if config.get("expand_collapsibles", True):
+        _expand_collapsibles(page)
+
     # Generic text extraction — two passes with the text_selector.
     selector = config.get("text_selector", "body")
 
@@ -216,6 +228,51 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     filtered_text = _extract_with_selector(page, selector)
 
     return filtered_text, baseline_text
+
+
+# Common accordion / collapsible triggers across WordPress, Bootstrap,
+# Elementor, native <details>. These are ARIA + class patterns only —
+# nothing page-specific. Clicking an already-expanded accordion is a
+# no-op, so running these unconditionally is safe.
+_EXPAND_SELECTORS = (
+    '[aria-expanded="false"]',
+    'details:not([open])',
+    '.elementor-tab-title:not(.elementor-active)',
+    '.elementor-toggle-title:not(.elementor-active)',
+    '.elementor-accordion-title:not(.elementor-active)',
+    '[data-toggle="collapse"]',
+    '[data-bs-toggle="collapse"]',
+)
+
+
+def _expand_collapsibles(page) -> None:
+    """Click every common accordion / details / collapse trigger so the
+    subsequent inner_text() call sees expanded content. Runs two
+    rounds with a short wait between — some widgets reveal nested
+    collapsibles only after the parent opens."""
+    try:
+        for _round in range(2):
+            page.evaluate(
+                """(sels) => {
+                    for (const s of sels) {
+                        try {
+                            document.querySelectorAll(s).forEach(el => {
+                                try {
+                                    if (el.tagName === 'DETAILS') {
+                                        el.open = true;
+                                    } else {
+                                        el.click();
+                                    }
+                                } catch (e) { /* single click failure ignored */ }
+                            });
+                        } catch (e) { /* bad selector, move on */ }
+                    }
+                }""",
+                list(_EXPAND_SELECTORS),
+            )
+            page.wait_for_timeout(250)
+    except Exception as e:
+        print(f"[playwright_scraper] WARNING: expand_collapsibles failed: {e}")
 
 
 def _strip_selectors(page, selectors: list) -> None:

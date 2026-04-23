@@ -1148,6 +1148,40 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
                     # Small settle so deferred cookie-consent / newsletter
                     # widgets have a chance to render before we snapshot.
                     page.wait_for_timeout(500)
+                    # Auto-expand FAQ / <details> / Bootstrap collapsibles
+                    # so the preview iframe visually matches what the
+                    # scraper actually extracts. Two rounds with a short
+                    # wait handle nested collapsibles. Same selector list
+                    # the scraper uses when expand_collapsibles=true.
+                    try:
+                        expand_selectors = [
+                            '[aria-expanded="false"]',
+                            'details:not([open])',
+                            '.elementor-tab-title:not(.elementor-active)',
+                            '.elementor-toggle-title:not(.elementor-active)',
+                            '.elementor-accordion-title:not(.elementor-active)',
+                            '[data-toggle="collapse"]',
+                            '[data-bs-toggle="collapse"]',
+                        ]
+                        for _ in range(2):
+                            page.evaluate(
+                                """(sels) => {
+                                    for (const s of sels) {
+                                        try {
+                                            document.querySelectorAll(s).forEach(el => {
+                                                try {
+                                                    if (el.tagName === 'DETAILS') { el.open = true; }
+                                                    else { el.click(); }
+                                                } catch (_) {}
+                                            });
+                                        } catch (_) {}
+                                    }
+                                }""",
+                                expand_selectors,
+                            )
+                            page.wait_for_timeout(250)
+                    except Exception:
+                        pass
                     html = page.content()
                 finally:
                     browser.close()
