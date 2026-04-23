@@ -772,6 +772,191 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Preview exclusions — render a single page with matched elements
+# outlined in red so the user can visually confirm the exclude_selectors
+# list does the right thing before saving.
+#
+# Output: one big HTML string that the caller renders inside a sandboxed
+# iframe. We:
+#   - strip every <script> (safety + avoids any JS that fights our
+#     highlight CSS)
+#   - inject a <base href> so relative URLs for CSS/images/fonts still
+#     resolve against the original origin
+#   - inject a <style> with .jbkb-ex-hit and a floating legend
+#   - tag each matched element with class="jbkb-ex-hit" and
+#     data-jbkb-sel="<matched selector>"
+# The baseline strip list (script/style/noscript/iframe) is ALSO included
+# so users see what the scraper actually drops in production.
+# ═══════════════════════════════════════════════════════════════════════
+
+class PreviewExclusionsRequest(BaseModel):
+    url: str
+    exclude_selectors: list[str] = Field(default_factory=list)
+    timeout: float = 10.0
+
+
+class PreviewExclusionsResponse(BaseModel):
+    url: str
+    html: str = ""                      # rewritten HTML to iframe
+    matched_count: int = 0              # total elements tagged
+    per_selector: dict[str, int] = Field(default_factory=dict)  # selector -> count
+    error: Optional[str] = None
+
+
+_PREVIEW_BASELINE = ["script", "style", "noscript", "iframe"]
+
+_PREVIEW_STYLE = """
+.jbkb-ex-hit {
+  outline: 3px dashed #dc2626 !important;
+  background: rgba(220, 38, 38, 0.08) !important;
+}
+.jbkb-ex-hit::before {
+  content: "stripped: " attr(data-jbkb-sel);
+  display: inline-block;
+  background: #dc2626;
+  color: #fff;
+  font: 10px/1.2 ui-monospace, Menlo, monospace;
+  padding: 2px 6px;
+  border-radius: 0 0 4px 0;
+  margin: -2px 0 2px -2px;
+  max-width: 100%;
+  word-break: break-all;
+}
+#__jbkb_legend {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 2147483647;
+  background: rgba(17, 24, 39, 0.95);
+  color: #fff;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font: 11px/1.35 ui-sans-serif, system-ui, sans-serif;
+  max-width: 320px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+}
+#__jbkb_legend b { font-weight: 600; }
+#__jbkb_legend ul { margin: 4px 0 0; padding-left: 18px; }
+#__jbkb_legend li { font-family: ui-monospace, Menlo, monospace; font-size: 10px; }
+"""
+
+
+@router.post("/preview-exclusions", response_model=PreviewExclusionsResponse)
+def execute_preview_exclusions(req: PreviewExclusionsRequest):
+    """Fetch a URL, tag matched elements with a red outline, return HTML."""
+    try:
+        import httpx
+        from bs4 import BeautifulSoup, Tag
+    except Exception as e:
+        raise HTTPException(500, f"Missing deps: {e}")
+
+    if not req.url:
+        return PreviewExclusionsResponse(url="", error="url is required")
+
+    # ── Fetch ───────────────────────────────────────────────────────
+    try:
+        with httpx.Client(
+            timeout=req.timeout,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; jBKB-RAG/1.0)"},
+        ) as client:
+            resp = client.get(req.url)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as e:
+        return PreviewExclusionsResponse(url=req.url, error=f"fetch failed: {e}")
+
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception as e:
+        return PreviewExclusionsResponse(url=req.url, error=f"parse failed: {e}")
+
+    # ── Inject <base href> so CSS/images/fonts resolve ──────────────
+    # If the page already has a <base>, leave it alone.
+    try:
+        from urllib.parse import urljoin, urlparse
+        origin = "{0.scheme}://{0.netloc}".format(urlparse(req.url))
+        if soup.head and not soup.head.find("base"):
+            base = soup.new_tag("base", href=req.url if req.url.endswith("/") else urljoin(req.url, "./"))
+            soup.head.insert(0, base)
+        elif not soup.head:
+            # No <head>; create one.
+            head = soup.new_tag("head")
+            head.append(soup.new_tag("base", href=origin + "/"))
+            if soup.html:
+                soup.html.insert(0, head)
+    except Exception:
+        pass
+
+    # ── Strip <script> for safety ───────────────────────────────────
+    for s in soup.find_all("script"):
+        s.decompose()
+
+    # ── Tag matched elements ────────────────────────────────────────
+    user_selectors = [s for s in (req.exclude_selectors or []) if s]
+    all_selectors = _PREVIEW_BASELINE + user_selectors
+
+    per_selector: dict[str, int] = {}
+    total = 0
+    for sel in all_selectors:
+        try:
+            matches = soup.select(sel)
+        except Exception:
+            per_selector[sel] = 0
+            continue
+        per_selector[sel] = len(matches)
+        for el in matches:
+            if not isinstance(el, Tag):
+                continue
+            # Don't double-count if another selector already hit this node
+            cls = el.get("class") or []
+            if "jbkb-ex-hit" not in cls:
+                cls = list(cls) + ["jbkb-ex-hit"]
+                el["class"] = cls
+                total += 1
+            # Keep the first selector that matched; if the element was
+            # already hit, we still note both in data-jbkb-sel.
+            existing = el.get("data-jbkb-sel", "")
+            el["data-jbkb-sel"] = (existing + " " + sel).strip() if existing else sel
+
+    # ── Inject <style> + legend ─────────────────────────────────────
+    style_tag = soup.new_tag("style")
+    style_tag.string = _PREVIEW_STYLE
+    if soup.head:
+        soup.head.append(style_tag)
+    elif soup.html:
+        soup.html.insert(0, style_tag)
+    else:
+        soup.insert(0, style_tag)
+
+    # Legend — only if there's a <body>; otherwise skip to avoid
+    # corrupting the document structure.
+    if soup.body and total > 0:
+        legend = soup.new_tag("div", id="__jbkb_legend")
+        legend.append(BeautifulSoup(
+            f"<b>{total} element(s) stripped</b>",
+            "html.parser",
+        ))
+        ul = soup.new_tag("ul")
+        # Sort by count desc, skip selectors with 0 matches
+        for sel, cnt in sorted(per_selector.items(), key=lambda kv: -kv[1]):
+            if cnt == 0:
+                continue
+            li = soup.new_tag("li")
+            li.string = f"{sel} ({cnt})"
+            ul.append(li)
+        legend.append(ul)
+        soup.body.append(legend)
+
+    return PreviewExclusionsResponse(
+        url=req.url,
+        html=str(soup),
+        matched_count=total,
+        per_selector=per_selector,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # FAQ extraction — ask an LLM for Q&A pairs from raw text
 # ═══════════════════════════════════════════════════════════════════════
 
