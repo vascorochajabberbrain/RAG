@@ -35,6 +35,10 @@ class ScraperConfig(BaseModel):
     start_url: Optional[str] = None
     excluded_urls: list[str] = Field(default_factory=list)
     text_selector: str = "main, article, .entry-content, body"
+    # CSS selectors for elements to REMOVE before extracting text. Per-sitemap
+    # user config (cookie banners, newsletter popups, footers). A baseline of
+    # script/style/noscript/iframe is always stripped in addition.
+    exclude_selectors: list[str] = Field(default_factory=list)
     # Extra config (custom JS extractors, click selectors, etc.)
     extra: dict = Field(default_factory=dict)
 
@@ -182,6 +186,7 @@ def execute_fetch(req: FetchRequest):
                 "start_url": sc.start_url,
                 "excluded_urls": sc.excluded_urls,
                 "text_selector": sc.text_selector,
+                "exclude_selectors": sc.exclude_selectors,
                 **(sc.extra or {}),
             }
         elif req.source_url:

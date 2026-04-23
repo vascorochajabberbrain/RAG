@@ -142,8 +142,26 @@ def _fetch_and_extract_from_soup(soup: BeautifulSoup, url: str, config: dict) ->
         return _extract_text(soup, config)
 
 
+def _strip_excluded(soup: BeautifulSoup, config: dict) -> None:
+    """Remove elements matching exclude_selectors (+ a built-in baseline of
+    non-text elements) so they don't pollute the extracted text. Mutates
+    the soup in place. Silent on selector errors so one bad entry can't
+    break the whole fetch."""
+    baseline = ["script", "style", "noscript", "iframe"]
+    user_selectors = config.get("exclude_selectors") or []
+    for selector in baseline + list(user_selectors):
+        if not selector:
+            continue
+        try:
+            for el in soup.select(selector):
+                el.decompose()
+        except Exception as e:
+            print(f"[httpx_scraper] WARNING: bad exclude_selector {selector!r}: {e}")
+
+
 def _extract_text(soup: BeautifulSoup, config: dict) -> str:
     """Extract plain text using text_selector (CSS selector). Default: body."""
+    _strip_excluded(soup, config)
     selector = config.get("text_selector", "body")
     el = soup.select_one(selector)
     if not el:

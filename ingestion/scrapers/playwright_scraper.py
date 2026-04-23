@@ -186,8 +186,27 @@ def _fetch_and_extract(page, url: str, config: dict) -> str:
         return _extract_text(page, config)
 
 
+def _strip_excluded(page, config: dict) -> None:
+    """Remove elements matching exclude_selectors (+ a built-in baseline of
+    non-text elements) from the DOM before extraction. Runs in-page via
+    evaluate so text_selector walks over a pruned tree."""
+    baseline = ["script", "style", "noscript", "iframe"]
+    user_selectors = [s for s in (config.get("exclude_selectors") or []) if s]
+    selectors = baseline + user_selectors
+    if not selectors:
+        return
+    try:
+        page.evaluate(
+            "(sels) => { for (const s of sels) { try { document.querySelectorAll(s).forEach(el => el.remove()); } catch (e) { console.warn('bad selector', s, e); } } }",
+            selectors,
+        )
+    except Exception as e:
+        print(f"[playwright_scraper] WARNING: strip_excluded failed: {e}")
+
+
 def _extract_text(page, config: dict) -> str:
     """Extract plain text from the page using text_selector."""
+    _strip_excluded(page, config)
     selector = config.get("text_selector", "body")
     try:
         el = page.locator(selector).first
