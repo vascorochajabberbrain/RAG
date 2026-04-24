@@ -4,6 +4,39 @@ Workflow runner: executes one step at a time using existing ingestion, vectoriza
 from workflow.models import Step, WorkflowState, ChunkingConfig
 
 
+def _parse_page_range(spec: str) -> set[int]:
+    """Parse a page-range spec into a set of 1-based page numbers.
+
+    Accepts: "20-45" (inclusive range), "1,5,8-10" (mixed), "7" (single).
+    Returns empty set on malformed input — the caller treats that as
+    an error and reports it to the user rather than silently taking
+    all pages or no pages.
+    """
+    out: set[int] = set()
+    for part in (spec or "").split(","):
+        p = part.strip()
+        if not p:
+            continue
+        if "-" in p:
+            a, _, b = p.partition("-")
+            try:
+                start, end = int(a), int(b)
+            except ValueError:
+                return set()
+            if start <= 0 or end <= 0 or end < start:
+                return set()
+            out.update(range(start, end + 1))
+        else:
+            try:
+                n = int(p)
+            except ValueError:
+                return set()
+            if n <= 0:
+                return set()
+            out.add(n)
+    return out
+
+
 def run_step(state: WorkflowState, step: Step, cancel_check=None) -> str:
     """
     Execute a single workflow step. Mutates state. Returns a short status message.
@@ -94,14 +127,34 @@ def _run_fetch(state: WorkflowState, cancel_check=None) -> str:
     config = state.source_config or {}
 
     if stype == "pdf":
-        from ingestion.pdf_ingestion import read_from_pdf, read_from_pdf_pages
+        from ingestion.pdf_ingestion import read_from_pdf_pages
         path = config.get("path") or config.get("pdf_path")
         if not path:
             return "Error: source_config must contain 'path' or 'pdf_path' for PDF."
-        state.raw_text = read_from_pdf(path)
-        state.pdf_pages = read_from_pdf_pages(path)  # per-page for source attribution
+        # Always use the page-aware reader so chunks can carry a
+        # page number in their source_url (pdf://filename#page=N).
+        # We then rebuild raw_text from the filtered pages instead of
+        # calling read_from_pdf() a second time.
+        all_pages = read_from_pdf_pages(path)
+
+        # Apply optional page filter. Format accepted: "20-45",
+        # "1,5,8-10", or a bare number. Null/missing/empty = all pages.
+        page_range = (config.get("page_range") or "").strip()
+        if page_range:
+            wanted = _parse_page_range(page_range)
+            if not wanted:
+                return f"Error: invalid page_range '{page_range}' (expected e.g. '20-45' or '1,5,8-10')."
+            filtered = [p for p in all_pages if p.get("page") in wanted]
+            if not filtered:
+                return f"Error: page_range '{page_range}' matches no pages in this PDF ({len(all_pages)} pages total)."
+            state.pdf_pages = filtered
+        else:
+            state.pdf_pages = all_pages
+
+        state.raw_text = "\n\n".join((p.get("text") or "") for p in state.pdf_pages)
         state.source_label = config.get("source_label") or path.split("/")[-1]
-        return f"Fetched PDF: {len(state.raw_text)} characters ({len(state.pdf_pages)} pages)."
+        range_suffix = f" [pages {page_range}]" if page_range else ""
+        return f"Fetched PDF{range_suffix}: {len(state.raw_text)} characters ({len(state.pdf_pages)} pages)."
 
     if stype == "txt":
         from ingestion.txt_ingestion import read_txt_as_text

@@ -51,6 +51,9 @@ class FetchRequest(BaseModel):
     source_url: Optional[str] = None  # alternative to scraper_config for simple single-URL fetch
     # For file sources:
     file_path: Optional[str] = None
+    # Optional page filter for PDF sources. Format: "20-45" or
+    # "1,5,8-10". Null/empty means the entire file.
+    page_range: Optional[str] = None
     # Optional: routing metadata for relevance filtering
     routing: Optional[dict] = None
     # Collection context (for labeling)
@@ -216,6 +219,9 @@ def execute_fetch(req: FetchRequest):
         if not req.file_path:
             raise HTTPException(400, f"{req.source_type} source requires file_path")
         source_config["path"] = req.file_path
+        # Page filter only applies to PDFs; txt doesn't have pages.
+        if req.source_type == "pdf" and req.page_range:
+            source_config["page_range"] = req.page_range
     elif req.source_type == "csv":
         if not req.file_path:
             raise HTTPException(400, "CSV source requires file_path")
