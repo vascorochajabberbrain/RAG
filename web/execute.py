@@ -171,6 +171,25 @@ class CollectionInfoResponse(BaseModel):
     status: str = ""
 
 
+class ProbePdfRequest(BaseModel):
+    """Probe a PDF (local path or http(s) URL) for page structure.
+
+    Used by the jBKB upload dialog to show a page outline and
+    auto-suggest per-range splits before the source rows are created.
+    """
+    file_path: str
+
+
+class ProbePdfPagePreview(BaseModel):
+    page: int
+    first_line: str
+
+
+class ProbePdfResponse(BaseModel):
+    page_count: int
+    page_previews: list[ProbePdfPagePreview] = Field(default_factory=list)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Endpoints
 # ═══════════════════════════════════════════════════════════════════════
@@ -1436,3 +1455,42 @@ def execute_faq_extract(req: FaqExtractRequest):
             pairs.append(FaqPair(question=q, answer=a))
 
     return FaqExtractResponse(pairs=pairs, count=len(pairs), source_url=req.source_url)
+
+
+@router.post("/probe-pdf", response_model=ProbePdfResponse)
+def execute_probe_pdf(req: ProbePdfRequest):
+    """Probe a PDF for its page structure.
+
+    Used by the jBKB upload dialog to:
+     1. confirm the PDF is readable before the user commits to a save,
+     2. display a page outline (first non-empty line per page) so the
+        user can spot chapter boundaries for range-split mode.
+
+    Local paths and http(s) URLs are handled by the same underlying
+    reader (pdf_ingestion._open_pdf), so this endpoint doesn't care
+    which mode the caller is in.
+    """
+    from ingestion.pdf_ingestion import read_from_pdf_pages
+
+    try:
+        pages = read_from_pdf_pages(req.file_path)
+    except FileNotFoundError as e:
+        raise HTTPException(404, f"PDF not found: {e}")
+    except Exception as e:
+        raise HTTPException(400, f"Could not read PDF: {e}")
+
+    previews: list[ProbePdfPagePreview] = []
+    for p in pages:
+        text = p.get("text", "") or ""
+        # First non-empty line, collapsed whitespace, clipped to 140
+        # chars — enough to show a chapter heading or a first
+        # sentence. Anything longer is noise in the outline view.
+        first_line = ""
+        for raw_line in text.splitlines():
+            stripped = " ".join(raw_line.split())
+            if stripped:
+                first_line = stripped[:140]
+                break
+        previews.append(ProbePdfPagePreview(page=p["page"], first_line=first_line))
+
+    return ProbePdfResponse(page_count=len(pages), page_previews=previews)
