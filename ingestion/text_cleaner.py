@@ -53,13 +53,16 @@ def clean_scraped_text(text: str, lexicon: set | None = None) -> str:
     # word characters; preserves real compound hyphens like
     # "self-aware" within a line. Also covers the soft-hyphen
     # variant U+00AD which some PDF libraries emit.
+    #
+    # NOTE: don't collapse single mid-paragraph \n into spaces here.
+    # In HTML scrapes, single \n IS the paragraph separator (each
+    # block-level element gets one \n) — collapsing it merges
+    # everything onto one line, which then matches the leading
+    # noise pattern (e.g. "Pular para o conteúdo …") and drops the
+    # whole document. PDFs DO have soft mid-paragraph breaks, but
+    # the recursive chunker handles those fine via its \n-fallback
+    # separator without us needing to pre-process.
     text = re.sub(r"(\w)[­-]\n(\w)", r"\1\2", text)
-    # Also collapse single soft line breaks inside paragraphs that
-    # PDFs often insert: "the quick brown fox jumps\nover the lazy
-    # dog" should become one line so the recursive splitter can see
-    # the paragraph boundary at the next blank line. Two consecutive
-    # newlines (real paragraph break) are preserved.
-    text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
 
     lines = text.split("\n")
     cleaned_lines = []
@@ -110,25 +113,18 @@ def clean_scraped_text(text: str, lexicon: set | None = None) -> str:
 def _is_likely_heading(line: str) -> bool:
     """Heuristic for "this line looks like a page title / section
     heading" — used as a keep-override against the noise-pattern
-    list. Two signals:
-      - All-uppercase letters (with possible accents/digits/spaces),
-        e.g. "IMPRENSA", "FAQ"
-      - Title Case multi-word, e.g. "Reportagem Programa Bioesfera"
-    Single Title-Case words ("Imprensa") are NOT considered headings
-    here — too easy to confuse with footer links."""
+    list. Conservative on purpose: only ALL-CAPS lines qualify
+    (e.g. "IMPRENSA", "FRITAR", "FAQ"). Title-Case multi-word was
+    too aggressive — labels like "Preço: Ascendente" / "Filter By"
+    were getting classified as headings. Title-case content lines
+    that aren't true noise (article titles, etc.) get kept anyway
+    by the default-keep at the end of clean_scraped_text."""
     if len(line) < 2 or len(line) > 120:
         return False
     has_letter = any(c.isalpha() for c in line)
     if not has_letter:
         return False
-    # All-uppercase
-    if line == line.upper():
-        return True
-    # Title Case multi-word (≥2 alpha tokens, each starting upper)
-    tokens = [t for t in re.findall(r"[A-Za-zÀ-ÿ]+", line)]
-    if len(tokens) >= 2 and all(t[0].isupper() for t in tokens):
-        return True
-    return False
+    return line == line.upper()
 
 
 def _is_universal_noise(line: str) -> bool:
