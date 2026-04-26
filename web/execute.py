@@ -1184,9 +1184,37 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
                         # times out — we may still get usable HTML from
                         # partial load.
                         page.goto(req.url, wait_until="commit", timeout=int(req.timeout * 1000))
-                    # Give async widgets (cookie banner, analytics popups,
-                    # Elementor lazy sections) 1.5s to render. Long enough
-                    # for most sites, not so long the preview crawls.
+                    # Wait for cookie consent / CMP root elements to
+                    # appear, with a max timeout. Many CMP libraries
+                    # (CookieYes, OneTrust, Cookiebot, Iubenda etc.)
+                    # are loaded via Google Tag Manager and take 2-4s
+                    # post-DCL to render. The previous flat 1.5s wait
+                    # missed them — preview showed a "clean" page that
+                    # doesn't match what Build later sees.
+                    cmp_root_selector = ', '.join([
+                        '[class*="cky-"]',
+                        '#onetrust-banner-sdk',
+                        '#onetrust-consent-sdk',
+                        '#CybotCookiebotDialog',
+                        '.cookie-notice-container',
+                        '.iubenda-cs-container',
+                        '.klaro',
+                        '#cmpwrapper',
+                        '#cookiescript_injected',
+                        '#hs-eu-cookie-confirmation',
+                        '[aria-label*="cookie" i]',
+                        '[aria-label*="consent" i]',
+                    ])
+                    try:
+                        # First-element-to-appear wins, max 4s. If
+                        # nothing matches, we don't crash — just fall
+                        # through to the generic 1.5s settle wait.
+                        page.wait_for_selector(cmp_root_selector, timeout=4000, state="attached")
+                    except Exception:
+                        pass
+                    # Generic post-DCL settle. Catches any remaining
+                    # async widgets that aren't on the CMP list above
+                    # (Elementor lazy sections, analytics popups, etc.)
                     page.wait_for_timeout(1500)
                     # Auto-expand FAQ / <details> / Bootstrap collapsibles
                     # so the preview iframe visually matches what the
