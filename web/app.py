@@ -2933,11 +2933,6 @@ def wizard_page_preview(url: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-class WizardSaveRequest(BaseModel):
-    solution_id: str
-    state: dict  # full JS wizard state serialised
-
-
 class WizardChatRequest(BaseModel):
     question: str
     categories: list = []
@@ -2990,60 +2985,13 @@ def wizard_chat(req: WizardChatRequest):
         return {"answer": f"Error: {e}", "suggestions": []}
 
 
-@app.post("/api/wizard/save")
-def wizard_save(req: WizardSaveRequest):
-    """Persist the wizard UI state to .wizard_state_{solution_id}.json in project root."""
-    import json as _json
-    sid = req.solution_id.strip().lower().replace(" ", "_")
-    if not sid:
-        raise HTTPException(status_code=400, detail="solution_id required")
-    path = os.path.join(_DATA_ROOT, f".wizard_state_{sid}.json")
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            _json.dump(req.state, f, ensure_ascii=False, indent=2)
-        return {"saved": True, "path": path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/wizard/load")
-def wizard_load(solution_id: str):
-    """Load a previously saved wizard state."""
-    import json as _json
-    sid = solution_id.strip().lower().replace(" ", "_")
-    path = os.path.join(_DATA_ROOT, f".wizard_state_{sid}.json")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail=f"No saved wizard state for '{sid}'")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            state = _json.load(f)
-        return {"found": True, "solution_id": sid, "state": state}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/wizard/list-saves")
-def wizard_list_saves():
-    """List all saved wizard sessions (files matching .wizard_state_*.json in project root)."""
-    import glob as _glob
-    pattern = os.path.join(_DATA_ROOT, ".wizard_state_*.json")
-    saves = []
-    for p in sorted(_glob.glob(pattern)):
-        sid = os.path.basename(p)[len(".wizard_state_"):-len(".json")]
-        saves.append({"solution_id": sid, "path": p,
-                      "mtime": os.path.getmtime(p)})
-    return {"saves": saves}
-
-
-@app.delete("/api/wizard/delete-save")
-def wizard_delete_save(solution_id: str):
-    """Delete a saved wizard state file."""
-    sid = solution_id.strip().lower().replace(" ", "_")
-    path = os.path.join(_DATA_ROOT, f".wizard_state_{sid}.json")
-    if not os.path.isfile(path):
-        raise HTTPException(status_code=404, detail="Config not found")
-    os.remove(path)
-    return {"deleted": True, "solution_id": sid}
+# /api/wizard/save, /load, /list-saves, /delete-save removed
+# 2026-04-26 — jBKB no longer reads or writes wizard JSON state. The
+# DB-backed model (rag_sitemaps + rag_sources tables) is the single
+# source of truth for sitemap state. The legacy embedded web UI in
+# this file still references these endpoints in dead-code paths
+# (~lines 8787, 10790, 10825, 10856) — those will be removed as part
+# of the broader legacy-UI strip.
 
 
 class WizardDiffRequest(BaseModel):
