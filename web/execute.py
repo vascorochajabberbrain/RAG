@@ -999,7 +999,25 @@ class PreviewExclusionsResponse(BaseModel):
     error: Optional[str] = None
 
 
-_PREVIEW_BASELINE = ["script", "style", "noscript", "iframe"]
+_PREVIEW_BASELINE = [
+    # HTML elements that never carry meaningful page content
+    "script", "style", "noscript", "iframe",
+    # Universal cookie / consent / privacy banner roots. Always
+    # boilerplate, never page content. Stripped by default so users
+    # don't have to discover and configure them per-site. The phantom
+    # "Cookies and Privacy" source captures this text once per CBVA
+    # so it's still searchable in Qdrant.
+    '[class*="cky-"]',                  # CookieYes
+    "#onetrust-banner-sdk",             # OneTrust banner
+    "#onetrust-consent-sdk",            # OneTrust prefs panel
+    "#CybotCookiebotDialog",            # Cookiebot
+    ".cookie-notice-container",         # WP Cookie Notice
+    ".iubenda-cs-container",            # Iubenda
+    ".klaro",                           # Klaro
+    "#cmpwrapper",                      # Quantcast / TCFv2
+    "#cookiescript_injected",           # CookieScript
+    "#hs-eu-cookie-confirmation",       # HubSpot
+]
 
 # Inspector script injected when inspect_mode=True. Runs in the iframe
 # with the parent's (jBKB's) origin since the iframe uses srcDoc +

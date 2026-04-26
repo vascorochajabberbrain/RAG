@@ -27,6 +27,32 @@ import httpx
 from playwright.sync_api import sync_playwright
 
 
+# ── Always-on strip list ──────────────────────────────────────────────────────
+# Applied to every page before text extraction, regardless of the
+# user's scraper_config. Two groups:
+#   1. HTML elements that never carry meaningful page content
+#      (script/style/noscript/iframe).
+#   2. Universal cookie / consent / privacy banner roots — pure
+#      boilerplate. Class/id wildcards cover ~95% of real-world
+#      CMP libraries; the rest can still be added per-sitemap via
+#      exclude_selectors. The phantom "Cookies and Privacy"
+#      synthetic source captures the original CMP text once per
+#      CBVA so it's still searchable in Qdrant.
+_BASELINE_STRIP = [
+    "script", "style", "noscript", "iframe",
+    '[class*="cky-"]',                  # CookieYes
+    "#onetrust-banner-sdk",             # OneTrust banner
+    "#onetrust-consent-sdk",            # OneTrust prefs panel
+    "#CybotCookiebotDialog",            # Cookiebot
+    ".cookie-notice-container",         # WP Cookie Notice
+    ".iubenda-cs-container",            # Iubenda
+    ".klaro",                           # Klaro
+    "#cmpwrapper",                      # Quantcast / TCFv2
+    "#cookiescript_injected",           # CookieScript
+    "#hs-eu-cookie-confirmation",       # HubSpot
+]
+
+
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def run_playwright_scraper(config: dict, cancel_check=None) -> tuple:
@@ -220,7 +246,7 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     # Generic text extraction — two passes with the text_selector.
     selector = config.get("text_selector", "body")
 
-    _strip_selectors(page, ["script", "style", "noscript", "iframe"])
+    _strip_selectors(page, _BASELINE_STRIP)
     baseline_text = _extract_with_selector(page, selector)
 
     user_selectors = [s for s in (config.get("exclude_selectors") or []) if s]
@@ -293,9 +319,8 @@ def _strip_excluded(page, config: dict) -> None:
     """DEPRECATED backward-compat shim. Strips baseline + user in one
     call; left so third-party callers don't break. New code should use
     _strip_selectors with an explicit list."""
-    baseline = ["script", "style", "noscript", "iframe"]
     user_selectors = [s for s in (config.get("exclude_selectors") or []) if s]
-    _strip_selectors(page, baseline + user_selectors)
+    _strip_selectors(page, _BASELINE_STRIP + user_selectors)
 
 
 def _extract_with_selector(page, selector: str) -> str:

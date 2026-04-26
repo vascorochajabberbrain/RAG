@@ -23,6 +23,29 @@ _HEADERS = {
 }
 
 
+# ── Always-on strip list ──────────────────────────────────────────────────────
+# Mirrors playwright_scraper.py — keep them in sync. Two groups:
+#   1. HTML elements that never carry meaningful page content
+#      (script/style/noscript/iframe).
+#   2. Universal cookie / consent / privacy banner roots — pure
+#      boilerplate. The phantom "Cookies and Privacy" synthetic
+#      source captures the original CMP text once per CBVA so it's
+#      still searchable in Qdrant.
+_BASELINE_STRIP = [
+    "script", "style", "noscript", "iframe",
+    '[class*="cky-"]',                  # CookieYes
+    "#onetrust-banner-sdk",             # OneTrust banner
+    "#onetrust-consent-sdk",            # OneTrust prefs panel
+    "#CybotCookiebotDialog",            # Cookiebot
+    ".cookie-notice-container",         # WP Cookie Notice
+    ".iubenda-cs-container",            # Iubenda
+    ".klaro",                           # Klaro
+    "#cmpwrapper",                      # Quantcast / TCFv2
+    "#cookiescript_injected",           # CookieScript
+    "#hs-eu-cookie-confirmation",       # HubSpot
+]
+
+
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def run_httpx_scraper(config: dict, cancel_check=None) -> tuple:
@@ -160,7 +183,7 @@ def _fetch_and_extract_from_soup_pair(soup: BeautifulSoup, url: str, config: dic
     selector = config.get("text_selector", "body")
 
     # Baseline strip + extract (soup is mutated in place).
-    _strip_selectors(soup, ["script", "style", "noscript", "iframe"])
+    _strip_selectors(soup, _BASELINE_STRIP)
     baseline_text = _extract_via_selector(soup, selector)
 
     # User strip + extract again (soup mutated further).
@@ -185,9 +208,8 @@ def _strip_selectors(soup: BeautifulSoup, selectors: list) -> None:
 def _strip_excluded(soup: BeautifulSoup, config: dict) -> None:
     """DEPRECATED backward-compat shim. New code should use
     _strip_selectors with an explicit list."""
-    baseline = ["script", "style", "noscript", "iframe"]
     user_selectors = config.get("exclude_selectors") or []
-    _strip_selectors(soup, baseline + list(user_selectors))
+    _strip_selectors(soup, _BASELINE_STRIP + list(user_selectors))
 
 
 def _extract_via_selector(soup: BeautifulSoup, selector: str) -> str:
