@@ -24,15 +24,11 @@ _HEADERS = {
 
 
 # ── Always-on strip list ──────────────────────────────────────────────────────
-# Mirrors playwright_scraper.py — keep them in sync. Two groups:
-#   1. HTML elements that never carry meaningful page content
-#      (script/style/noscript/iframe).
-#   2. Universal cookie / consent / privacy banner roots — pure
-#      boilerplate. The phantom "Cookies and Privacy" synthetic
-#      source captures the original CMP text once per CBVA so it's
-#      still searchable in Qdrant.
-_BASELINE_STRIP = [
-    "script", "style", "noscript", "iframe",
+# Mirrors playwright_scraper.py — keep them in sync. Split into two
+# groups so the CMP roots can be reused for cmp_text capture (used
+# by jBKB to seed the per-CBVA "Cookies and Privacy" source).
+_BASELINE_HTML_STRIP = ["script", "style", "noscript", "iframe"]
+_BASELINE_CMP_STRIP = [
     '[class*="cky-"]',                  # CookieYes
     "#onetrust-banner-sdk",             # OneTrust banner
     "#onetrust-consent-sdk",            # OneTrust prefs panel
@@ -44,6 +40,7 @@ _BASELINE_STRIP = [
     "#cookiescript_injected",           # CookieScript
     "#hs-eu-cookie-confirmation",       # HubSpot
 ]
+_BASELINE_STRIP = _BASELINE_HTML_STRIP + _BASELINE_CMP_STRIP
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
@@ -149,10 +146,10 @@ def _single_page_scrape(client: httpx.Client, config: dict) -> tuple:
         resp = client.get(url)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-        text, text_baseline = _fetch_and_extract_from_soup_pair(soup, url, config)
+        text, text_baseline, cmp_text = _fetch_and_extract_from_soup_pair(soup, url, config)
         text = text or ""
         items = (
-            [{"url": url, "text": text, "text_baseline": text_baseline or ""}]
+            [{"url": url, "text": text, "text_baseline": text_baseline or "", "cmp_text": cmp_text or ""}]
             if text else []
         )
         return text, items
@@ -164,23 +161,45 @@ def _single_page_scrape(client: httpx.Client, config: dict) -> tuple:
 
 def _fetch_and_extract_from_soup(soup: BeautifulSoup, url: str, config: dict) -> str:
     """Legacy single-return variant used by sitemap / crawl modes."""
-    filtered, _baseline = _fetch_and_extract_from_soup_pair(soup, url, config)
+    filtered, _baseline, _cmp = _fetch_and_extract_from_soup_pair(soup, url, config)
     return filtered
 
 
+def _extract_cmp_text_from_soup(soup: BeautifulSoup, selectors: list) -> str:
+    """Joined inner text from any CMP-root element. Empty when none
+    match. Must be called BEFORE _strip_selectors removes them."""
+    if not selectors:
+        return ""
+    parts: list[str] = []
+    for sel in selectors:
+        try:
+            for el in soup.select(sel):
+                txt = el.get_text(separator="\n", strip=True)
+                if txt:
+                    parts.append(txt)
+        except Exception:
+            continue
+    return "\n\n".join(parts)
+
+
 def _fetch_and_extract_from_soup_pair(soup: BeautifulSoup, url: str, config: dict) -> tuple:
-    """Extract text twice from the same soup:
+    """Extract text twice from the same soup plus capture CMP text:
       - filtered  (baseline strip + user exclude_selectors)
       - baseline  (baseline strip only)
+      - cmp_text  (CMP roots, captured BEFORE stripping)
 
     Structured-extraction paths return the same text for both since they
     don't walk the DOM via text_selector. Downstream always needs SOMETHING
     to hash as content_raw."""
     if config.get("structured_extraction"):
         r = _extract_structured(soup, url, config) or ""
-        return r, r
+        return r, r, ""
 
     selector = config.get("text_selector", "body")
+
+    # Capture CMP text BEFORE stripping — those elements are about
+    # to be decomposed in place.
+    cmp_text = _extract_cmp_text_from_soup(soup, _BASELINE_CMP_STRIP)
 
     # Baseline strip + extract (soup is mutated in place).
     _strip_selectors(soup, _BASELINE_STRIP)
@@ -191,7 +210,7 @@ def _fetch_and_extract_from_soup_pair(soup: BeautifulSoup, url: str, config: dic
     _strip_selectors(soup, user_selectors)
     filtered_text = _extract_via_selector(soup, selector)
 
-    return filtered_text, baseline_text
+    return filtered_text, baseline_text, cmp_text
 
 
 def _strip_selectors(soup: BeautifulSoup, selectors: list) -> None:

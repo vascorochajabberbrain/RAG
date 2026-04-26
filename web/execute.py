@@ -72,7 +72,15 @@ class FetchResponse(BaseModel):
     # the scraper doesn't produce a distinct baseline (structured mode,
     # sitemap / crawl modes that haven't been upgraded).
     baseline_text: str = ""
-    scraped_items: list[dict] = Field(default_factory=list)  # [{url, text}, ...]
+    # Cookie / consent / privacy text captured BEFORE the baseline
+    # strip removes the CMP roots (CookieYes, OneTrust, Cookiebot, …).
+    # jBKB uses this to seed the per-CBVA "Cookies and Privacy"
+    # synthetic source on the first page where it appears, so the
+    # cookie-policy text remains searchable in Qdrant after the
+    # boilerplate is stripped from every regular page. Empty when
+    # the page has no CMP roots.
+    cmp_text: str = ""
+    scraped_items: list[dict] = Field(default_factory=list)  # [{url, text, text_baseline, cmp_text}]
     pdf_pages: list[dict] = Field(default_factory=list)  # [{page, text}, ...]
     source_label: str = ""
     char_count: int = 0
@@ -276,9 +284,19 @@ def execute_fetch(req: FetchRequest):
     if not baseline_text:
         baseline_text = state.raw_text or ""
 
+    # cmp_text — joined from scraped_items[].cmp_text. First non-empty
+    # wins for the response-level field; per-item values are still in
+    # scraped_items so jBKB can attribute back to a URL if needed.
+    cmp_pieces = [
+        (it.get("cmp_text") or "")
+        for it in (state.scraped_items or [])
+    ]
+    cmp_text = next((p for p in cmp_pieces if p and p.strip()), "")
+
     return FetchResponse(
         raw_text=state.raw_text or "",
         baseline_text=baseline_text,
+        cmp_text=cmp_text,
         scraped_items=state.scraped_items or [],
         pdf_pages=state.pdf_pages or [],
         source_label=state.source_label or "",

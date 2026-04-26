@@ -29,17 +29,12 @@ from playwright.sync_api import sync_playwright
 
 # ── Always-on strip list ──────────────────────────────────────────────────────
 # Applied to every page before text extraction, regardless of the
-# user's scraper_config. Two groups:
-#   1. HTML elements that never carry meaningful page content
-#      (script/style/noscript/iframe).
-#   2. Universal cookie / consent / privacy banner roots — pure
-#      boilerplate. Class/id wildcards cover ~95% of real-world
-#      CMP libraries; the rest can still be added per-sitemap via
-#      exclude_selectors. The phantom "Cookies and Privacy"
-#      synthetic source captures the original CMP text once per
-#      CBVA so it's still searchable in Qdrant.
-_BASELINE_STRIP = [
-    "script", "style", "noscript", "iframe",
+# user's scraper_config. Split into two groups so the CMP roots can
+# also be reused for cmp_text capture (extracted BEFORE stripping
+# and surfaced to jBKB for the synthetic "Cookies and Privacy"
+# source).
+_BASELINE_HTML_STRIP = ["script", "style", "noscript", "iframe"]
+_BASELINE_CMP_STRIP = [
     '[class*="cky-"]',                  # CookieYes
     "#onetrust-banner-sdk",             # OneTrust banner
     "#onetrust-consent-sdk",            # OneTrust prefs panel
@@ -51,6 +46,7 @@ _BASELINE_STRIP = [
     "#cookiescript_injected",           # CookieScript
     "#hs-eu-cookie-confirmation",       # HubSpot
 ]
+_BASELINE_STRIP = _BASELINE_HTML_STRIP + _BASELINE_CMP_STRIP
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
@@ -187,9 +183,12 @@ def _single_page_scrape(page, config: dict) -> tuple:
     url = config.get("url")
     if not url:
         return "Error: url required for scrape_mode=single_page.", []
-    text, text_baseline = _fetch_and_extract_pair(page, url, config)
+    text, text_baseline, cmp_text = _fetch_and_extract_pair(page, url, config)
     text = text or ""
-    items = [{"url": url, "text": text, "text_baseline": text_baseline or ""}] if text else []
+    items = (
+        [{"url": url, "text": text, "text_baseline": text_baseline or "", "cmp_text": cmp_text or ""}]
+        if text else []
+    )
     return text, items
 
 
@@ -200,48 +199,73 @@ def _fetch_and_extract(page, url: str, config: dict) -> str:
 
     Legacy single-return variant kept for the sitemap + crawl modes
     that don't need the baseline pair. New code should prefer
-    _fetch_and_extract_pair which returns (filtered, baseline)."""
-    filtered, _baseline = _fetch_and_extract_pair(page, url, config)
+    _fetch_and_extract_pair which returns (filtered, baseline,
+    cmp_text)."""
+    filtered, _baseline, _cmp = _fetch_and_extract_pair(page, url, config)
     return filtered
 
 
+def _extract_cmp_text(page, selectors: list) -> str:
+    """Inner text from any CMP-root element on the page, joined with
+    blank-line separators. Empty string when nothing matches.
+
+    Must be called BEFORE _strip_selectors removes the elements.
+    Used by jBKB to seed the per-CBVA "Cookies and Privacy"
+    synthetic source — which keeps the cookie/privacy notice text
+    searchable in Qdrant after the baseline strip removes it from
+    every regular page."""
+    if not selectors:
+        return ""
+    try:
+        sel = ", ".join(selectors)
+        return page.evaluate(
+            "(sel) => { const els = document.querySelectorAll(sel); "
+            "return Array.from(els).map(el => (el.innerText || '').trim()).filter(Boolean).join('\\n\\n'); }",
+            sel,
+        ) or ""
+    except Exception as e:
+        print(f"[playwright_scraper] WARNING: cmp_text extraction failed: {e}")
+        return ""
+
+
 def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
-    """Navigate + extract text TWICE:
+    """Navigate + extract text TWICE plus capture CMP text:
       - filtered text  (baseline strip + user exclude_selectors applied)
       - baseline text  (baseline strip only, no user exclude_selectors)
+      - cmp_text       (joined inner text from any CMP root, captured
+                        BEFORE stripping)
 
-    Both use the same text_selector. Baseline text is the "truly raw"
-    content that jBKB stores in content_raw for change-detection +
-    re-processing when the user edits exclude_selectors."""
+    Baseline text is the "truly raw" content that jBKB stores in
+    content_raw for change-detection. cmp_text feeds the synthetic
+    "Cookies and Privacy" source per CBVA."""
     try:
         page.goto(url, wait_until="networkidle", timeout=30000)
     except Exception as e:
         print(f"[playwright_scraper] WARNING: Failed to load {url}: {e}")
-        return "", ""
+        return "", "", ""
 
     time.sleep(config.get("page_delay", 0.5))
 
     # Structured / custom-JS paths don't walk the DOM via text_selector,
     # so baseline vs filtered doesn't apply. Return the single result
-    # for both so downstream logic always has SOMETHING to hash.
+    # for both, plus an empty cmp_text (these modes typically extract
+    # specific structured data, not full-page boilerplate).
     if config.get("custom_js_extraction"):
         r = _extract_custom_js(page, url, config) or ""
-        return r, r
+        return r, r, ""
     if config.get("structured_extraction"):
         r = _extract_structured(page, url, config) or ""
-        return r, r
+        return r, r, ""
 
     # Expand FAQ accordions / <details> / Bootstrap collapsibles etc.
     # BEFORE text extraction so Pattern B/C sites (content hidden via
     # display:none or JS-loaded on click) contribute their answers too.
-    # Pattern A sites (CSS-only max-height collapse) don't need this —
-    # inner_text already reads through max-height clips — but running
-    # the expand step is harmless for them (clicks are no-ops on
-    # already-expanded elements). Config opt-out via
-    # `expand_collapsibles: false` for sites where clicking trips
-    # unwanted behaviour.
     if config.get("expand_collapsibles", True):
         _expand_collapsibles(page)
+
+    # Capture CMP text BEFORE stripping — once _BASELINE_STRIP runs
+    # those elements are gone. Cheap (one querySelectorAll per page).
+    cmp_text = _extract_cmp_text(page, _BASELINE_CMP_STRIP)
 
     # Generic text extraction — two passes with the text_selector.
     selector = config.get("text_selector", "body")
@@ -253,7 +277,7 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     _strip_selectors(page, user_selectors)
     filtered_text = _extract_with_selector(page, selector)
 
-    return filtered_text, baseline_text
+    return filtered_text, baseline_text, cmp_text
 
 
 # Common accordion / collapsible triggers across WordPress, Bootstrap,
