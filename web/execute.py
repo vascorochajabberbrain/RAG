@@ -1283,8 +1283,34 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
                     try:
                         page.evaluate(
                             """() => {
+                                // Tags the browser keeps hidden for a
+                                // reason — never force-show them.
+                                // <style>/<script> would render their
+                                // source code as raw page text.
+                                // <head>/<link>/<meta>/<template> never
+                                // carry visible content. Plus their
+                                // descendants.
+                                const SKIP = new Set([
+                                  'HEAD', 'SCRIPT', 'STYLE', 'NOSCRIPT',
+                                  'LINK', 'META', 'TEMPLATE', 'IFRAME',
+                                ]);
+                                // Nav menus / dropdowns / off-screen
+                                // tooltips are SUPPOSED to be hidden
+                                // until interaction. Force-showing them
+                                // explodes the page layout. Heuristic:
+                                // if the element is inside a <nav>, a
+                                // dropdown wrapper, or has role=menu /
+                                // role=tooltip / aria-hidden, leave it
+                                // alone.
+                                function shouldSkip(el) {
+                                  if (SKIP.has(el.tagName)) return true;
+                                  if (el.closest('script,style,noscript,link,meta,template,head,iframe')) return true;
+                                  if (el.closest('nav,[role="menu"],[role="menubar"],[role="tooltip"],[role="navigation"]')) return true;
+                                  return false;
+                                }
                                 document.querySelectorAll('*').forEach(el => {
                                     try {
+                                        if (shouldSkip(el)) return;
                                         const cs = getComputedStyle(el);
                                         if (cs.display === 'none') {
                                             el.style.setProperty('display', 'block', 'important');
