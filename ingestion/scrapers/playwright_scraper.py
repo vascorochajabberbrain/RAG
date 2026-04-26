@@ -238,13 +238,27 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     Baseline text is the "truly raw" content that jBKB stores in
     content_raw for change-detection. cmp_text feeds the synthetic
     "Cookies and Privacy" source per CBVA."""
+    # domcontentloaded is much faster and more reliable than
+    # networkidle on sites loaded with trackers (GTM, analytics,
+    # chat widgets) that keep the network busy indefinitely. We
+    # then settle explicitly via page_delay so JS-injected content
+    # has a chance to render. networkidle on a tracker-heavy site
+    # times out → goto raises → scraper returns "" and the user
+    # sees "Fetch returned no content" even though the page is fine.
     try:
-        page.goto(url, wait_until="networkidle", timeout=30000)
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
     except Exception as e:
-        print(f"[playwright_scraper] WARNING: Failed to load {url}: {e}")
-        return "", "", ""
+        # Fall back to plain goto (no wait) so we still capture
+        # whatever HTML arrived before the timeout.
+        try:
+            page.goto(url, wait_until="commit", timeout=10000)
+        except Exception as e2:
+            print(f"[playwright_scraper] WARNING: Failed to load {url}: {e} (fallback also failed: {e2})")
+            return "", "", ""
 
-    time.sleep(config.get("page_delay", 0.5))
+    # Slightly longer default settle (was 0.5s) — Elementor + tracker
+    # sites need ~1-2s to inject content after DCL.
+    time.sleep(config.get("page_delay", 1.5))
 
     # Structured / custom-JS paths don't walk the DOM via text_selector,
     # so baseline vs filtered doesn't apply. Return the single result
