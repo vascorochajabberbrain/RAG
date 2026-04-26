@@ -1143,6 +1143,12 @@ _PREVIEW_STYLE = """
   position: relative;
   z-index: 1;
 }
+/* Hide-mode: parent toggles `jbkb-hide-mode` on <body> to make
+   matched elements disappear entirely instead of being highlighted.
+   Lets the user see what the page looks like AFTER stripping. */
+body.jbkb-hide-mode .jbkb-ex-hit {
+  display: none !important;
+}
 #__jbkb_legend {
   position: fixed;
   top: 8px;
@@ -1280,9 +1286,22 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
                     # needs excluding. The page will look stylistically
                     # broken (modals stacking, dropdowns open) — that's
                     # the point: surface what the scraper sees.
+                    # Selectors we never want to force-show. They're
+                    # either rendering-hostile (script/style etc), kept
+                    # hidden until interaction (nav/menus), or about to
+                    # be stripped anyway by the baseline (CMP roots).
+                    # CMP roots especially: cky-overlay is a fullscreen
+                    # position:fixed element — force-showing it paints
+                    # the red strip overlay across the WHOLE viewport,
+                    # making it look like the entire page is being
+                    # stripped when only 83 boilerplate elements are.
+                    no_force_show_selector = ", ".join(
+                        sel for sel in _PREVIEW_BASELINE
+                        if not sel.lower() in ("script", "style", "noscript", "iframe")
+                    )
                     try:
                         page.evaluate(
-                            """() => {
+                            """(skipSelector) => {
                                 // Tags the browser keeps hidden for a
                                 // reason — never force-show them.
                                 // <style>/<script> would render their
@@ -1290,22 +1309,30 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
                                 // <head>/<link>/<meta>/<template> never
                                 // carry visible content. Plus their
                                 // descendants.
-                                const SKIP = new Set([
+                                const SKIP_TAGS = new Set([
                                   'HEAD', 'SCRIPT', 'STYLE', 'NOSCRIPT',
                                   'LINK', 'META', 'TEMPLATE', 'IFRAME',
                                 ]);
-                                // Nav menus / dropdowns / off-screen
-                                // tooltips are SUPPOSED to be hidden
-                                // until interaction. Force-showing them
-                                // explodes the page layout. Heuristic:
-                                // if the element is inside a <nav>, a
-                                // dropdown wrapper, or has role=menu /
-                                // role=tooltip / aria-hidden, leave it
-                                // alone.
                                 function shouldSkip(el) {
-                                  if (SKIP.has(el.tagName)) return true;
+                                  if (SKIP_TAGS.has(el.tagName)) return true;
                                   if (el.closest('script,style,noscript,link,meta,template,head,iframe')) return true;
+                                  // Nav menus / dropdowns / off-screen
+                                  // tooltips — SUPPOSED to be hidden
+                                  // until interaction. Force-showing
+                                  // them explodes the page layout.
                                   if (el.closest('nav,[role="menu"],[role="menubar"],[role="tooltip"],[role="navigation"]')) return true;
+                                  // Baseline-stripped boilerplate (CMP
+                                  // roots etc) — already going to be
+                                  // tagged + counted by the legend.
+                                  // Don't force-show them; cky-overlay
+                                  // is fullscreen and would paint over
+                                  // the entire page.
+                                  if (skipSelector) {
+                                    try {
+                                      if (el.matches(skipSelector)) return true;
+                                      if (el.closest(skipSelector)) return true;
+                                    } catch (_) {}
+                                  }
                                   return false;
                                 }
                                 document.querySelectorAll('*').forEach(el => {
@@ -1326,7 +1353,8 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
                                         }
                                     } catch (_) {}
                                 });
-                            }"""
+                            }""",
+                            no_force_show_selector,
                         )
                     except Exception:
                         pass
