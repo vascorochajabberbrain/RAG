@@ -46,6 +46,21 @@ def clean_scraped_text(text: str, lexicon: set | None = None) -> str:
     if not text:
         return ""
 
+    # PDF dehyphenation — PDF text extraction routinely breaks long
+    # words at line ends as `mer-\ncury`. Joining them back BEFORE
+    # we tokenize / chunk avoids polluting the embedding with broken
+    # word fragments. Only joins when both sides look like normal
+    # word characters; preserves real compound hyphens like
+    # "self-aware" within a line. Also covers the soft-hyphen
+    # variant U+00AD which some PDF libraries emit.
+    text = re.sub(r"(\w)[­-]\n(\w)", r"\1\2", text)
+    # Also collapse single soft line breaks inside paragraphs that
+    # PDFs often insert: "the quick brown fox jumps\nover the lazy
+    # dog" should become one line so the recursive splitter can see
+    # the paragraph boundary at the next blank line. Two consecutive
+    # newlines (real paragraph break) are preserved.
+    text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
+
     lines = text.split("\n")
     cleaned_lines = []
 

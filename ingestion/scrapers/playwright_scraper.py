@@ -231,6 +231,12 @@ def _extract_cmp_text(page, selectors: list) -> str:
         return ""
     try:
         sel = ", ".join(selectors)
+        # textContent (not innerText) — innerText respects CSS
+        # visibility, so cky-modal (visibility:hidden by default
+        # until "Customize" is clicked) returns "" and we'd lose
+        # the ~1.5KB preferences-panel text. textContent ignores
+        # CSS, so we get the full DOM text exactly the same way
+        # the regular scraper's body.get_text() does.
         return page.evaluate(
             """(sel) => {
                 const all = Array.from(document.querySelectorAll(sel));
@@ -238,7 +244,7 @@ def _extract_cmp_text(page, selectors: list) -> str:
                 // another matched element
                 const topLevel = all.filter(el => !all.some(other => other !== el && other.contains(el)));
                 return topLevel
-                    .map(el => (el.innerText || '').trim())
+                    .map(el => (el.textContent || '').replace(/\\s+/g, ' ').trim())
                     .filter(Boolean)
                     .join('\\n\\n');
             }""",

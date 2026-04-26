@@ -439,15 +439,8 @@ def _run_chunk(state: WorkflowState) -> str:
             page_url = item.get("url", "")
 
             if cfg.use_hierarchical_chunking:
-                from langchain_text_splitters import CharacterTextSplitter
-                parent_splitter = CharacterTextSplitter(
-                    separator="\n", chunk_size=cfg.hierarchical_parent_size,
-                    chunk_overlap=cfg.hierarchical_parent_overlap, length_function=len,
-                )
-                child_splitter = CharacterTextSplitter(
-                    separator="\n", chunk_size=cfg.hierarchical_child_size,
-                    chunk_overlap=cfg.hierarchical_child_overlap, length_function=len,
-                )
+                parent_splitter = _make_splitter(cfg.hierarchical_parent_size, cfg.hierarchical_parent_overlap)
+                child_splitter = _make_splitter(cfg.hierarchical_child_size, cfg.hierarchical_child_overlap)
                 parents = parent_splitter.split_text(page_text)
                 for parent in parents:
                     children = child_splitter.split_text(parent)
@@ -457,11 +450,7 @@ def _run_chunk(state: WorkflowState) -> str:
                             "url": page_url,
                         })
             else:
-                from langchain_text_splitters import CharacterTextSplitter
-                splitter = CharacterTextSplitter(
-                    separator="\n", chunk_size=cfg.simple_chunk_size,
-                    chunk_overlap=cfg.simple_chunk_overlap, length_function=len,
-                )
+                splitter = _make_splitter(cfg.simple_chunk_size, cfg.simple_chunk_overlap)
                 page_chunks = splitter.split_text(page_text)
                 for ch in page_chunks:
                     all_chunks.append({"text": ch, "url": page_url})
@@ -484,13 +473,7 @@ def _run_chunk(state: WorkflowState) -> str:
         state.chunks = chunks
         msg = f"Chunked into {len(state.chunks)} chunks."
     else:
-        from langchain_text_splitters import CharacterTextSplitter
-        splitter = CharacterTextSplitter(
-            separator="\n",
-            chunk_size=cfg.simple_chunk_size,
-            chunk_overlap=cfg.simple_chunk_overlap,
-            length_function=len,
-        )
+        splitter = _make_splitter(cfg.simple_chunk_size, cfg.simple_chunk_overlap)
         state.chunks = splitter.split_text(text)
         msg = f"Chunked into {len(state.chunks)} chunks."
 
@@ -564,6 +547,28 @@ def _attach_pdf_page_urls(state: WorkflowState) -> None:
     state.scraped_items = items
 
 
+def _make_splitter(chunk_size: int, chunk_overlap: int):
+    """Return a RecursiveCharacterTextSplitter with a separator
+    priority list that respects natural language boundaries:
+    paragraph → line → sentence → clause → word → char.
+
+    Falls back gracefully — if no \\n\\n exists in a long block,
+    tries \\n, then sentence punctuation + space (so "3.14" stays
+    intact), then comma, space, character. End result: chunks land
+    on the cleanest available boundary instead of mid-word.
+
+    Replaces the previous CharacterTextSplitter(separator="\\n")
+    which split mid-word whenever a paragraph or table row was
+    longer than chunk_size."""
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    return RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""],
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=len,
+    )
+
+
 def _run_chunk_hierarchical(state: WorkflowState, cfg, text: str) -> str:
     """
     Hierarchical chunking: split into large parent chunks, then split each parent
@@ -572,20 +577,8 @@ def _run_chunk_hierarchical(state: WorkflowState, cfg, text: str) -> str:
     includes the full parent section. This gives much better recall on structured
     documents (e.g. recipe books, technical docs) — completely free, no LLM needed.
     """
-    from langchain_text_splitters import CharacterTextSplitter
-
-    parent_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=cfg.hierarchical_parent_size,
-        chunk_overlap=cfg.hierarchical_parent_overlap,
-        length_function=len,
-    )
-    child_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=cfg.hierarchical_child_size,
-        chunk_overlap=cfg.hierarchical_child_overlap,
-        length_function=len,
-    )
+    parent_splitter = _make_splitter(cfg.hierarchical_parent_size, cfg.hierarchical_parent_overlap)
+    child_splitter = _make_splitter(cfg.hierarchical_child_size, cfg.hierarchical_child_overlap)
 
     parents = parent_splitter.split_text(text)
     chunks = []
