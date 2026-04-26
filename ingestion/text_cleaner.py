@@ -30,11 +30,18 @@ def clean_scraped_text(text: str, lexicon: set | None = None) -> str:
     Clean raw scraped page text by removing common boilerplate.
     Returns cleaned text suitable for chunking and RAG retrieval.
 
-    lexicon: optional set of lowercased content tokens from the
-             collection's routing terms. When provided, short lines
-             with zero lexicon overlap are dropped as likely chrome.
-             When None/empty, falls back to the hardcoded PT/EN
-             pattern list.
+    Decision tree per line (after universal-noise pre-filter):
+      1. Looks like a heading (all-caps, or Title-Case multi-word) → KEEP
+      2. Lexicon hit (collection keyword present) → KEEP
+      3. Matches a legacy noise pattern (cookie, sort, footer, …) → DROP
+      4. Default → KEEP
+
+    The previous standalone "short line + no lexicon hit = drop" rule
+    was too aggressive: it removed legitimate article titles like
+    "Reportagem Programa Bioesfera" because none of its tokens were
+    in the collection's routing keywords. Article titles look nothing
+    like chrome, so we now require a noise-pattern match to drop —
+    lexicon serves as a positive override only.
     """
     if not text:
         return ""
@@ -48,18 +55,30 @@ def clean_scraped_text(text: str, lexicon: set | None = None) -> str:
             continue
         if _is_universal_noise(stripped):
             continue
-        if lexicon:
-            # Lexicon mode: the single rule is "short line + zero
-            # keyword overlap = drop". Long lines always pass.
-            # Short lines with a keyword hit pass. Short lines with
-            # no hit are dropped.
-            if len(stripped) < 80 and not _has_lexicon_hit(stripped, lexicon):
-                continue
-        else:
-            # Fallback: the historic PT/EN hardcoded list.
-            if _is_noise_line(stripped):
-                continue
-        # Normalize star ratings in-line for any surviving line.
+
+        # Heading-like lines (page titles / section headings) are
+        # always kept. All-caps tokens or Title-Case multi-word
+        # phrases are strong heading signals — they aren't UI chrome.
+        if _is_likely_heading(stripped):
+            stripped = _clean_star_ratings(stripped)
+            if stripped:
+                cleaned_lines.append(stripped)
+            continue
+
+        # Lexicon hit — definite content. Skip the noise check.
+        if lexicon and _has_lexicon_hit(stripped, lexicon):
+            stripped = _clean_star_ratings(stripped)
+            if stripped:
+                cleaned_lines.append(stripped)
+            continue
+
+        # Legacy PT/EN noise patterns — drop on match.
+        if _is_noise_line(stripped):
+            continue
+
+        # Default: keep. Better to err toward over-inclusion than
+        # silently delete article titles / headings on non-PT/EN
+        # sites where legacy patterns don't match.
         stripped = _clean_star_ratings(stripped)
         if stripped:
             cleaned_lines.append(stripped)
@@ -71,6 +90,30 @@ def clean_scraped_text(text: str, lexicon: set | None = None) -> str:
     result = re.sub(r"  +", " ", result)
 
     return result.strip()
+
+
+def _is_likely_heading(line: str) -> bool:
+    """Heuristic for "this line looks like a page title / section
+    heading" — used as a keep-override against the noise-pattern
+    list. Two signals:
+      - All-uppercase letters (with possible accents/digits/spaces),
+        e.g. "IMPRENSA", "FAQ"
+      - Title Case multi-word, e.g. "Reportagem Programa Bioesfera"
+    Single Title-Case words ("Imprensa") are NOT considered headings
+    here — too easy to confuse with footer links."""
+    if len(line) < 2 or len(line) > 120:
+        return False
+    has_letter = any(c.isalpha() for c in line)
+    if not has_letter:
+        return False
+    # All-uppercase
+    if line == line.upper():
+        return True
+    # Title Case multi-word (≥2 alpha tokens, each starting upper)
+    tokens = [t for t in re.findall(r"[A-Za-zÀ-ÿ]+", line)]
+    if len(tokens) >= 2 and all(t[0].isupper() for t in tokens):
+        return True
+    return False
 
 
 def _is_universal_noise(line: str) -> bool:
