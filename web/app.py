@@ -2921,14 +2921,71 @@ def wizard_sitemap_pages(sitemap_url: str, url_filter: str = None):
 
 
 @app.get("/api/wizard/page-preview")
-def wizard_page_preview(url: str):
-    """Fetch a 500-char content preview for a single page URL (lazy, on demand)."""
+def wizard_page_preview(url: str, exclude_selectors: str | None = None):
+    """Fetch a content preview that mirrors what the production scraper
+    actually produces:
+      1. Fetch URL (httpx, follow redirects).
+      2. Baseline-strip script/style/noscript/iframe.
+      3. Apply user-provided exclude_selectors (one per line, or
+         comma-separated). Same logic the live pipeline uses on
+         content_raw → content.
+      4. Return the resulting text (capped at PREVIEW_CHARS).
+
+    The previous implementation (_sample_page) used an aggressive
+    main/article/body extraction that hid cookie banners + footers
+    even when the user hadn't configured selectors for them. That
+    made the preview misleadingly clean. The current logic is honest:
+    if the user hasn't excluded the cookie banner, the preview shows
+    it (so they know they need to add a selector).
+    """
     try:
         import httpx as _httpx
-        from ingestion.scrapers.sitemap_analyzer import _sample_page, _HEADERS
-        with _httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=10) as client:
-            text = _sample_page(client, url)
-        return {"url": url, "preview": text}
+        import re as _re
+        from bs4 import BeautifulSoup as _Bs
+        from ingestion.scrapers.sitemap_analyzer import _HEADERS, _PAGE_TIMEOUT, _PREVIEW_CHARS
+
+        # Parse the exclude_selectors param. Accept newline OR comma
+        # separated so the frontend can pass either shape without
+        # over-thinking the wire format.
+        sel_list: list[str] = []
+        if exclude_selectors:
+            for chunk in exclude_selectors.replace(',', '\n').split('\n'):
+                s = chunk.strip()
+                if s:
+                    sel_list.append(s)
+
+        with _httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=_PAGE_TIMEOUT) as client:
+            r = client.get(url, timeout=_PAGE_TIMEOUT)
+            if r.status_code != 200:
+                return {"url": url, "preview": "", "applied_selectors": sel_list, "matched_per_selector": {}}
+            soup = _Bs(r.text, "html.parser")
+            # Baseline strip — same as the production scraper's stage 1
+            for tag in soup(["script", "style", "noscript", "iframe"]):
+                tag.decompose()
+            # Apply exclude_selectors. Track per-selector hit count so
+            # the UI can flag selectors that match nothing (likely
+            # typos or stale rules from an older site version).
+            matched: dict[str, int] = {}
+            for sel in sel_list:
+                try:
+                    hits = soup.select(sel)
+                    matched[sel] = len(hits)
+                    for el in hits:
+                        el.decompose()
+                except Exception:
+                    matched[sel] = -1  # invalid CSS selector
+            # Extract from <body> (or whole soup if no body) — NO
+            # progressive main/article narrowing. The user controls
+            # what's included via exclude_selectors.
+            body = soup.find("body") or soup
+            text = body.get_text(separator=" ")
+            text = _re.sub(r"\s+", " ", text).strip()
+            return {
+                "url": url,
+                "preview": text[:_PREVIEW_CHARS],
+                "applied_selectors": sel_list,
+                "matched_per_selector": matched,
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
