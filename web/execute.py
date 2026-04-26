@@ -1250,6 +1250,42 @@ def execute_preview_exclusions(req: PreviewExclusionsRequest):
                             page.wait_for_timeout(250)
                     except Exception:
                         pass
+                    # Force-show CSS-hidden DOM so the preview iframe
+                    # matches what the scraper will actually extract.
+                    # body.get_text() in BS4 ignores CSS visibility,
+                    # so any hidden boilerplate (CookieYes preferences
+                    # modal, accordion bodies, off-screen menus,
+                    # newsletter pop-ups built into the page, etc.)
+                    # silently leaks into chunks unless the user adds
+                    # a selector for it. Showing them in the preview
+                    # is the only way the user can SEE that something
+                    # needs excluding. The page will look stylistically
+                    # broken (modals stacking, dropdowns open) — that's
+                    # the point: surface what the scraper sees.
+                    try:
+                        page.evaluate(
+                            """() => {
+                                document.querySelectorAll('*').forEach(el => {
+                                    try {
+                                        const cs = getComputedStyle(el);
+                                        if (cs.display === 'none') {
+                                            el.style.setProperty('display', 'block', 'important');
+                                        }
+                                        if (cs.visibility === 'hidden') {
+                                            el.style.setProperty('visibility', 'visible', 'important');
+                                        }
+                                        if (cs.opacity === '0') {
+                                            el.style.setProperty('opacity', '1', 'important');
+                                        }
+                                        if (el.hasAttribute('hidden')) {
+                                            el.removeAttribute('hidden');
+                                        }
+                                    } catch (_) {}
+                                });
+                            }"""
+                        )
+                    except Exception:
+                        pass
                     html = page.content()
                 finally:
                     browser.close()
