@@ -35,7 +35,13 @@ from playwright.sync_api import sync_playwright
 # source).
 _BASELINE_HTML_STRIP = ["script", "style", "noscript", "iframe"]
 _BASELINE_CMP_STRIP = [
-    '[class*="cky-"]',                  # CookieYes
+    # CookieYes — must anchor to word boundary, otherwise the
+    # substring match also hits Elementor's "elementor-sticky--*"
+    # classes (sti·cky-·-active etc.). Two-clause selector:
+    #   [class^="cky-"]    → first class begins with cky-
+    #   [class*=" cky-"]   → any subsequent class (space-prefixed)
+    '[class^="cky-"]',
+    '[class*=" cky-"]',
     "#onetrust-banner-sdk",             # OneTrust banner
     "#onetrust-consent-sdk",            # OneTrust prefs panel
     "#CybotCookiebotDialog",            # Cookiebot
@@ -209,6 +215,13 @@ def _extract_cmp_text(page, selectors: list) -> str:
     """Inner text from any CMP-root element on the page, joined with
     blank-line separators. Empty string when nothing matches.
 
+    Filters to TOP-LEVEL matches only — if a matched element has a
+    matched ancestor we skip it, otherwise the parent's innerText
+    already contains the descendant's text and we'd emit the same
+    block 4-6× (cky-consent-container → cky-consent-bar →
+    cky-notice → cky-notice-group → cky-notice-des all carry the
+    same banner text via innerText).
+
     Must be called BEFORE _strip_selectors removes the elements.
     Used by jBKB to seed the per-CBVA "Cookies and Privacy"
     synthetic source — which keeps the cookie/privacy notice text
@@ -219,8 +232,16 @@ def _extract_cmp_text(page, selectors: list) -> str:
     try:
         sel = ", ".join(selectors)
         return page.evaluate(
-            "(sel) => { const els = document.querySelectorAll(sel); "
-            "return Array.from(els).map(el => (el.innerText || '').trim()).filter(Boolean).join('\\n\\n'); }",
+            """(sel) => {
+                const all = Array.from(document.querySelectorAll(sel));
+                // keep only those whose ancestors don't include
+                // another matched element
+                const topLevel = all.filter(el => !all.some(other => other !== el && other.contains(el)));
+                return topLevel
+                    .map(el => (el.innerText || '').trim())
+                    .filter(Boolean)
+                    .join('\\n\\n');
+            }""",
             sel,
         ) or ""
     except Exception as e:

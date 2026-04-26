@@ -29,7 +29,10 @@ _HEADERS = {
 # by jBKB to seed the per-CBVA "Cookies and Privacy" source).
 _BASELINE_HTML_STRIP = ["script", "style", "noscript", "iframe"]
 _BASELINE_CMP_STRIP = [
-    '[class*="cky-"]',                  # CookieYes
+    # CookieYes — anchor to word boundary so we don't hit
+    # Elementor's "elementor-sticky--*" classes (sti·cky-·-active).
+    '[class^="cky-"]',
+    '[class*=" cky-"]',
     "#onetrust-banner-sdk",             # OneTrust banner
     "#onetrust-consent-sdk",            # OneTrust prefs panel
     "#CybotCookiebotDialog",            # Cookiebot
@@ -167,18 +170,39 @@ def _fetch_and_extract_from_soup(soup: BeautifulSoup, url: str, config: dict) ->
 
 def _extract_cmp_text_from_soup(soup: BeautifulSoup, selectors: list) -> str:
     """Joined inner text from any CMP-root element. Empty when none
-    match. Must be called BEFORE _strip_selectors removes them."""
+    match. Filters to TOP-LEVEL matches only — children whose ancestor
+    also matches the selector list would have their text already
+    included in the parent's get_text(), producing 4-6× duplication
+    of the same banner block. Must be called BEFORE _strip_selectors
+    removes them."""
     if not selectors:
         return ""
-    parts: list[str] = []
+    matched: list = []
     for sel in selectors:
         try:
-            for el in soup.select(sel):
-                txt = el.get_text(separator="\n", strip=True)
-                if txt:
-                    parts.append(txt)
+            matched.extend(soup.select(sel))
         except Exception:
             continue
+    if not matched:
+        return ""
+    # Keep only top-level matches (no matched ancestor).
+    matched_set = set(id(m) for m in matched)
+    top_level = []
+    for el in matched:
+        ancestor = el.parent
+        skip = False
+        while ancestor is not None:
+            if id(ancestor) in matched_set:
+                skip = True
+                break
+            ancestor = ancestor.parent
+        if not skip:
+            top_level.append(el)
+    parts: list[str] = []
+    for el in top_level:
+        txt = el.get_text(separator="\n", strip=True)
+        if txt:
+            parts.append(txt)
     return "\n\n".join(parts)
 
 

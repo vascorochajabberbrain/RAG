@@ -1025,7 +1025,10 @@ _PREVIEW_BASELINE = [
     # don't have to discover and configure them per-site. The phantom
     # "Cookies and Privacy" source captures this text once per CBVA
     # so it's still searchable in Qdrant.
-    '[class*="cky-"]',                  # CookieYes
+    # CookieYes — anchor to word boundary so we don't also strip
+    # Elementor's "elementor-sticky--*" classes (sti·cky-·-active).
+    '[class^="cky-"]',
+    '[class*=" cky-"]',
     "#onetrust-banner-sdk",             # OneTrust banner
     "#onetrust-consent-sdk",            # OneTrust prefs panel
     "#CybotCookiebotDialog",            # Cookiebot
