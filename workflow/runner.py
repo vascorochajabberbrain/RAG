@@ -427,18 +427,27 @@ def _run_chunk(state: WorkflowState) -> str:
         # editing). Plain text, no Context/Passage formatting.
         state.cleaned_text = "\n\n".join(it["text"] for it in cleaned_items)
 
-        # If pages are small enough, keep 1 chunk per page (with cleaned text)
+        # Hierarchical mode ALWAYS splits into child chunks regardless
+        # of page size. The earlier "1 chunk per page if it fits"
+        # optimization made sense for non-hierarchical chunking, but
+        # for hierarchical it skipped the child-level granularity that
+        # makes retrieval precise — a single 1701-char policy page
+        # covering 5 distinct cookie categories ended up as one big
+        # embedding instead of ~4 focused child chunks.
+        #
+        # Simple mode keeps the 1-per-page fast path: when the page is
+        # already smaller than simple_chunk_size, splitting is a no-op
+        # (the splitter would return one piece anyway), so we skip it.
         avg_len = sum(len(it["text"]) for it in cleaned_items) / len(cleaned_items)
-        max_chunk = cfg.hierarchical_parent_size if cfg.use_hierarchical_chunking else cfg.simple_chunk_size
 
-        if avg_len <= max_chunk:
-            # Pages are small — 1 cleaned chunk per page
+        if not cfg.use_hierarchical_chunking and avg_len <= cfg.simple_chunk_size:
+            # Simple mode, pages are small — 1 cleaned chunk per page
             state.chunks = [it["text"] for it in cleaned_items]
             state.scraped_items = cleaned_items
             return f"Chunked into {len(state.chunks)} chunks (1 per cleaned page, avg {int(avg_len)} chars)."
 
-        # Pages are large — concatenate and apply hierarchical/simple chunking
-        # Keep URL attribution by marking chunk boundaries
+        # Either hierarchical (always split) or simple+large pages.
+        # Keep URL attribution by marking chunk boundaries.
         all_chunks = []
         for item in cleaned_items:
             page_text = item["text"]
