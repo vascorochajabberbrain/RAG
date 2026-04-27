@@ -2921,7 +2921,7 @@ def wizard_sitemap_pages(sitemap_url: str, url_filter: str = None):
 
 
 @app.get("/api/wizard/page-preview")
-def wizard_page_preview(url: str, exclude_selectors: str | None = None):
+def wizard_page_preview(url: str, exclude_selectors: str | None = None, max_chars: int = 100000):
     """Fetch a content preview that mirrors what the production scraper
     actually produces:
       1. Fetch URL (httpx, follow redirects).
@@ -2929,7 +2929,10 @@ def wizard_page_preview(url: str, exclude_selectors: str | None = None):
       3. Apply user-provided exclude_selectors (one per line, or
          comma-separated). Same logic the live pipeline uses on
          content_raw → content.
-      4. Return the resulting text (capped at PREVIEW_CHARS).
+      4. Return the resulting text (capped at max_chars, default
+         100k — large enough for any normal article / recipe page;
+         the sitemap-card 500-char snippet uses _PREVIEW_CHARS which
+         is a different and unrelated cap).
 
     The previous implementation (_sample_page) used an aggressive
     main/article/body extraction that hid cookie banners + footers
@@ -2942,7 +2945,7 @@ def wizard_page_preview(url: str, exclude_selectors: str | None = None):
         import httpx as _httpx
         import re as _re
         from bs4 import BeautifulSoup as _Bs
-        from ingestion.scrapers.sitemap_analyzer import _HEADERS, _PAGE_TIMEOUT, _PREVIEW_CHARS
+        from ingestion.scrapers.sitemap_analyzer import _HEADERS, _PAGE_TIMEOUT
 
         # Parse the exclude_selectors param. Accept newline OR comma
         # separated so the frontend can pass either shape without
@@ -2982,7 +2985,7 @@ def wizard_page_preview(url: str, exclude_selectors: str | None = None):
             text = _re.sub(r"\s+", " ", text).strip()
             return {
                 "url": url,
-                "preview": text[:_PREVIEW_CHARS],
+                "preview": text[:max_chars],
                 "applied_selectors": sel_list,
                 "matched_per_selector": matched,
             }
