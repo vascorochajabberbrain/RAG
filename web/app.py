@@ -3054,6 +3054,128 @@ def wizard_harvest_links(url: str, pattern: str = r"\.pdf(?:\?.*)?$"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SniffUrlsRequest(BaseModel):
+    urls: list[str]
+    same_domain_only: bool = True
+
+
+@app.post("/api/wizard/sniff-urls")
+def wizard_sniff_urls(req: SniffUrlsRequest):
+    """Classify a batch of URLs by fetching each once and inspecting
+    its content. Used by jBKB's "Bulk Add Sources" flow to auto-pick a
+    process type per URL before the user reviews the table.
+
+    For each URL we return:
+      - status:           HTTP status (or 0 on connection error)
+      - content_type:     MIME from the response Content-Type header
+      - title:            <title> text if HTML, else ""
+      - pdf_link_count:   <a href> entries matching .pdf in the page
+      - internal_link_count: <a href> entries on the same domain (only
+                          counted when same_domain_only=True; else
+                          every internal-page link is counted)
+      - suggested_type:   our best guess at how to ingest this URL:
+                            "pdf"           — URL itself is a PDF
+                            "harvest_pdfs"  — page has many PDF links
+                            "drill"         — page has many internal
+                                              same-domain links and
+                                              few PDFs (suggest 1-level
+                                              drill)
+                            "single_url"    — plain article / page
+
+    Capped at 100 URLs per request to keep the round-trip bounded.
+    Each fetch uses _PAGE_TIMEOUT (10s); fail-soft on individual URLs
+    so one bad URL doesn't kill the batch.
+    """
+    if not req.urls:
+        return {"results": []}
+    if len(req.urls) > 100:
+        raise HTTPException(status_code=400, detail="Max 100 URLs per request")
+
+    try:
+        import httpx as _httpx
+        from urllib.parse import urlparse as _urlparse, urljoin as _urljoin
+        from bs4 import BeautifulSoup as _Bs
+        from ingestion.scrapers.sitemap_analyzer import _HEADERS, _PAGE_TIMEOUT
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sniff dependencies missing: {e}")
+
+    PDF_LINK_HARVEST_THRESHOLD = 3
+    DRILL_LINK_THRESHOLD = 10
+
+    results = []
+    with _httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=_PAGE_TIMEOUT) as client:
+        for url in req.urls:
+            url = url.strip()
+            if not url:
+                continue
+            entry = {
+                "url": url,
+                "status": 0,
+                "content_type": "",
+                "title": "",
+                "pdf_link_count": 0,
+                "internal_link_count": 0,
+                "suggested_type": "single_url",
+                "error": None,
+            }
+            try:
+                # URL ending in .pdf is a PDF — skip the fetch.
+                if url.lower().split("?")[0].endswith(".pdf"):
+                    entry["suggested_type"] = "pdf"
+                    entry["status"] = 200  # optimistic, not actually verified
+                    entry["content_type"] = "application/pdf"
+                    results.append(entry)
+                    continue
+                r = client.get(url, timeout=_PAGE_TIMEOUT)
+                entry["status"] = r.status_code
+                entry["content_type"] = (r.headers.get("content-type") or "").split(";")[0].strip()
+                if r.status_code != 200:
+                    results.append(entry)
+                    continue
+                # PDF served by content-type even if URL doesn't say .pdf
+                if entry["content_type"] == "application/pdf":
+                    entry["suggested_type"] = "pdf"
+                    results.append(entry)
+                    continue
+                if not entry["content_type"].startswith("text/") and "html" not in entry["content_type"]:
+                    # Not a page we know how to classify; leave default
+                    results.append(entry)
+                    continue
+                soup = _Bs(r.text, "html.parser")
+                title_tag = soup.find("title")
+                if title_tag and title_tag.string:
+                    entry["title"] = title_tag.string.strip()[:200]
+                base_host = _urlparse(url).netloc.lower()
+                pdf_count = 0
+                internal_count = 0
+                for a in soup.find_all("a", href=True):
+                    href = a["href"].strip()
+                    if not href or href.startswith(("#", "javascript:", "mailto:")):
+                        continue
+                    absolute = _urljoin(url, href)
+                    parsed = _urlparse(absolute)
+                    is_internal = parsed.netloc.lower() == base_host
+                    is_pdf = absolute.lower().split("?")[0].endswith(".pdf")
+                    if is_pdf:
+                        pdf_count += 1
+                    elif is_internal or not req.same_domain_only:
+                        internal_count += 1
+                entry["pdf_link_count"] = pdf_count
+                entry["internal_link_count"] = internal_count
+                # Classification: PDFs win first; then drill candidates;
+                # else plain page.
+                if pdf_count >= PDF_LINK_HARVEST_THRESHOLD:
+                    entry["suggested_type"] = "harvest_pdfs"
+                elif internal_count >= DRILL_LINK_THRESHOLD:
+                    entry["suggested_type"] = "drill"
+                else:
+                    entry["suggested_type"] = "single_url"
+            except Exception as e:
+                entry["error"] = str(e)[:200]
+            results.append(entry)
+    return {"results": results}
+
+
 class WizardChatRequest(BaseModel):
     question: str
     categories: list = []
