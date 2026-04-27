@@ -119,6 +119,12 @@ class ChunkResponse(BaseModel):
     scraped_items: list[dict] = Field(default_factory=list)  # with URL attribution
     chunk_count: int = 0
     metadata: Optional[dict] = None  # auto-generated collection metadata
+    # Plain post-cleaner pre-chunk text — what jBKB writes to
+    # rag_sources.content_clean for human inspection / hand editing.
+    # Replaces the old behaviour where the orchestrator joined the
+    # chunked-with-Context/Passage strings, which produced massive
+    # duplication for hierarchical chunks.
+    cleaned_text: str = ""
 
 
 class PushRequest(BaseModel):
@@ -363,6 +369,7 @@ def execute_chunk(req: ChunkRequest):
         scraped_items=state.scraped_items or [],
         chunk_count=len(state.chunks),
         metadata=metadata,
+        cleaned_text=state.cleaned_text or "",
     )
 
 
