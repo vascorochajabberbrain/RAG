@@ -380,6 +380,7 @@ def _run_chunk(state: WorkflowState) -> str:
             hierarchical_parent_overlap=cfg_dict.get("hierarchical_parent_overlap", 200),
             hierarchical_child_size=cfg_dict.get("hierarchical_child_size", 400),
             hierarchical_child_overlap=cfg_dict.get("hierarchical_child_overlap", 50),
+            single_chunk=cfg_dict.get("single_chunk", False),
         )
     cfg = state.chunking_config
     text = state.get_text_for_chunking()
@@ -426,6 +427,16 @@ def _run_chunk(state: WorkflowState) -> str:
         # rag_sources.content_clean for human inspection / hand
         # editing). Plain text, no Context/Passage formatting.
         state.cleaned_text = "\n\n".join(it["text"] for it in cleaned_items)
+
+        # single_chunk override (per-source) wins over everything —
+        # one chunk per page, no splitter at all. For list/table
+        # content (postal codes, opening hours) where splitting
+        # scatters rows across multiple chunks and breaks specific-
+        # entry retrieval.
+        if cfg.single_chunk:
+            state.chunks = [it["text"] for it in cleaned_items]
+            state.scraped_items = cleaned_items
+            return f"Chunked into {len(state.chunks)} chunks (single_chunk override — splitter bypassed)."
 
         # Hierarchical mode ALWAYS splits into child chunks regardless
         # of page size. The earlier "1 chunk per page if it fits"
@@ -477,7 +488,15 @@ def _run_chunk(state: WorkflowState) -> str:
             f"(avg page {int(avg_len)} chars, {'hierarchical' if cfg.use_hierarchical_chunking else 'simple'} chunking)."
         )
 
-    if cfg.use_hierarchical_chunking:
+    # single_chunk override (per-source) — fall back path used by
+    # text-block / PDF / manually-edited sources where there are no
+    # scraped_items. Skip every splitter; emit the full text as one
+    # chunk. Mirrors the scraped-items branch above.
+    if cfg.single_chunk:
+        state.chunks = [text]
+        state.cleaned_text = text
+        msg = f"Chunked into 1 chunk (single_chunk override — splitter bypassed)."
+    elif cfg.use_hierarchical_chunking:
         msg = _run_chunk_hierarchical(state, cfg, text)
     elif cfg.use_proposition_chunking:
         from vectorization import get_text_chunks, create_batches_of_text

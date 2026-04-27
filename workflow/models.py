@@ -42,6 +42,11 @@ class ChunkingConfig:
     hierarchical_parent_overlap: int = 200
     hierarchical_child_size: int = 400       # small child for retrieval
     hierarchical_child_overlap: int = 50
+    # Per-source override: when True, runner emits ONE chunk per
+    # page (the full cleaned text) and bypasses every splitter.
+    # For list/table pages where splitting scatters rows across
+    # multiple chunks and breaks specific-entry retrieval.
+    single_chunk: bool = False
 
 
 @dataclass

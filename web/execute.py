@@ -95,6 +95,12 @@ class ChunkingConfig(BaseModel):
     overlap: int = 200
     child_size: int = 400  # hierarchical only
     child_overlap: int = 50  # hierarchical only
+    # Per-source override: when True, skip both the parent/child and
+    # simple splitters and emit ONE chunk per page (full cleaned
+    # text). Best for list/table content (postal codes, opening
+    # hours, product price lists) where splitting would scatter
+    # related rows across multiple chunks.
+    single_chunk: bool = False
 
 
 class ChunkRequest(BaseModel):
@@ -346,6 +352,7 @@ def execute_chunk(req: ChunkRequest):
         hierarchical_parent_overlap=cfg.overlap,
         hierarchical_child_size=cfg.child_size,
         hierarchical_child_overlap=cfg.child_overlap,
+        single_chunk=cfg.single_chunk,
     )
 
     # Run chunk
