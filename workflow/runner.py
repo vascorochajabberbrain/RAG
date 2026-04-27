@@ -421,6 +421,12 @@ def _run_chunk(state: WorkflowState) -> str:
         if not cleaned_items:
             return "Error: All pages were empty after cleaning."
 
+        # Surface the joined post-cleaner text on state so the
+        # /chunk endpoint can return it (and jBKB can write it to
+        # rag_sources.content_clean for human inspection / hand
+        # editing). Plain text, no Context/Passage formatting.
+        state.cleaned_text = "\n\n".join(it["text"] for it in cleaned_items)
+
         # If pages are small enough, keep 1 chunk per page (with cleaned text)
         avg_len = sum(len(it["text"]) for it in cleaned_items) / len(cleaned_items)
         max_chunk = cfg.hierarchical_parent_size if cfg.use_hierarchical_chunking else cfg.simple_chunk_size
