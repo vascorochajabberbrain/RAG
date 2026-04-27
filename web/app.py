@@ -2990,6 +2990,70 @@ def wizard_page_preview(url: str, exclude_selectors: str | None = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/wizard/harvest-links")
+def wizard_harvest_links(url: str, pattern: str = r"\.pdf(?:\?.*)?$"):
+    """Fetch a page and return every <a href> that matches `pattern`.
+
+    Used by jBKB's "Harvest PDFs from page" workspace dialog to turn an
+    index page (catalog of links to PDFs / datasheets / reports) into a
+    bulk-create payload for rag_sources rows.
+
+    Args:
+      url:     Page to harvest. httpx is used (no JS rendering) — most
+               accordion / tab interactions still embed every link in
+               the static DOM, just CSS-hidden until clicked. If a
+               site genuinely fetches the link list via XHR on click,
+               this endpoint won't see them; the caller will need to
+               fall back to Playwright.
+      pattern: Python regex applied (case-insensitive) to each href.
+               Default matches PDFs (with or without query string).
+               Pass "" to disable filtering and return every link.
+
+    Returns:
+      {
+        "url": <input>,
+        "links": [{"href": "<absolute>", "text": "<anchor text>"}, ...],
+        "count": <int>,
+      }
+    """
+    try:
+        import httpx as _httpx
+        import re as _re
+        from urllib.parse import urljoin as _urljoin
+        from bs4 import BeautifulSoup as _Bs
+        from ingestion.scrapers.sitemap_analyzer import _HEADERS, _PAGE_TIMEOUT
+
+        with _httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=_PAGE_TIMEOUT) as client:
+            r = client.get(url, timeout=_PAGE_TIMEOUT)
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Page returned {r.status_code}")
+            soup = _Bs(r.text, "html.parser")
+            # Compile pattern once. Empty pattern → match every href.
+            rx = _re.compile(pattern, _re.IGNORECASE) if pattern else None
+            seen: set[str] = set()
+            links: list[dict] = []
+            for a in soup.find_all("a", href=True):
+                href = a["href"].strip()
+                if not href or href.startswith(("#", "javascript:", "mailto:")):
+                    continue
+                absolute = _urljoin(url, href)
+                if rx and not rx.search(absolute):
+                    continue
+                if absolute in seen:
+                    continue
+                seen.add(absolute)
+                # anchor text — fall back to title attr or filename
+                text = a.get_text(strip=True) or (a.get("title") or "").strip()
+                if not text:
+                    text = absolute.rsplit("/", 1)[-1].split("?")[0]
+                links.append({"href": absolute, "text": text})
+            return {"url": url, "links": links, "count": len(links)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class WizardChatRequest(BaseModel):
     question: str
     categories: list = []
