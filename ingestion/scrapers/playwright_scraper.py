@@ -308,6 +308,13 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     # those elements are gone. Cheap (one querySelectorAll per page).
     cmp_text = _extract_cmp_text(page, _BASELINE_CMP_STRIP)
 
+    # Annotate <a href> elements with markdown-style link syntax
+    # ([text](abs_url)) BEFORE any stripping or text extraction so
+    # subsequent inner_text() picks up inline URLs the LLM can cite.
+    # Default ON; opt out via `preserve_links: false` on scraper_config.
+    if config.get("preserve_links", True):
+        _annotate_links(page)
+
     # Generic text extraction — two passes with the text_selector.
     selector = config.get("text_selector", "body")
 
@@ -319,6 +326,38 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     filtered_text = _extract_with_selector(page, selector)
 
     return filtered_text, baseline_text, cmp_text
+
+
+def _annotate_links(page) -> None:
+    """Replace every anchor in the live DOM with a text node
+    `[anchor text](absolute_url)` so the next inner_text() call
+    embeds URLs inline. Mirror of httpx_scraper._annotate_links;
+    runs once per page before either of the strip passes.
+
+    Uses node.href (not getAttribute) so the URL comes back already
+    resolved against the page's base URL — Playwright's DOM does
+    that automatically. Skips fragment / javascript: / mailto: / tel:
+    / empty-text anchors."""
+    try:
+        page.evaluate(
+            """() => {
+                const anchors = Array.from(document.querySelectorAll('a[href]'));
+                for (const a of anchors) {
+                    const raw = (a.getAttribute('href') || '').trim();
+                    if (!raw) continue;
+                    if (raw.startsWith('#') || raw.startsWith('javascript:')
+                        || raw.startsWith('mailto:') || raw.startsWith('tel:')) continue;
+                    const text = (a.textContent || '').trim();
+                    if (!text) continue;
+                    const url = a.href; // already absolute
+                    try {
+                        a.replaceWith(document.createTextNode(`[${text}](${url})`));
+                    } catch (e) { /* ignore one-off failures */ }
+                }
+            }"""
+        )
+    except Exception as e:
+        print(f"[playwright_scraper] WARNING: Could not annotate links: {e}")
 
 
 # Common accordion / collapsible triggers across WordPress, Bootstrap,

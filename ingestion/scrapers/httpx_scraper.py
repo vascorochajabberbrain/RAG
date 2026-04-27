@@ -225,6 +225,16 @@ def _fetch_and_extract_from_soup_pair(soup: BeautifulSoup, url: str, config: dic
     # to be decomposed in place.
     cmp_text = _extract_cmp_text_from_soup(soup, _BASELINE_CMP_STRIP)
 
+    # Annotate <a href> elements with markdown-style link syntax
+    # ([text](abs_url)) BEFORE any stripping or text extraction so the
+    # final chunk text carries inline URLs that the LLM can cite (e.g.
+    # recipe pages that link to product pages — the appended per-
+    # collection prompt can ask the model to include those URLs in
+    # answers). Default ON; opt out by setting `preserve_links: false`
+    # in scraper_config.
+    if config.get("preserve_links", True):
+        _annotate_links(soup, url)
+
     # Baseline strip + extract (soup is mutated in place).
     _strip_selectors(soup, _BASELINE_STRIP)
     baseline_text = _extract_via_selector(soup, selector)
@@ -235,6 +245,33 @@ def _fetch_and_extract_from_soup_pair(soup: BeautifulSoup, url: str, config: dic
     filtered_text = _extract_via_selector(soup, selector)
 
     return filtered_text, baseline_text, cmp_text
+
+
+def _annotate_links(soup: BeautifulSoup, page_url: str) -> None:
+    """Replace every <a href="..."> in soup with a text node carrying
+    `[anchor text](absolute_url)` so subsequent get_text() preserves
+    the link inline. Skips fragment / javascript: / mailto: / empty-
+    text anchors. Idempotent within a soup since replace_with removes
+    the <a> from the tree.
+
+    Mutation is intentional — it runs once per page before either of
+    the get_text passes, so both baseline_text and filtered_text
+    inherit the same annotations."""
+    from urllib.parse import urljoin
+    for a in list(soup.find_all("a", href=True)):
+        href = (a.get("href") or "").strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        text = a.get_text(strip=True)
+        if not text:
+            # Image-only or empty anchor — drop the URL since there's
+            # nothing to label it with.
+            continue
+        try:
+            abs_url = urljoin(page_url, href)
+        except Exception:
+            abs_url = href
+        a.replace_with(f"[{text}]({abs_url})")
 
 
 def _strip_selectors(soup: BeautifulSoup, selectors: list) -> None:
