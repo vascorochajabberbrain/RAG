@@ -113,9 +113,11 @@ def get_image_knowing_the_src(driver):
     # Convert image data to base64
     base64_image = base64.b64encode(img_data).decode("utf-8")
 
-    # Call GPT-4 Vision model
+    # Call OpenAI vision model (gpt-4o-mini supports vision and is
+    # roughly 25x cheaper than gpt-4-turbo for the same OCR quality on
+    # screenshot-style content).
     response = openai_client.chat.completions.create(
-        model="gpt-4-turbo",
+        model="gpt-4o-mini",
         messages=[
             { "role": "user", "content": [{ "type": "text", "text": "Please retrun the text of the image."},{ "type": "image_url", "image_url": { "url": f"data:image/png;base64,{base64_image}" }}]}],
         max_tokens=1000

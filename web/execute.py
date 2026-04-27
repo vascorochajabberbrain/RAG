@@ -59,7 +59,12 @@ class FetchRequest(BaseModel):
     # Collection context (for labeling)
     collection_name: Optional[str] = None
     source_label: Optional[str] = None
-    embedding_model: str = "text-embedding-ada-002"
+    # 3-small replaces ada-002 as the default — same 1536 dims (so still
+    # drop-in compatible with existing ada-002 Qdrant collections at query
+    # time), cheaper, higher quality. jBKB-driven flows always pass an
+    # explicit `embedding_model` from the rag_collection's config so this
+    # default only applies to direct API callers.
+    embedding_model: str = "text-embedding-3-small"
 
 
 class FetchResponse(BaseModel):
@@ -139,7 +144,12 @@ class PushRequest(BaseModel):
     chunks: list[str]
     scraped_items: list[dict] = Field(default_factory=list)  # [{url, text}, ...] for source attribution
     source_label: str = "document"
-    embedding_model: str = "text-embedding-ada-002"
+    # 3-small replaces ada-002 as the default — same 1536 dims (so still
+    # drop-in compatible with existing ada-002 Qdrant collections at query
+    # time), cheaper, higher quality. jBKB-driven flows always pass an
+    # explicit `embedding_model` from the rag_collection's config so this
+    # default only applies to direct API callers.
+    embedding_model: str = "text-embedding-3-small"
     # Push behavior:
     recreate_collection: bool = False  # True = delete + create fresh; False = append
     skip_urls: list[str] = Field(default_factory=list)  # URLs to skip (manually edited)
@@ -172,7 +182,12 @@ class QARequest(BaseModel):
     collection_name: str
     question: str
     company_name: str = "the assistant"
-    embedding_model: str = "text-embedding-ada-002"
+    # 3-small replaces ada-002 as the default — same 1536 dims (so still
+    # drop-in compatible with existing ada-002 Qdrant collections at query
+    # time), cheaper, higher quality. jBKB-driven flows always pass an
+    # explicit `embedding_model` from the rag_collection's config so this
+    # default only applies to direct API callers.
+    embedding_model: str = "text-embedding-3-small"
 
 
 class QAResponse(BaseModel):
