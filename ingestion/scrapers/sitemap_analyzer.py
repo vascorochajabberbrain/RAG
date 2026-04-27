@@ -192,11 +192,18 @@ def fetch_all_pages(sitemap_url: str, url_filter: str = None) -> list:
     """
     Fetch all <loc> URLs from a single sitemap file (called lazily when user expands a sitemap row).
     If url_filter is given (path substring, e.g. '/produto/'), only matching URLs are returned.
+
+    Returns [] if the response isn't valid XML (e.g. caller passed a regular
+    web page URL by mistake) — never raises ParseError, so the FastAPI route
+    doesn't 500 on user-facing wrong inputs.
     """
     with httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=_SITEMAP_TIMEOUT) as client:
         r = client.get(sitemap_url, timeout=_SITEMAP_TIMEOUT)
         r.raise_for_status()
-        root = ET.fromstring(r.text)
+        try:
+            root = ET.fromstring(r.text)
+        except ET.ParseError:
+            return []
         urls = _extract_locs(root)
     if url_filter:
         urls = [u for u in urls if url_filter in u]
