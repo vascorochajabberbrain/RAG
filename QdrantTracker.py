@@ -415,25 +415,41 @@ class QdrantTracker:
     def _delete_points_by_url(self, collection_name: str, url: str) -> None:
         """
         Delete all Qdrant points whose point.source_url matches the given URL.
-        """
-        from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointIdsList
 
-        url_filter = Filter(
-            must=[FieldCondition(key="point.source_url", match=MatchValue(value=url))]
-        )
-        # Collect IDs to delete via scroll (delete-by-filter not always available on older Qdrant)
+        Uses scroll-without-filter + client-side match. Qdrant's
+        FieldCondition `match` requires a PAYLOAD INDEX on the keyword
+        field; collections built before payload indexes were
+        configured (which is most of jBKE's collections) silently
+        return nothing for filtered scrolls. Same approach the chunks-
+        viewer + orphan-scan endpoints use.
+        """
+        from qdrant_client.http.models import PointIdsList
+
         ids_to_delete = []
         offset = None
         while True:
             result, offset = self._connection.scroll(
                 collection_name=collection_name,
-                scroll_filter=url_filter,
-                with_payload=False,
+                with_payload=True,
                 with_vectors=False,
                 offset=offset,
-                limit=100,
+                limit=500,
             )
-            ids_to_delete.extend(point.id for point in result)
+            for point in result:
+                payload = point.payload or {}
+                # Payload may be nested ({collection, point: {source_url}})
+                # or flat — handle both shapes.
+                nested = payload.get("point") if isinstance(payload, dict) else None
+                flat = nested if isinstance(nested, dict) else payload
+                stored_url = ""
+                if isinstance(flat, dict):
+                    for key in ("source_url", "sourceUrl", "url"):
+                        v = flat.get(key)
+                        if isinstance(v, str) and v:
+                            stored_url = v
+                            break
+                if stored_url == url:
+                    ids_to_delete.append(point.id)
             if offset is None:
                 break
 
