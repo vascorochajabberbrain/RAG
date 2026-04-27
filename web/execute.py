@@ -1149,6 +1149,21 @@ _INSPECTOR_SCRIPT = r"""
 """
 
 _PREVIEW_STYLE = """
+/* Force the iframe body + html to scroll their own content. Many
+   real-world pages set `body { overflow: hidden; }` (often as part
+   of cookie-banner / modal lockdown logic that we strip server-side
+   but the inline style stays), which makes the rendered preview
+   un-scrollable inside the iframe even when its content is taller
+   than the viewport. !important wins over the page's own rules.
+   height:auto + min-height:100% lets short pages still fill the
+   iframe but tall ones overflow + scroll naturally. */
+html, body {
+  overflow: auto !important;
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  position: static !important;
+}
 /* Matched elements: red diagonal "caution tape" stripes over whatever
    background they had, plus a solid red outline so the bounds are
    unambiguous. !important overrides site CSS. */
