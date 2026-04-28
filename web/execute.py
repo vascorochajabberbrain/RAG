@@ -1608,6 +1608,12 @@ def execute_faq_extract(req: FaqExtractRequest):
     # Cap input size to avoid expensive calls on very large pages
     truncated = text[:40_000]
 
+    # Output language must match the SOURCE TEXT, not req.language — the
+    # FAQ table downstream is grouped by CBVA and translated by jBSE at
+    # delivery time. Auto-translating here would (a) lose the operator's
+    # intended phrasing and (b) make duplicate detection brittle (existing
+    # PT pairs vs new EN pairs would never match). req.language stays as
+    # a hint for the rare case where the page mixes languages.
     system_prompt = (
         "Extract FAQ-style question-and-answer pairs from the text.\n"
         "Rules:\n"
@@ -1615,7 +1621,9 @@ def execute_faq_extract(req: FaqExtractRequest):
         "  - One pair per distinct topic.\n"
         "  - Only include pairs where both question and answer are clearly supported by the text.\n"
         "  - Skip promotional filler, navigation blocks, and duplicates.\n"
-        f"  - Language: {req.language}. Speak as {req.company_name}.\n"
+        "  - Output language: match the SOURCE TEXT exactly. Do NOT translate.\n"
+        f"    (Hint: the page is most likely in '{req.language}', but if the text is in another language, keep that language.)\n"
+        f"  - Speak as {req.company_name}.\n"
         f"  - At most {req.max_items} pairs.\n"
         "Return ONLY the JSON. No prose, no markdown fences."
     )
