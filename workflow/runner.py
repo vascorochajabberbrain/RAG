@@ -544,16 +544,34 @@ def _find_page_for_chunk(chunk: str, pdf_pages: list) -> int:
 def _attach_pdf_page_urls(state: WorkflowState) -> None:
     """
     After chunking a PDF source, map each chunk to its source page and populate
-    state.scraped_items with {text, url} entries using the pdf:// URI scheme.
+    state.scraped_items with {text, url} entries.
+
+    URL preference:
+    1. If the source was fetched from an http(s):// URL (URL-mode source —
+       jBKB stores the web URL in file_path), use that URL with #page=N
+       so chunks point back to the real PDF on the web.
+    2. Otherwise fall back to the legacy pdf://<basename>#page=N URI which
+       chatbot.py resolves to /pdfs/<basename>.pdf for locally-uploaded files.
+
     This is called after any PDF chunking path (simple, hierarchical, proposition).
     """
     if not state.pdf_pages:
         return  # no per-page data available, skip
 
-    source_label = state.source_label or "document"
-    # Strip file extension for use in the pdf:// URI
-    import os
-    base_name = os.path.splitext(source_label)[0]
+    # Resolve source URL — see docstring for selection logic.
+    config = state.source_config or {}
+    raw_path = config.get("path") or config.get("pdf_path") or ""
+    is_remote = isinstance(raw_path, str) and raw_path.startswith(("http://", "https://"))
+
+    if is_remote:
+        # Strip any pre-existing fragment so we can append a clean #page=N.
+        source_url_base = raw_path.split("#", 1)[0]
+    else:
+        # Legacy local-file path: synthesize a pdf:// URI from the label.
+        import os
+        source_label = state.source_label or "document"
+        base_name = os.path.splitext(source_label)[0]
+        source_url_base = f"pdf://{base_name}"
 
     total_chunks = len(state.chunks)
     total_pages = len(state.pdf_pages)
@@ -575,7 +593,7 @@ def _attach_pdf_page_urls(state: WorkflowState) -> None:
             page_num = max(1, round((idx / max(total_chunks - 1, 1)) * (total_pages - 1)) + 1)
             page_num = min(page_num, total_pages)
 
-        url = f"pdf://{base_name}#page={page_num}"
+        url = f"{source_url_base}#page={page_num}"
         items.append({"text": chunk, "url": url})
 
     state.scraped_items = items
