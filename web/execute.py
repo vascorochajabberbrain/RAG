@@ -115,6 +115,12 @@ class ChunkRequest(BaseModel):
     pdf_pages: list[dict] = Field(default_factory=list)  # for PDF page attribution
     source_type: str = "url"
     source_label: str = "document"
+    # Original source URL or file path (whatever was used at fetch time).
+    # For PDF sources this drives _attach_pdf_page_urls — when it's an
+    # http(s):// URL, chunks get the real URL with #page=N appended; when
+    # it's a local path or empty, falls back to the legacy pdf://<basename>
+    # format. /chunk doesn't refetch; the caller is the source of truth.
+    source_path: Optional[str] = None
     chunking_config: ChunkingConfig = Field(default_factory=ChunkingConfig)
     # Collection's content lexicon — raw strings (routing_keywords,
     # typical_questions, etc.). Tokenized into a stopword-filtered set
@@ -342,6 +348,12 @@ def execute_chunk(req: ChunkRequest):
     state.source_type = req.source_type
     state.source_label = req.source_label
     state.keywords = req.keywords or []
+    # Carry the source's original URL/path through so _attach_pdf_page_urls
+    # can build correct per-chunk source URLs. Without this, PDF sources
+    # would always fall back to the legacy pdf://<basename> form even when
+    # the source was fetched from an http(s) URL.
+    if req.source_path:
+        state.source_config = {"path": req.source_path}
 
     # Set text or scraped items
     if req.scraped_items:
