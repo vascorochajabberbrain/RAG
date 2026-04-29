@@ -35,7 +35,7 @@ def improve_query(query, history):
     print("----------------------------------------\nOld query: ", query, "\nNew query: ", new_query, "\n----------------------------------------\n")
     return new_query
 
-def retrieve_from_vdb(query, collection_names, embedding_model: str = "text-embedding-ada-002"):
+def retrieve_from_vdb(query, collection_names, embedding_model: str = "text-embedding-3-small"):
     """
     Retrieve relevant chunks from one or more Qdrant collections.
     collection_names: str or list[str]
@@ -113,7 +113,7 @@ def retrieve_from_vdb(query, collection_names, embedding_model: str = "text-embe
     return {"text": "\n".join(text_parts), "sources": sources}
 
 
-def get_retrieved_info(query, history, collection_names, embedding_model: str = "text-embedding-ada-002"):
+def get_retrieved_info(query, history, collection_names, embedding_model: str = "text-embedding-3-small"):
     new_query = improve_query(query, history)
     return retrieve_from_vdb(new_query, collection_names, embedding_model=embedding_model)
 
@@ -157,7 +157,7 @@ def main():
 
     conversation_file = f"""Conversation with bot retrieving from `{company}`\n
     Collections: {', '.join(collection_names)}\n
-    Using gpt-4o for queries and text-embedding-ada-002 for embeddings.\nConversation starts second next line:\n\n"""
+    Using gpt-4o for queries and text-embedding-3-small for embeddings.\nConversation starts second next line:\n\n"""
     
     history = []
 

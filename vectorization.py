@@ -66,7 +66,7 @@ def get_text_chunks(text, additional_prompt=None):
         print(clean_text)
         return [""]
 
-def get_points(text_chunks, condition, initial_idx, model_id="text-embedding-ada-002"):
+def get_points(text_chunks, condition, initial_idx, model_id="text-embedding-3-small"):
     if not isinstance(initial_idx, int):
         raise ValueError("initial_idx has to be an integer")
     openai_client = get_openai_client()
@@ -85,7 +85,7 @@ def get_points(text_chunks, condition, initial_idx, model_id="text-embedding-ada
 
     return points
 
-def get_points_with_source(text_chunks, source, condition, initial_idx, model_id="text-embedding-ada-002"):
+def get_points_with_source(text_chunks, source, condition, initial_idx, model_id="text-embedding-3-small"):
     if not isinstance(initial_idx, int):
         raise ValueError("initial_idx has to be an integer")
     openai_client = get_openai_client()
@@ -112,7 +112,7 @@ def get_unique_id():
     """
     return str(uuid.uuid4())
 
-def get_embedding(text, model_id="text-embedding-ada-002"):
+def get_embedding(text, model_id="text-embedding-3-small"):
     openai_client = get_openai_client()
     response = openai_client.embeddings.create(
         input=text,

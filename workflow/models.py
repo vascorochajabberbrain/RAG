@@ -56,7 +56,7 @@ class WorkflowState:
     collection_name: Optional[str] = None
     collection_type: str = "scs"  # scs | group | group_sameSource
     collection_object: Any = None  # SCS_Collection or GroupCollection when open
-    embedding_model: str = "text-embedding-ada-002"  # OpenAI embedding model; locked at collection creation
+    embedding_model: str = "text-embedding-3-small"  # OpenAI embedding model; locked at collection creation
 
     # Source
     source_type: Optional[str] = None  # pdf | url | txt | csv
@@ -252,7 +252,7 @@ class WorkflowState:
         return cls(
             collection_name=d.get("collection_name"),
             collection_type=d.get("collection_type", "scs"),
-            embedding_model=d.get("embedding_model", "text-embedding-ada-002"),
+            embedding_model=d.get("embedding_model", "text-embedding-3-small"),
             source_type=d.get("source_type"),
             source_id=d.get("source_id"),
             source_config=d.get("source_config"),

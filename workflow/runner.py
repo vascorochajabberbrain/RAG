@@ -685,7 +685,7 @@ def _run_push(state: WorkflowState, cancel_check=None) -> str:
     # When loaded from disk, coll is None. Two cases:
     #   A) Collection already exists in Qdrant → append mode (don't wipe existing points)
     #   B) Collection doesn't exist yet → fresh push (original behaviour)
-    embedding_model = state.embedding_model or "text-embedding-ada-002"
+    embedding_model = state.embedding_model or "text-embedding-3-small"
 
     # ── Push guard: filter out skip_urls (manually edited chunks preserved) ──
     chunks_to_push = state.chunks
@@ -793,7 +793,7 @@ def _push_to_not_relevant(
 
         tracker = state.tracker or QdrantTracker()
         coll_name = "not_relevant"
-        embedding_model = state.embedding_model or "text-embedding-ada-002"
+        embedding_model = state.embedding_model or "text-embedding-3-small"
         vector_size = EMBEDDING_DIMS.get(embedding_model, 1536)
 
         if not tracker._existing_collection_name(coll_name):
