@@ -89,10 +89,12 @@ class Collection:
         """
         return self.collection_name
     
-    def points_to_save(self, model_id: str = "text-embedding-ada-002"):
+    def points_to_save(self, model_id: str = "text-embedding-3-small"):
         """
         Embed all items and return a list of Qdrant PointStructs ready to upsert.
         model_id: OpenAI embedding model to use (must match the collection's vector size).
+        Stamps model_id on each point's payload so future reads can detect
+        model drift between push time and query time.
         """
         qdrant_points = []
 
@@ -102,7 +104,7 @@ class Collection:
             qdrant_points.append(PointStruct(
                 id=get_point_id(),
                 vector=get_embedding(item.to_embed(), model_id=model_id),
-                payload=self._add_collection_data_to_payload(item.to_payload(idx))
+                payload=self._add_collection_data_to_payload(item.to_payload(idx), model_id=model_id)
             ))
 
         return qdrant_points
@@ -160,14 +162,18 @@ class Collection:
         pass
     """-----------------------------Private Methods-----------------------------"""
     
-    def _add_collection_data_to_payload(self, point_payload):
+    def _add_collection_data_to_payload(self, point_payload, model_id: str = ""):
         """
         Add collection specific data to the payload.
+        model_id (optional): the OpenAI embedding model used to vectorize this
+        chunk. Stamped at point-level so the Chunks view can detect mismatch
+        when the collection's configured model is later changed.
         """
+        collection = {"type": self.TYPE}
+        if model_id:
+            collection["embedding_model"] = model_id
         return {
-            "collection": {
-                "type": self.TYPE
-            },
+            "collection": collection,
             "point": point_payload
         }
     
