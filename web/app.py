@@ -169,6 +169,61 @@ def api_version():
     return {"version": APP_VERSION, "commit": commit}
 
 
+# ── Page-screenshot endpoint ──
+# Used by jBKB's WCI Profile "Capture backdrop" flow: render a URL with
+# Playwright and return the PNG bytes. jBKB uploads the result to S3 and
+# stores the key on wci_profile.preview_image_key. Synchronous; 5-20s
+# typical. No persistent state — each call spins up a fresh browser
+# context and tears it down.
+@app.post("/api/screenshot")
+def api_screenshot(payload: dict):
+    from starlette.responses import Response, PlainTextResponse
+    url = (payload or {}).get("url")
+    if not url or not isinstance(url, str):
+        return PlainTextResponse("Missing 'url' in body", status_code=400)
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return PlainTextResponse("'url' must be http(s)://", status_code=400)
+    viewport_in = (payload or {}).get("viewport") or "desktop"
+    if viewport_in == "mobile":
+        width, height = 390, 844     # iPhone 13 / 14 portrait
+    else:
+        width, height = 1440, 900    # operator-friendly desktop default
+    # Optional capture height — full-page captures can be huge for long
+    # pages. Cap at the viewport unless explicitly opted into full_page.
+    full_page = bool((payload or {}).get("full_page"))
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:
+        return PlainTextResponse(
+            f"Playwright not installed in this env: {e}",
+            status_code=500,
+        )
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            try:
+                context = browser.new_context(
+                    viewport={"width": width, "height": height},
+                    device_scale_factor=2,  # crisp on retina backdrops
+                )
+                page = context.new_page()
+                page.set_default_timeout(15_000)
+                page.goto(url, wait_until="networkidle")
+                png = page.screenshot(type="png", full_page=full_page)
+                return Response(
+                    content=png,
+                    media_type="image/png",
+                    headers={
+                        "Cache-Control": "no-store",
+                        "Content-Length": str(len(png)),
+                    },
+                )
+            finally:
+                browser.close()
+    except Exception as e:
+        return PlainTextResponse(f"Screenshot failed: {e}", status_code=502)
+
+
 # ── Token usage tracking ──
 @app.get("/api/tokens")
 def get_tokens():
