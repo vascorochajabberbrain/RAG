@@ -232,6 +232,126 @@ def api_screenshot(payload: dict):
         return PlainTextResponse(f"Screenshot failed: {e}", status_code=502)
 
 
+# ── WCI preflight check ──
+# Inspects a client URL for likely WCI-install conflicts: CSP headers,
+# existing fixed-position widgets at bottom-right, known third-party
+# chat widgets, service worker, mixed-content risks. jBKB orchestrates
+# the call (POST /api/v1/wci-profiles/:id/preflight) and adds the
+# embed-specific verdicts (which CSP directives the client must allow).
+@app.post("/api/preflight")
+def api_preflight(payload: dict):
+    from starlette.responses import JSONResponse, PlainTextResponse
+    url = (payload or {}).get("url")
+    if not url or not isinstance(url, str):
+        return PlainTextResponse("Missing 'url' in body", status_code=400)
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return PlainTextResponse("'url' must be http(s)://", status_code=400)
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:
+        return PlainTextResponse(
+            f"Playwright not installed: {e}", status_code=500
+        )
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            try:
+                context = browser.new_context(viewport={"width": 1440, "height": 900})
+                page = context.new_page()
+                page.set_default_timeout(30_000)
+                # Capture the *initial* response headers (post-redirect) so
+                # we can read CSP / HSTS / X-Frame-Options on the final
+                # navigated document. response.headers gives lowercased keys.
+                response = page.goto(url, wait_until="load")
+                page.wait_for_timeout(500)
+                headers = {}
+                final_url = page.url
+                try:
+                    if response is not None:
+                        headers = dict(response.headers or {})
+                except Exception:
+                    headers = {}
+                # Pull DOM facts via a single in-page script — cheaper than
+                # round-tripping per-element.
+                facts = page.evaluate(
+                    """
+                    () => {
+                        const VIEWPORT = { w: window.innerWidth, h: window.innerHeight };
+                        const fixedElements = [];
+                        const all = document.querySelectorAll('*');
+                        for (const el of all) {
+                            const cs = getComputedStyle(el);
+                            if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+                            const r = el.getBoundingClientRect();
+                            if (r.width === 0 && r.height === 0) continue;
+                            const z = cs.zIndex === 'auto' ? null : Number(cs.zIndex);
+                            fixedElements.push({
+                                tag: el.tagName.toLowerCase(),
+                                id: el.id || '',
+                                classes: (el.className && typeof el.className === 'string')
+                                    ? el.className.split(/\\s+/).filter(Boolean).slice(0, 4).join(' ')
+                                    : '',
+                                zIndex: z,
+                                rect: { top: r.top, left: r.left, right: VIEWPORT.w - r.right, bottom: VIEWPORT.h - r.bottom, width: r.width, height: r.height },
+                            });
+                        }
+                        // Quick fingerprints for common chat widgets / banners
+                        // — flag anything that's likely to fight the WCI.
+                        const detectedWidgets = [];
+                        const probes = [
+                            { name: 'Intercom', selector: '#intercom-frame, .intercom-launcher, #intercom-container' },
+                            { name: 'Drift',    selector: '#drift-frame-controller, .drift-conductor-item, iframe[name*="drift"]' },
+                            { name: 'Crisp',    selector: '.crisp-client, #crisp-chatbox' },
+                            { name: 'Tawk.to',  selector: '#tawk-widget-container, iframe[id*="tawk"]' },
+                            { name: 'Tidio',    selector: '#tidio-chat, iframe[src*="tidio"]' },
+                            { name: 'Zendesk',  selector: 'iframe[id*="zendesk"], #launcher.zEWidget-launcher' },
+                            { name: 'HubSpot',  selector: '#hubspot-messages-iframe-container' },
+                            { name: 'LiveChat', selector: '#livechat-eye-catcher, iframe[id*="livechat"]' },
+                            { name: 'OneTrust', selector: '#onetrust-banner-sdk, #onetrust-consent-sdk' },
+                            { name: 'Cookiebot',selector: '#CybotCookiebotDialog' },
+                            { name: 'Klaro',    selector: '.klaro' },
+                        ];
+                        for (const probe of probes) {
+                            if (document.querySelector(probe.selector)) detectedWidgets.push(probe.name);
+                        }
+                        const metaCsp = Array.from(document.querySelectorAll('meta[http-equiv="Content-Security-Policy"], meta[http-equiv="content-security-policy"]'))
+                            .map((m) => m.getAttribute('content') || '')
+                            .filter(Boolean);
+                        const hasServiceWorker = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+                        return {
+                            viewport: VIEWPORT,
+                            fixedElements,
+                            detectedWidgets,
+                            metaCsp,
+                            hasServiceWorker,
+                            title: document.title || '',
+                        };
+                    }
+                    """
+                )
+                # Trim noisy keys before returning.
+                csp = headers.get("content-security-policy") or ""
+                csp_report_only = headers.get("content-security-policy-report-only") or ""
+                x_frame = headers.get("x-frame-options") or ""
+                hsts = headers.get("strict-transport-security") or ""
+                return JSONResponse({
+                    "url": url,
+                    "finalUrl": final_url,
+                    "isHttps": final_url.startswith("https://"),
+                    "responseHeaders": {
+                        "contentSecurityPolicy": csp,
+                        "contentSecurityPolicyReportOnly": csp_report_only,
+                        "xFrameOptions": x_frame,
+                        "strictTransportSecurity": hsts,
+                    },
+                    **facts,
+                })
+            finally:
+                browser.close()
+    except Exception as e:
+        return PlainTextResponse(f"Preflight failed: {e}", status_code=502)
+
+
 # ── Token usage tracking ──
 @app.get("/api/tokens")
 def get_tokens():
