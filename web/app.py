@@ -207,8 +207,16 @@ def api_screenshot(payload: dict):
                     device_scale_factor=2,  # crisp on retina backdrops
                 )
                 page = context.new_page()
-                page.set_default_timeout(15_000)
-                page.goto(url, wait_until="networkidle")
+                # 30s overall timeout — real-world sites with analytics,
+                # chat widgets, etc. routinely take 10-15s for `load`
+                # alone. `networkidle` would be ideal but most sites
+                # never reach it (lingering websockets, polling pings,
+                # third-party trackers) and the wait just times out.
+                page.set_default_timeout(30_000)
+                page.goto(url, wait_until="load")
+                # Tiny post-load nap so async hero imagery / fonts /
+                # CLS-driven layout shifts settle before the snap.
+                page.wait_for_timeout(800)
                 png = page.screenshot(type="png", full_page=full_page)
                 return Response(
                     content=png,
