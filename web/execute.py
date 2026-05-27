@@ -1599,6 +1599,15 @@ class FaqExtractRequest(BaseModel):
 class FaqPair(BaseModel):
     question: str
     answer: str
+    # Optional category label derived from the source page's section /
+    # heading the Q&A pair lived under. E.g. on a FAQ page organised
+    # as "Promotions / Jewelry / Shipping & Returns", a question under
+    # the Shipping heading comes back with category="Shipping & Returns".
+    # When the source page has no visible grouping, category is None
+    # and the downstream faq_items row stays at the operator's manual
+    # category (if any). Free-form string — the FAQ Items panel
+    # treats category as a label, not an enum.
+    category: Optional[str] = None
 
 
 class FaqExtractResponse(BaseModel):
@@ -1645,11 +1654,12 @@ def _faq_extract_system_prompt(language: str, company_name: str, max_items: int)
     return (
         "Extract FAQ-style question-and-answer pairs from the text.\n"
         "Rules:\n"
-        "  - Output valid JSON: {\"pairs\": [{\"question\": \"...\", \"answer\": \"...\"}]}\n"
+        "  - Output valid JSON: {\"pairs\": [{\"question\": \"...\", \"answer\": \"...\", \"category\": \"...\"}]}\n"
         "  - One pair per distinct topic.\n"
         "  - Only include pairs where both question and answer are clearly supported by the text.\n"
         "  - Skip promotional filler, navigation blocks, and duplicates.\n"
-        "  - Output language: match the SOURCE TEXT exactly. Do NOT translate.\n"
+        "  - Category: copy the section heading or group label the pair appears under in the source text (e.g. \"Promotions\", \"Jewelry Care\", \"Shipping & Returns\"). When the page has no visible grouping, omit the field or set it to an empty string.\n"
+        "  - Output language: match the SOURCE TEXT exactly. Do NOT translate. This applies to category too.\n"
         f"    (Hint: the page is most likely in '{language}', but if the text is in another language, keep that language.)\n"
         f"  - Speak as {company_name}.\n"
         f"  - At most {max_items} pairs.\n"
@@ -1783,7 +1793,9 @@ def execute_faq_extract(req: FaqExtractRequest):
             if key in seen:
                 continue
             seen.add(key)
-            pairs.append(FaqPair(question=q, answer=a))
+            cat_raw = p.get("category")
+            category = cat_raw.strip() if isinstance(cat_raw, str) and cat_raw.strip() else None
+            pairs.append(FaqPair(question=q, answer=a, category=category))
         if len(pairs) >= req.max_items:
             break
 
