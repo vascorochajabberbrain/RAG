@@ -360,28 +360,74 @@ def _annotate_links(page) -> None:
         print(f"[playwright_scraper] WARNING: Could not annotate links: {e}")
 
 
-# Common accordion / collapsible triggers across WordPress, Bootstrap,
-# Elementor, native <details>. These are ARIA + class patterns only —
-# nothing page-specific. Clicking an already-expanded accordion is a
-# no-op, so running these unconditionally is safe.
+# Common accordion / collapsible triggers across the platforms we've
+# seen in operator pages. ARIA + class patterns only — nothing
+# page-specific. Clicking an already-expanded accordion is a no-op, so
+# running these unconditionally is safe.
+#
+# Conservative-by-design: only click button-ish elements (or native
+# <details>). We deliberately do NOT match anchors (`a`) or broad
+# `.collapsed` class selectors — those would cause accidental
+# navigation / mis-clicks on nav menus.
 _EXPAND_SELECTORS = (
+    # ARIA contract — used by accessible accordions on most modern stacks.
     '[aria-expanded="false"]',
+    # Native HTML <details>.
     'details:not([open])',
+    # Elementor (WordPress page builder).
     '.elementor-tab-title:not(.elementor-active)',
     '.elementor-toggle-title:not(.elementor-active)',
     '.elementor-accordion-title:not(.elementor-active)',
+    # Bootstrap collapse.
     '[data-toggle="collapse"]',
     '[data-bs-toggle="collapse"]',
+    # Shopify Dawn / Liquid theme primitives. Dawn ships an accessible
+    # <summary>-based accordion but several merchant themes use a
+    # button-class hybrid.
+    '.collapsible-trigger:not(.collapsible-trigger--inactive)',
+    'summary.h4',
+    'summary.accordion__summary',
+    'button.accordion-header',
+    'button.accordion-toggle',
+    'button.accordion__button',
+    'button[class*="accordion-button"]',
+    'button[class*="accordion__header"]',
+    # FAQ-specific class patterns that surface on custom React /
+    # Vue / Webflow builds. Restricted to <button> so we don't click
+    # decorative span / h3 elements; the role="button" fallback below
+    # catches the heading-as-trigger pattern.
+    'button.faq-question',
+    'button.faq-toggle',
+    'button.faq__question',
+    'button[class*="faq-question"]',
+    'button[class*="faq__question"]',
+    # Heading-as-trigger pattern (h2/h3/h4 with role=button, common in
+    # custom builds that put click handlers on the heading itself).
+    # Scoped to h2–h5 to avoid clicking arbitrary headings.
+    'h2[role="button"][aria-expanded]',
+    'h3[role="button"][aria-expanded]',
+    'h4[role="button"][aria-expanded]',
+    'h5[role="button"][aria-expanded]',
 )
 
 
 def _expand_collapsibles(page) -> None:
     """Click every common accordion / details / collapse trigger so the
-    subsequent inner_text() call sees expanded content. Runs two
-    rounds with a short wait between — some widgets reveal nested
-    collapsibles only after the parent opens."""
+    subsequent inner_text() call sees expanded content.
+
+    Runs THREE rounds with a small wait between each — some widgets
+    reveal nested collapsibles only after the parent opens, and some
+    JS-driven FAQs hydrate the answer DOM on first click (so a second
+    pass picks up the newly-visible elements). Empirically:
+    - Round 1 opens top-level FAQ groups.
+    - Round 2 opens individual Q items inside those groups.
+    - Round 3 catches any sub-collapsibles inside long answers.
+
+    A final post-round wait lets any JS-loaded content settle into the
+    DOM before the inner_text() call that follows.
+    """
     try:
-        for _round in range(2):
+        for _round in range(3):
             page.evaluate(
                 """(sels) => {
                     for (const s of sels) {
@@ -400,7 +446,11 @@ def _expand_collapsibles(page) -> None:
                 }""",
                 list(_EXPAND_SELECTORS),
             )
-            page.wait_for_timeout(250)
+            page.wait_for_timeout(400)
+        # Post-round settle — JS-loaded FAQ answers sometimes lag the
+        # final click by a few hundred ms (network roundtrip for content
+        # that wasn't in the initial HTML).
+        page.wait_for_timeout(600)
     except Exception as e:
         print(f"[playwright_scraper] WARNING: expand_collapsibles failed: {e}")
 
