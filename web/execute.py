@@ -1587,7 +1587,11 @@ class FaqExtractRequest(BaseModel):
     text: str
     language: str = "en"
     company_name: str = "the assistant"
-    max_items: int = 50
+    # Default raised 50 → 200 (2026-05-27). A typical product / brand FAQ
+    # page commonly has 50–80 entries; the previous default was silently
+    # truncating the long tail. Callers can still override down per call
+    # but the default no longer needs to.
+    max_items: int = 200
     # Optional: source URL echoed back in each pair for traceability
     source_url: Optional[str] = None
 
@@ -1604,29 +1608,41 @@ class FaqExtractResponse(BaseModel):
     error: Optional[str] = None
 
 
-@router.post("/faq-extract", response_model=FaqExtractResponse)
-def execute_faq_extract(req: FaqExtractRequest):
+# Tuning constants for FAQ extraction (2026-05-27 — Hey Harper "70 FAQs
+# but only 35 extracted" report).
+#
+# - INPUT_CHAR_CAP: hard cap on input text length, separate from the
+#   per-chunk size below. gpt-4o-mini has a 128k input window, so the
+#   previous 40k cap was conservative-by-default and dropped half of
+#   long FAQ pages.
+# - CHUNK_THRESHOLD_CHARS: input length above which we switch to the
+#   chunk-and-merge path. Below this, one LLM call is faster and easier
+#   to debug. Above this, a single call would have to produce too many
+#   output tokens.
+# - CHUNK_SIZE_CHARS: target per-chunk input size. Splits on paragraph
+#   boundaries to keep each chunk semantically self-contained.
+# - FAQ_EXTRACT_MAX_TOKENS: explicit output cap. Default
+#   (no max_tokens) falls back to gpt-4o-mini's 4096, which truncated
+#   ~35 pairs into the response and made the JSON un-parseable past the
+#   cut-off. 8000 comfortably fits 80+ pairs of typical question-answer
+#   lengths.
+INPUT_CHAR_CAP = 100_000
+CHUNK_THRESHOLD_CHARS = 25_000
+CHUNK_SIZE_CHARS = 20_000
+FAQ_EXTRACT_MAX_TOKENS = 8000
+
+
+def _faq_extract_system_prompt(language: str, company_name: str, max_items: int) -> str:
+    """System prompt used in both the single-shot and per-chunk paths.
+
+    Output language must match the SOURCE TEXT, not `language` — the
+    FAQ table downstream is grouped by CBVA and translated by jBSE at
+    delivery time. Auto-translating here would (a) lose the operator's
+    intended phrasing and (b) make duplicate detection brittle (existing
+    PT pairs vs new EN pairs would never match). `language` stays as
+    a hint for the rare case where the page mixes languages.
     """
-    Extract FAQ Q&A pairs from raw text. Stateless: no collection lookup,
-    no disk I/O — just text in, pairs out. Used by jBKB's FAQ pipeline to
-    turn one rag_sources row (destination='faq_table') into faq_items rows.
-    """
-    from llms.openai_utils import openai_chat_completion
-
-    text = (req.text or "").strip()
-    if not text:
-        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error="empty text")
-
-    # Cap input size to avoid expensive calls on very large pages
-    truncated = text[:40_000]
-
-    # Output language must match the SOURCE TEXT, not req.language — the
-    # FAQ table downstream is grouped by CBVA and translated by jBSE at
-    # delivery time. Auto-translating here would (a) lose the operator's
-    # intended phrasing and (b) make duplicate detection brittle (existing
-    # PT pairs vs new EN pairs would never match). req.language stays as
-    # a hint for the rare case where the page mixes languages.
-    system_prompt = (
+    return (
         "Extract FAQ-style question-and-answer pairs from the text.\n"
         "Rules:\n"
         "  - Output valid JSON: {\"pairs\": [{\"question\": \"...\", \"answer\": \"...\"}]}\n"
@@ -1634,48 +1650,148 @@ def execute_faq_extract(req: FaqExtractRequest):
         "  - Only include pairs where both question and answer are clearly supported by the text.\n"
         "  - Skip promotional filler, navigation blocks, and duplicates.\n"
         "  - Output language: match the SOURCE TEXT exactly. Do NOT translate.\n"
-        f"    (Hint: the page is most likely in '{req.language}', but if the text is in another language, keep that language.)\n"
-        f"  - Speak as {req.company_name}.\n"
-        f"  - At most {req.max_items} pairs.\n"
+        f"    (Hint: the page is most likely in '{language}', but if the text is in another language, keep that language.)\n"
+        f"  - Speak as {company_name}.\n"
+        f"  - At most {max_items} pairs.\n"
         "Return ONLY the JSON. No prose, no markdown fences."
     )
 
-    try:
-        raw = openai_chat_completion(system_prompt, f"Text:\n{truncated}", model="gpt-4o-mini")
-    except Exception as e:
-        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error=str(e))
 
-    # Strip accidental code fences / surrounding prose
-    cleaned = raw.strip()
+def _parse_faq_json_response(raw: str) -> tuple[list[dict], Optional[str]]:
+    """Parse the LLM's JSON response into raw pair dicts.
+
+    Returns (pairs, error). On any failure pairs=[] and error explains.
+    Tolerates code fences and leading/trailing prose.
+    """
+    cleaned = (raw or "").strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.strip("`").strip()
         if cleaned.lower().startswith("json"):
             cleaned = cleaned[4:].strip()
-    # Take the JSON object if there's leading/trailing noise
     lbrace = cleaned.find("{")
     rbrace = cleaned.rfind("}")
     if lbrace >= 0 and rbrace > lbrace:
         cleaned = cleaned[lbrace:rbrace + 1]
-
     try:
         parsed = json.loads(cleaned)
     except Exception as e:
-        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error=f"LLM did not return valid JSON: {e}")
-
+        return [], f"LLM did not return valid JSON: {e}"
     raw_pairs = parsed.get("pairs") if isinstance(parsed, dict) else None
     if not isinstance(raw_pairs, list):
-        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error="no 'pairs' array in LLM output")
+        return [], "no 'pairs' array in LLM output"
+    return raw_pairs, None
 
+
+def _split_into_chunks(text: str, target_size: int) -> list[str]:
+    """Split text into segments of approximately `target_size` chars,
+    cutting on paragraph boundaries so each chunk is self-contained.
+
+    Algorithm: greedily accumulate paragraphs until adding the next one
+    would exceed target_size, then start a new chunk. Single paragraphs
+    longer than target_size go in their own chunk (no mid-paragraph
+    splits — those tend to mangle Q/A pairs).
+    """
+    # Paragraph separator = one or more blank lines.
+    paragraphs = [p for p in text.split("\n\n") if p.strip()]
+    if not paragraphs:
+        return [text]
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for p in paragraphs:
+        # +2 for the join separator we'll re-insert.
+        if current and current_len + len(p) + 2 > target_size:
+            chunks.append("\n\n".join(current))
+            current = [p]
+            current_len = len(p)
+        else:
+            current.append(p)
+            current_len += len(p) + 2
+    if current:
+        chunks.append("\n\n".join(current))
+    return chunks
+
+
+def _normalize_question_for_dedup(q: str) -> str:
+    """Lowercase + collapse internal whitespace — used to dedup pairs
+    that span chunk boundaries (the same FAQ can appear in two
+    consecutive chunks if it straddles the split)."""
+    return " ".join(q.lower().split())
+
+
+@router.post("/faq-extract", response_model=FaqExtractResponse)
+def execute_faq_extract(req: FaqExtractRequest):
+    """
+    Extract FAQ Q&A pairs from raw text. Stateless: no collection lookup,
+    no disk I/O — just text in, pairs out. Used by jBKB's FAQ pipeline to
+    turn one rag_sources row (destination='faq_table') into faq_items rows.
+
+    For inputs longer than CHUNK_THRESHOLD_CHARS we split into segments
+    on paragraph boundaries and call the LLM per segment, then dedup the
+    union by normalized question. This avoids both the input cap AND the
+    output-token cap a single big call would hit on long pages.
+    """
+    from llms.openai_utils import openai_chat_completion
+
+    text = (req.text or "").strip()
+    if not text:
+        return FaqExtractResponse(pairs=[], count=0, source_url=req.source_url, error="empty text")
+
+    truncated = text[:INPUT_CHAR_CAP]
+    system_prompt = _faq_extract_system_prompt(req.language, req.company_name, req.max_items)
+
+    # Decide chunking. Below the threshold = single call (cheaper, easier
+    # to debug). Above = chunked path.
+    chunks = (
+        _split_into_chunks(truncated, CHUNK_SIZE_CHARS)
+        if len(truncated) > CHUNK_THRESHOLD_CHARS
+        else [truncated]
+    )
+
+    # Per-chunk extraction. Dedup by normalized question — same FAQ can
+    # legitimately appear in two adjacent chunks when the split happens
+    # mid-section. First-seen wins (preserves the answer from the chunk
+    # where the FAQ was extracted in full).
+    seen: set[str] = set()
     pairs: list[FaqPair] = []
-    for p in raw_pairs[:req.max_items]:
-        if not isinstance(p, dict):
+    last_error: Optional[str] = None
+    for chunk in chunks:
+        try:
+            raw = openai_chat_completion(
+                system_prompt,
+                f"Text:\n{chunk}",
+                model="gpt-4o-mini",
+                max_tokens=FAQ_EXTRACT_MAX_TOKENS,
+            )
+        except Exception as e:
+            last_error = str(e)
             continue
-        q = (p.get("question") or "").strip()
-        a = (p.get("answer") or "").strip()
-        if q and a:
+        raw_pairs, parse_err = _parse_faq_json_response(raw)
+        if parse_err:
+            last_error = parse_err
+            continue
+        for p in raw_pairs:
+            if len(pairs) >= req.max_items:
+                break
+            if not isinstance(p, dict):
+                continue
+            q = (p.get("question") or "").strip()
+            a = (p.get("answer") or "").strip()
+            if not q or not a:
+                continue
+            key = _normalize_question_for_dedup(q)
+            if key in seen:
+                continue
+            seen.add(key)
             pairs.append(FaqPair(question=q, answer=a))
+        if len(pairs) >= req.max_items:
+            break
 
-    return FaqExtractResponse(pairs=pairs, count=len(pairs), source_url=req.source_url)
+    # Only return an error when ZERO pairs came out. Partial success
+    # (some chunks failed, some succeeded) still returns the successful
+    # pairs — better than an all-or-nothing.
+    err = last_error if not pairs and last_error else None
+    return FaqExtractResponse(pairs=pairs, count=len(pairs), source_url=req.source_url, error=err)
 
 
 @router.post("/probe-pdf", response_model=ProbePdfResponse)
