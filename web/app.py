@@ -318,6 +318,28 @@ def api_preflight(payload: dict):
                             .map((m) => m.getAttribute('content') || '')
                             .filter(Boolean);
                         const hasServiceWorker = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+                        // ── Stack-signal extraction ──
+                        // These fields are consumed by the jBKB-side LLM
+                        // step that turns them into a per-site WCI install
+                        // recommendation (CMS detection, ranked methods,
+                        // gotchas). We surface raw signals; the LLM does
+                        // the reasoning. Cap script/link/meta lists at
+                        // sensible upper bounds so the prompt payload
+                        // stays compact even on page-builder-heavy sites.
+                        const metaGenerators = Array.from(document.querySelectorAll('meta[name="generator"]'))
+                            .map((m) => m.getAttribute('content') || '')
+                            .filter(Boolean);
+                        const scriptSrcs = Array.from(document.querySelectorAll('script[src]'))
+                            .map((s) => s.getAttribute('src') || '')
+                            .filter(Boolean)
+                            .slice(0, 80);
+                        const linkHrefs = Array.from(document.querySelectorAll('link[rel="stylesheet"][href], link[rel="preconnect"][href], link[rel="dns-prefetch"][href]'))
+                            .map((l) => l.getAttribute('href') || '')
+                            .filter(Boolean)
+                            .slice(0, 60);
+                        const metaOther = Array.from(document.querySelectorAll('meta[name]:not([name="generator"])'))
+                            .map((m) => `${m.getAttribute('name')}=${(m.getAttribute('content') || '').slice(0, 200)}`)
+                            .slice(0, 40);
                         return {
                             viewport: VIEWPORT,
                             fixedElements,
@@ -325,10 +347,22 @@ def api_preflight(payload: dict):
                             metaCsp,
                             hasServiceWorker,
                             title: document.title || '',
+                            metaGenerators,
+                            scriptSrcs,
+                            linkHrefs,
+                            metaOther,
                         };
                     }
                     """
                 )
+                # Grab a snippet of the raw HTML (first 30 KB) so the
+                # LLM has the literal page source to spot patterns the
+                # DOM extraction missed (e.g. inline plugin signatures,
+                # framework-specific data-* attributes).
+                try:
+                    html_snippet = page.content()[:30_000]
+                except Exception:
+                    html_snippet = ""
                 # Trim noisy keys before returning.
                 csp = headers.get("content-security-policy") or ""
                 csp_report_only = headers.get("content-security-policy-report-only") or ""
@@ -344,6 +378,7 @@ def api_preflight(payload: dict):
                         "xFrameOptions": x_frame,
                         "strictTransportSecurity": hsts,
                     },
+                    "htmlSnippet": html_snippet,
                     **facts,
                 })
             finally:
