@@ -189,10 +189,16 @@ def _single_page_scrape(page, config: dict) -> tuple:
     url = config.get("url")
     if not url:
         return "Error: url required for scrape_mode=single_page.", []
-    text, text_baseline, cmp_text = _fetch_and_extract_pair(page, url, config)
+    text, text_baseline, cmp_text, outgoing_links = _fetch_and_extract_pair(page, url, config)
     text = text or ""
     items = (
-        [{"url": url, "text": text, "text_baseline": text_baseline or "", "cmp_text": cmp_text or ""}]
+        [{
+            "url": url,
+            "text": text,
+            "text_baseline": text_baseline or "",
+            "cmp_text": cmp_text or "",
+            "outgoing_links": outgoing_links or [],
+        }]
         if text else []
     )
     return text, items
@@ -207,7 +213,7 @@ def _fetch_and_extract(page, url: str, config: dict) -> str:
     that don't need the baseline pair. New code should prefer
     _fetch_and_extract_pair which returns (filtered, baseline,
     cmp_text)."""
-    filtered, _baseline, _cmp = _fetch_and_extract_pair(page, url, config)
+    filtered, _baseline, _cmp, _links = _fetch_and_extract_pair(page, url, config)
     return filtered
 
 
@@ -256,11 +262,14 @@ def _extract_cmp_text(page, selectors: list) -> str:
 
 
 def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
-    """Navigate + extract text TWICE plus capture CMP text:
+    """Navigate + extract text TWICE plus capture CMP text + links:
       - filtered text  (baseline strip + user exclude_selectors applied)
       - baseline text  (baseline strip only, no user exclude_selectors)
       - cmp_text       (joined inner text from any CMP root, captured
                         BEFORE stripping)
+      - outgoing_links (same-host absolute URLs from <a href>, captured
+                        BEFORE any stripping or annotation — feeds the
+                        orphan-detection BFS on the jBKB side)
 
     Baseline text is the "truly raw" content that jBKB stores in
     content_raw for change-detection. cmp_text feeds the synthetic
@@ -281,7 +290,7 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
             page.goto(url, wait_until="commit", timeout=10000)
         except Exception as e2:
             print(f"[playwright_scraper] WARNING: Failed to load {url}: {e} (fallback also failed: {e2})")
-            return "", "", ""
+            return "", "", "", []
 
     # Slightly longer default settle (was 0.5s) — Elementor + tracker
     # sites need ~1-2s to inject content after DCL.
@@ -293,10 +302,10 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     # specific structured data, not full-page boilerplate).
     if config.get("custom_js_extraction"):
         r = _extract_custom_js(page, url, config) or ""
-        return r, r, ""
+        return r, r, "", []
     if config.get("structured_extraction"):
         r = _extract_structured(page, url, config) or ""
-        return r, r, ""
+        return r, r, "", []
 
     # Expand FAQ accordions / <details> / Bootstrap collapsibles etc.
     # BEFORE text extraction so Pattern B/C sites (content hidden via
@@ -307,6 +316,10 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     # Capture CMP text BEFORE stripping — once _BASELINE_STRIP runs
     # those elements are gone. Cheap (one querySelectorAll per page).
     cmp_text = _extract_cmp_text(page, _BASELINE_CMP_STRIP)
+
+    # Capture same-host outgoing <a href> URLs BEFORE the annotation
+    # pass mutates the DOM. Feeds the orphan-detection BFS on jBKB.
+    outgoing_links = _extract_outgoing_links(page, url)
 
     # Annotate <a href> elements with markdown-style link syntax
     # ([text](abs_url)) BEFORE any stripping or text extraction so
@@ -325,7 +338,55 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     _strip_selectors(page, user_selectors)
     filtered_text = _extract_with_selector(page, selector)
 
-    return filtered_text, baseline_text, cmp_text
+    return filtered_text, baseline_text, cmp_text, outgoing_links
+
+
+def _extract_outgoing_links(page, page_url: str) -> list:
+    """Return a deduplicated list of same-host absolute URLs reachable
+    via <a href> on this page. Used by jBKB's orphan-detection BFS to
+    determine which sitemap URLs are clickable from the homepage.
+    Mirror of httpx_scraper._extract_outgoing_links but reads from the
+    live Playwright DOM via page.evaluate. Filters fragment-only /
+    javascript: / mailto: / tel: / cross-host hrefs; strips URL
+    fragments so /foo#bar matches sitemap entry /foo."""
+    try:
+        from urllib.parse import urlparse
+        page_host = (urlparse(page_url).hostname or "").lower()
+        if not page_host:
+            return []
+        hrefs = page.evaluate(
+            """() => {
+                const out = new Set();
+                for (const a of document.querySelectorAll('a[href]')) {
+                    const raw = (a.getAttribute('href') || '').trim();
+                    if (!raw) continue;
+                    if (raw.startsWith('#') || raw.startsWith('javascript:')
+                        || raw.startsWith('mailto:') || raw.startsWith('tel:')) continue;
+                    try { out.add(a.href); } catch (e) { /* ignore */ }
+                }
+                return Array.from(out);
+            }"""
+        ) or []
+        seen: set = set()
+        cleaned: list = []
+        for href in hrefs:
+            try:
+                parsed = urlparse(href)
+            except Exception:
+                continue
+            if parsed.scheme not in ("http", "https"):
+                continue
+            if (parsed.hostname or "").lower() != page_host:
+                continue
+            normalized = parsed._replace(fragment="").geturl()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            cleaned.append(normalized)
+        return cleaned
+    except Exception as e:
+        print(f"[playwright_scraper] WARNING: outgoing-links extraction failed for {page_url}: {e}")
+        return []
 
 
 def _annotate_links(page) -> None:

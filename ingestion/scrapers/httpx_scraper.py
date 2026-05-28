@@ -149,10 +149,16 @@ def _single_page_scrape(client: httpx.Client, config: dict) -> tuple:
         resp = client.get(url)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-        text, text_baseline, cmp_text = _fetch_and_extract_from_soup_pair(soup, url, config)
+        text, text_baseline, cmp_text, outgoing_links = _fetch_and_extract_from_soup_pair(soup, url, config)
         text = text or ""
         items = (
-            [{"url": url, "text": text, "text_baseline": text_baseline or "", "cmp_text": cmp_text or ""}]
+            [{
+                "url": url,
+                "text": text,
+                "text_baseline": text_baseline or "",
+                "cmp_text": cmp_text or "",
+                "outgoing_links": outgoing_links or [],
+            }]
             if text else []
         )
         return text, items
@@ -164,7 +170,7 @@ def _single_page_scrape(client: httpx.Client, config: dict) -> tuple:
 
 def _fetch_and_extract_from_soup(soup: BeautifulSoup, url: str, config: dict) -> str:
     """Legacy single-return variant used by sitemap / crawl modes."""
-    filtered, _baseline, _cmp = _fetch_and_extract_from_soup_pair(soup, url, config)
+    filtered, _baseline, _cmp, _links = _fetch_and_extract_from_soup_pair(soup, url, config)
     return filtered
 
 
@@ -207,23 +213,31 @@ def _extract_cmp_text_from_soup(soup: BeautifulSoup, selectors: list) -> str:
 
 
 def _fetch_and_extract_from_soup_pair(soup: BeautifulSoup, url: str, config: dict) -> tuple:
-    """Extract text twice from the same soup plus capture CMP text:
-      - filtered  (baseline strip + user exclude_selectors)
-      - baseline  (baseline strip only)
-      - cmp_text  (CMP roots, captured BEFORE stripping)
+    """Extract text twice from the same soup plus capture CMP text + links:
+      - filtered        (baseline strip + user exclude_selectors)
+      - baseline        (baseline strip only)
+      - cmp_text        (CMP roots, captured BEFORE stripping)
+      - outgoing_links  (same-host absolute URLs from <a href>, captured
+                         BEFORE any stripping so the orphan-detection
+                         link graph isn't biased by user exclude_selectors)
 
     Structured-extraction paths return the same text for both since they
     don't walk the DOM via text_selector. Downstream always needs SOMETHING
     to hash as content_raw."""
     if config.get("structured_extraction"):
         r = _extract_structured(soup, url, config) or ""
-        return r, r, ""
+        return r, r, "", []
 
     selector = config.get("text_selector", "body")
 
     # Capture CMP text BEFORE stripping — those elements are about
     # to be decomposed in place.
     cmp_text = _extract_cmp_text_from_soup(soup, _BASELINE_CMP_STRIP)
+
+    # Capture same-host outgoing <a href> URLs BEFORE the link-
+    # annotation pass mutates the tree. Feeds the orphan-detection
+    # BFS on the jBKB side.
+    outgoing_links = _extract_outgoing_links(soup, url)
 
     # Annotate <a href> elements with markdown-style link syntax
     # ([text](abs_url)) BEFORE any stripping or text extraction so the
@@ -244,7 +258,46 @@ def _fetch_and_extract_from_soup_pair(soup: BeautifulSoup, url: str, config: dic
     _strip_selectors(soup, user_selectors)
     filtered_text = _extract_via_selector(soup, selector)
 
-    return filtered_text, baseline_text, cmp_text
+    return filtered_text, baseline_text, cmp_text, outgoing_links
+
+
+def _extract_outgoing_links(soup: BeautifulSoup, page_url: str) -> list:
+    """Return a deduplicated list of same-host absolute URLs reachable
+    via <a href> on this page. Used by jBKB's orphan-detection BFS to
+    determine which sitemap URLs are clickable from the homepage.
+
+    Filters:
+      - Drops fragment-only / javascript: / mailto: / tel: / empty hrefs.
+      - Resolves relative hrefs against the page URL.
+      - Same-host only (cross-domain links can't make THIS site's URLs
+        reachable).
+      - Strips the fragment so /foo#bar and /foo are the same node in
+        the graph.
+    Idempotent — call before any soup-stripping passes."""
+    from urllib.parse import urljoin, urlparse
+    page_host = (urlparse(page_url).hostname or "").lower()
+    seen: set = set()
+    out: list = []
+    for a in soup.find_all("a", href=True):
+        href = (a.get("href") or "").strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        try:
+            abs_url = urljoin(page_url, href)
+            parsed = urlparse(abs_url)
+        except Exception:
+            continue
+        if parsed.scheme not in ("http", "https"):
+            continue
+        if (parsed.hostname or "").lower() != page_host:
+            continue
+        # Drop fragment so URL identity matches sitemap entries.
+        normalized = parsed._replace(fragment="").geturl()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(normalized)
+    return out
 
 
 def _annotate_links(soup: BeautifulSoup, page_url: str) -> None:

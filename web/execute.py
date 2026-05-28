@@ -85,12 +85,18 @@ class FetchResponse(BaseModel):
     # boilerplate is stripped from every regular page. Empty when
     # the page has no CMP roots.
     cmp_text: str = ""
-    scraped_items: list[dict] = Field(default_factory=list)  # [{url, text, text_baseline, cmp_text}]
+    scraped_items: list[dict] = Field(default_factory=list)  # [{url, text, text_baseline, cmp_text, outgoing_links}]
     pdf_pages: list[dict] = Field(default_factory=list)  # [{page, text}, ...]
     source_label: str = ""
     char_count: int = 0
     page_count: int = 0
     relevance_report: Optional[dict] = None
+    # Deduplicated, same-host absolute URLs reachable via <a href>
+    # from every scraped page in this fetch. Joined from
+    # scraped_items[].outgoing_links so jBKB doesn't have to walk
+    # the per-item list. Empty when no scraper populated it
+    # (sitemap / crawl modes that haven't been upgraded).
+    outgoing_links: list[str] = Field(default_factory=list)
 
 
 class ChunkingConfig(BaseModel):
@@ -326,6 +332,19 @@ def execute_fetch(req: FetchRequest):
     ]
     cmp_text = next((p for p in cmp_pieces if p and p.strip()), "")
 
+    # outgoing_links — union of scraped_items[].outgoing_links across
+    # every page in this fetch. Deduped while preserving first-seen
+    # order so the BFS source list is stable across reruns. Same-host
+    # filtering already happened in the scraper.
+    seen_links: set = set()
+    outgoing_links: list = []
+    for it in (state.scraped_items or []):
+        for link in (it.get("outgoing_links") or []):
+            if not isinstance(link, str) or link in seen_links:
+                continue
+            seen_links.add(link)
+            outgoing_links.append(link)
+
     return FetchResponse(
         raw_text=state.raw_text or "",
         baseline_text=baseline_text,
@@ -336,6 +355,7 @@ def execute_fetch(req: FetchRequest):
         char_count=len(state.raw_text or ""),
         page_count=len(state.scraped_items) or len(state.pdf_pages),
         relevance_report=state.relevance_report,
+        outgoing_links=outgoing_links,
     )
 
 
