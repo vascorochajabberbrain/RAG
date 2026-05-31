@@ -912,8 +912,32 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
     # selector -> (reason, seen_on_count)
     seen_counts: dict[str, int] = defaultdict(int)
     reasons: dict[str, str] = {}
-    # selector -> {text_hash: pages_with_that_text}
-    text_hash_pages: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    # selector -> {text_hash: {count, sample, landmark}} — sample/landmark
+    # are captured on first occurrence so the Signal-C reason can include
+    # WHERE the element sits (nearest landmark ancestor) and WHAT it says
+    # (first ~60 chars of the repeated text). Lets the operator recognise
+    # "footer copyright" vs "newsletter CTA" without opening the page.
+    text_hash_pages: dict[str, dict[str, dict]] = defaultdict(
+        lambda: defaultdict(lambda: {"count": 0, "sample": "", "landmark": None})
+    )
+
+    _LANDMARK_TAGS = {"header", "footer", "nav", "aside", "main"}
+    _LANDMARK_ROLES = {"banner", "contentinfo", "navigation", "complementary", "main"}
+
+    def _nearest_landmark(el) -> Optional[str]:
+        """Walk up parents, return first landmark ancestor as e.g.
+        '<footer>' or '<div role=navigation>'. None when nothing on the
+        way up the tree qualifies."""
+        cur = el.parent
+        while cur is not None and getattr(cur, "name", None):
+            name = cur.name
+            if name in _LANDMARK_TAGS:
+                return f"<{name}>"
+            role_attr = cur.get("role") if hasattr(cur, "get") else None
+            if role_attr and role_attr in _LANDMARK_ROLES:
+                return f"<{name} role={role_attr}>"
+            cur = cur.parent
+        return None
 
     for (_url, html) in htmls:
         try:
@@ -988,7 +1012,11 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
             if _has_lexicon_hit(text, lexicon):
                 continue
             h = hashlib.md5(text.encode("utf-8")).hexdigest()[:12]
-            text_hash_pages[sel][h] += 1
+            bucket = text_hash_pages[sel][h]
+            bucket["count"] += 1
+            if not bucket["sample"]:
+                bucket["sample"] = text[:80]
+                bucket["landmark"] = _nearest_landmark(el)
 
         for s in page_hits:
             seen_counts[s] += 1
@@ -998,14 +1026,28 @@ def execute_suggest_exclude_selectors(req: SuggestExcludeRequest):
     # A or B, we keep the original reason; the text-repeat fact gets
     # appended as an upgrade note.
     if len(htmls) >= 2:
-        for sel, hash_counts in text_hash_pages.items():
-            top = max(hash_counts.values()) if hash_counts else 0
+        for sel, hash_buckets in text_hash_pages.items():
+            if not hash_buckets:
+                continue
+            # Dominant hash = the most-repeated text body; that's the one
+            # whose sample + landmark we cite in the reason.
+            top_hash, top_bucket = max(hash_buckets.items(), key=lambda kv: kv[1]["count"])
+            top = top_bucket["count"]
             if top < 2:
                 continue
-            # Promote (if not already) and upgrade the reason
             seen_counts[sel] = max(seen_counts[sel], top)
+            bits = [f"identical text on {top}/{len(htmls)} pages"]
+            landmark = top_bucket["landmark"]
+            if landmark:
+                bits.append(f"inside {landmark}")
+            sample = top_bucket["sample"]
+            if sample:
+                snippet = sample[:60].rstrip()
+                if len(sample) > 60:
+                    snippet += "…"
+                bits.append(f'starts: "{snippet}"')
+            addendum = " · ".join(bits)
             existing = reasons.get(sel, "")
-            addendum = f"identical text on {top}/{len(htmls)} pages"
             reasons[sel] = (existing + " · " + addendum).strip(" ·") if existing else addendum
 
     # ── Build response ──────────────────────────────────────────────
