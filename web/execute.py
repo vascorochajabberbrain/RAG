@@ -2337,3 +2337,330 @@ def execute_extract_collection_list(req: ExtractCollectionRequest):
         summary_text=summary_text,
         strategy=strategy,
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Product-detail extractor — parses a single product page (e.g.
+# /products/aurora-silver-bracelet) into a structured payload. Sister
+# to extract-collection-list; same strategy ladder (JSON-LD → heuristic
+# → Playwright fallback). One chunk per page; embedded text is a clean
+# prose summary, payload carries the structured fields so downstream
+# consumers (Session Engine, faceted browse) can use them directly.
+# ═══════════════════════════════════════════════════════════════════════
+
+class ExtractProductRequest(BaseModel):
+    url: str
+    timeout: float = 15.0
+    exclude_selectors: list[str] = Field(default_factory=list)
+
+
+class ExtractedAttribute(BaseModel):
+    """Free-form key/value pair extracted from a product page —
+    materials, dimensions, country of origin, etc. Both fields kept as
+    strings since heuristic extraction can't reliably type them."""
+    key: str
+    value: str
+
+
+class ExtractProductResponse(BaseModel):
+    name: str
+    handle: str | None = None        # URL slug for cross-linking with collection chunks
+    price: str | None = None
+    price_currency: str | None = None
+    description: str | None = None
+    image: str | None = None
+    sku: str | None = None
+    brand: str | None = None
+    in_stock: bool | None = None
+    availability: str | None = None  # raw availability string (e.g. "InStock", "OutOfStock", "Few left")
+    attributes: list[ExtractedAttribute] = Field(default_factory=list)
+    url: str
+    summary_text: str = ""
+    strategy: str = ""
+    error: str | None = None
+
+
+def _extract_product_jsonld(soup, base_url: str) -> dict | None:
+    """Pull the first Product JSON-LD block on the page. Returns a
+    dict of extracted fields (or None when nothing usable found).
+    Mirrors the @type / @graph traversal logic from the collection
+    extractor; reuses the offer-walk for price/currency/availability."""
+    import json
+    found: dict = {}
+
+    def walk(obj):
+        if isinstance(obj, list):
+            for it in obj:
+                walk(it)
+            return
+        if not isinstance(obj, dict):
+            return
+        t = obj.get("@type")
+        t_set = set(t) if isinstance(t, list) else ({t} if t else set())
+        if "Product" in t_set and not found:
+            name = obj.get("name")
+            if not name:
+                return
+            found["name"] = str(name).strip()
+            desc = obj.get("description")
+            if isinstance(desc, str) and desc.strip():
+                found["description"] = " ".join(desc.split())[:800]
+            img = obj.get("image")
+            if isinstance(img, list) and img:
+                img = img[0]
+            if isinstance(img, dict):
+                img = img.get("url")
+            if isinstance(img, str):
+                found["image"] = _absolute_url(img, base_url)
+            sku = obj.get("sku")
+            if sku:
+                found["sku"] = str(sku).strip()
+            brand = obj.get("brand")
+            if isinstance(brand, dict):
+                brand = brand.get("name")
+            if isinstance(brand, str):
+                found["brand"] = brand.strip()
+            offers = obj.get("offers")
+            offer_one: dict | None = None
+            if isinstance(offers, dict):
+                offer_one = offers
+            elif isinstance(offers, list) and offers and isinstance(offers[0], dict):
+                offer_one = offers[0]
+            if offer_one:
+                price = offer_one.get("price") or offer_one.get("lowPrice")
+                if price is not None:
+                    found["price"] = str(price).strip()
+                cur = offer_one.get("priceCurrency")
+                if cur:
+                    found["price_currency"] = str(cur).strip()
+                avail = offer_one.get("availability")
+                if avail:
+                    avail_str = str(avail)
+                    # schema.org URLs like "https://schema.org/InStock"
+                    if "/" in avail_str:
+                        avail_str = avail_str.rsplit("/", 1)[-1]
+                    found["availability"] = avail_str
+                    in_stock_map = {
+                        "InStock": True, "instock": True, "in_stock": True,
+                        "OutOfStock": False, "outofstock": False, "out_of_stock": False,
+                        "SoldOut": False, "Discontinued": False,
+                    }
+                    if avail_str in in_stock_map:
+                        found["in_stock"] = in_stock_map[avail_str]
+        graph = obj.get("@graph") if isinstance(obj, dict) else None
+        if isinstance(graph, list):
+            walk(graph)
+
+    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = tag.string or tag.get_text() or ""
+        if not raw.strip():
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        walk(data)
+        if found.get("name"):
+            break
+    return found if found.get("name") else None
+
+
+def _extract_product_heuristic(soup, base_url: str) -> dict:
+    """Fallback when JSON-LD missing. Walks the DOM for likely product
+    fields by class / itemprop / position. Best-effort — won't get
+    structured attributes, but should pull name + price + description."""
+    import re as _re
+    out: dict = {}
+    # Name: h1 first, fall back to <title> minus suffix
+    h1 = soup.find("h1")
+    if h1:
+        name = " ".join(h1.get_text(separator=" ", strip=True).split())
+        if name:
+            out["name"] = name[:200]
+    if "name" not in out:
+        title = soup.find("title")
+        if title:
+            t = " ".join(title.get_text(separator=" ", strip=True).split())
+            for sep in [" | ", " — ", " - ", " · "]:
+                if sep in t:
+                    t = t.split(sep, 1)[0]
+                    break
+            if t:
+                out["name"] = t[:200]
+
+    # Price: itemprop first, then common class patterns
+    price_el = soup.select_one(
+        '[itemprop="price"], [class*="product-price"], [class*="ProductPrice"], '
+        '[class*="price__"], [data-product-price]'
+    )
+    price_re = _re.compile(
+        r'(?:€|£|\$|USD|EUR|GBP|kr|CHF|SEK|NOK|DKK)\s*\d[\d.,]*'
+        r'|\d[\d.,]*\s*(?:€|£|\$|USD|EUR|GBP|kr|CHF|SEK|NOK|DKK)'
+    )
+    if price_el:
+        # Prefer the content attribute (often the raw number) over the rendered text
+        price = price_el.get("content") or price_el.get("data-price")
+        if price:
+            out["price"] = str(price).strip()
+        else:
+            txt = " ".join(price_el.get_text(separator=" ", strip=True).split())
+            m = price_re.search(txt)
+            if m:
+                out["price"] = m.group(0).strip()
+    # If no price element matched, scan the whole page body once
+    if "price" not in out:
+        body_text = " ".join(soup.get_text(separator=" ", strip=True).split())
+        m = price_re.search(body_text)
+        if m:
+            out["price"] = m.group(0).strip()
+
+    # Description
+    desc_el = soup.select_one(
+        '[itemprop="description"], [class*="product-description"], '
+        '[class*="ProductDescription"], [class*="rte"], [class*="product-content"]'
+    )
+    if desc_el:
+        desc = " ".join(desc_el.get_text(separator=" ", strip=True).split())
+        if desc:
+            out["description"] = desc[:800]
+
+    # Image
+    img_el = soup.select_one(
+        '[class*="product-image"] img, [class*="ProductImage"] img, '
+        'picture img, [itemprop="image"]'
+    )
+    if img_el:
+        src = img_el.get("src") or img_el.get("data-src")
+        if not src and img_el.get("srcset"):
+            src = img_el["srcset"].split(",")[0].strip().split()[0]
+        if src:
+            out["image"] = _absolute_url(src, base_url)
+    return out
+
+
+def _handle_from_url(url: str) -> str | None:
+    """Extract the URL slug — last non-empty path segment. Used for
+    cross-linking product chunks with their parent collection chunks
+    (collection chunks include /products/<handle> URLs)."""
+    import urllib.parse
+    try:
+        path = urllib.parse.urlparse(url).path.rstrip("/")
+        slug = path.rsplit("/", 1)[-1]
+        return slug or None
+    except Exception:
+        return None
+
+
+@router.post("/extract-product-details", response_model=ExtractProductResponse)
+def execute_extract_product_details(req: ExtractProductRequest):
+    """Parse a product page into a structured payload."""
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+    except Exception as e:
+        raise HTTPException(500, f"Missing deps: {e}")
+
+    def _parse(html: str) -> tuple[dict, str]:
+        """Returns (fields, strategy_label). Empty fields when neither
+        JSON-LD nor heuristic yields a product name."""
+        s = BeautifulSoup(html, "html.parser")
+        for sel in req.exclude_selectors:
+            if not isinstance(sel, str) or not sel.strip():
+                continue
+            try:
+                for el in s.select(sel):
+                    el.decompose()
+            except Exception:
+                pass
+        ld = _extract_product_jsonld(s, req.url)
+        if ld and ld.get("name"):
+            return ld, "jsonld"
+        h = _extract_product_heuristic(s, req.url)
+        if h.get("name"):
+            return h, "heuristic"
+        return {}, ""
+
+    # Stage 1: httpx
+    try:
+        with httpx.Client(
+            timeout=req.timeout,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; jBKB-RAG/1.0)"},
+        ) as client:
+            resp = client.get(req.url)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as e:
+        return ExtractProductResponse(
+            name="",
+            url=req.url,
+            summary_text="",
+            strategy="fetch_failed",
+            error=f"{e}",
+        )
+
+    fields, strategy = _parse(html)
+
+    # Stage 2: Playwright fallback for JS-rendered storefronts
+    if not fields.get("name"):
+        try:
+            rendered = _playwright_render_html(req.url, req.exclude_selectors, req.timeout * 2)
+            fields, strategy_pw = _parse(rendered)
+            if fields.get("name"):
+                strategy = f"playwright_{strategy_pw}"
+        except Exception as e:
+            return ExtractProductResponse(
+                name="",
+                url=req.url,
+                summary_text="",
+                strategy="playwright_failed",
+                error=f"httpx parse found no product; Playwright fallback failed: {e}",
+            )
+
+    if not fields.get("name"):
+        return ExtractProductResponse(
+            name="",
+            url=req.url,
+            summary_text="",
+            strategy="no_product_found",
+            error="Could not extract product name via JSON-LD or heuristic DOM walk, even after Playwright rendering. Page may not be a product page or its template uses non-standard markup.",
+        )
+
+    # Build embed-friendly summary text. Format: name + price line,
+    # then description, then any attributes joined as "key: value" lines.
+    # Optimised so a question like "what does Brazil Fan cost" matches
+    # against the price line and "describe Aurora Silver" matches the
+    # description block.
+    lines: list[str] = []
+    price_bit = ""
+    if fields.get("price"):
+        cur = fields.get("price_currency") or ""
+        price_bit = f" — {cur}{fields['price']}".strip()
+    lines.append(f"{fields['name']}{price_bit}")
+    if fields.get("brand"):
+        lines.append(f"Brand: {fields['brand']}")
+    if fields.get("availability"):
+        lines.append(f"Availability: {fields['availability']}")
+    if fields.get("sku"):
+        lines.append(f"SKU: {fields['sku']}")
+    if fields.get("description"):
+        lines.append("")
+        lines.append(fields["description"])
+    summary_text = "\n".join(lines)
+
+    return ExtractProductResponse(
+        name=fields["name"],
+        handle=_handle_from_url(req.url),
+        price=fields.get("price"),
+        price_currency=fields.get("price_currency"),
+        description=fields.get("description"),
+        image=fields.get("image"),
+        sku=fields.get("sku"),
+        brand=fields.get("brand"),
+        in_stock=fields.get("in_stock"),
+        availability=fields.get("availability"),
+        attributes=[],  # Future: parse schema.org additionalProperty or definition lists
+        url=req.url,
+        summary_text=summary_text,
+        strategy=strategy,
+    )
