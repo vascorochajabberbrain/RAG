@@ -2062,35 +2062,90 @@ def _extract_collection_jsonld(soup, base_url: str) -> tuple[list[ExtractedProdu
 
 def _extract_collection_heuristic(soup, base_url: str) -> list[ExtractedProduct]:
     """Fallback: look for elements matching common product-card class
-    patterns that contain both a link and a price-shaped text node."""
+    patterns. Name resolution tries multiple paths to handle modern
+    headless storefronts (Hydrogen / Svelte / Next-on-Shopify) that
+    skip semantic heading tags for product card titles."""
     import re as _re
+    import urllib.parse
     products: list[ExtractedProduct] = []
     seen_urls: set[str] = set()
     candidates = soup.select(
         '[class*="product-card"], [class*="product-item"], '
         '[class*="ProductCard"], [class*="ProductItem"], '
+        '[class*="product-tile"], [class*="ProductTile"], '
         'li[class*="product"], article[class*="product"]'
     )
-    price_re = _re.compile(r'(?:€|£|\$|USD|EUR|GBP)\s*\d[\d.,]*|\d[\d.,]*\s*(?:€|£|\$|USD|EUR|GBP)')
+    price_re = _re.compile(
+        r'(?:€|£|\$|USD|EUR|GBP|kr|CHF|SEK|NOK|DKK)\s*\d[\d.,\s]*'
+        r'|\d[\d.,]*\s*(?:€|£|\$|USD|EUR|GBP|kr|CHF|SEK|NOK|DKK)'
+    )
     for el in candidates:
-        link = el.find("a", href=True)
-        if not link:
+        # Prefer the first link to /products/* — that's the canonical
+        # product URL on every Shopify-shaped storefront. Falls back
+        # to any href when no product-shaped link exists.
+        prod_links = el.find_all("a", href=True)
+        if not prod_links:
             continue
+        canonical_link = None
+        for a in prod_links:
+            if "/products/" in (a.get("href") or ""):
+                canonical_link = a
+                break
+        link = canonical_link or prod_links[0]
         url = _absolute_url(link.get("href"), base_url)
         if not url or url in seen_urls:
             continue
-        # Name = first non-empty text node (often the link text or an h2/h3)
-        name_el = el.find(["h1", "h2", "h3", "h4"]) or link
-        name = " ".join(name_el.get_text(separator=" ", strip=True).split())[:200]
+
+        # Name resolution, in priority order:
+        # 1. Heading element (h1-h4) inside the card
+        # 2. Any element matching common product-title class patterns
+        # 3. The link with the LONGEST non-empty text among links
+        #    pointing to the same product URL (image link is usually
+        #    empty; the second/third link carries the visible name)
+        # 4. The URL slug, prettified
+        name = ""
+        heading = el.find(["h1", "h2", "h3", "h4"])
+        if heading:
+            name = " ".join(heading.get_text(separator=" ", strip=True).split())
+        if not name:
+            title_el = el.select_one(
+                '[class*="product-title"], [class*="ProductTitle"], '
+                '[class*="product-name"], [class*="ProductName"], '
+                '[class*="card-title"], [class*="CardTitle"]'
+            )
+            if title_el:
+                name = " ".join(title_el.get_text(separator=" ", strip=True).split())
+        if not name:
+            same_url_links = [a for a in prod_links if _absolute_url(a.get("href"), base_url) == url]
+            best_text = ""
+            for a in same_url_links:
+                txt = " ".join(a.get_text(separator=" ", strip=True).split())
+                if len(txt) > len(best_text):
+                    best_text = txt
+            name = best_text
+        if not name:
+            # Slug fallback: /products/aurora-silver-bracelet → "Aurora Silver Bracelet"
+            try:
+                slug = urllib.parse.urlparse(url).path.rsplit("/", 1)[-1]
+                name = slug.replace("-", " ").replace("_", " ").strip().title()
+            except Exception:
+                name = ""
         if not name:
             continue
+        name = name[:200]
+
         # Price = first price-shaped match anywhere in the card text
         card_text = " ".join(el.get_text(separator=" ", strip=True).split())
         m = price_re.search(card_text)
         price = m.group(0).strip() if m else None
+
         # Image
         img = el.find("img")
-        image = _absolute_url(img.get("src"), base_url) if img and img.get("src") else None
+        image_src = img.get("src") if img else None
+        if not image_src and img:
+            image_src = img.get("data-src") or img.get("srcset", "").split()[0] if img.get("srcset") else None
+        image = _absolute_url(image_src, base_url) if image_src else None
+
         products.append(ExtractedProduct(
             name=name,
             price=price,
@@ -2129,6 +2184,51 @@ def _collection_name_from_dom(soup, url: str) -> str:
         return url
 
 
+def _playwright_render_html(url: str, exclude_selectors: list[str], timeout_sec: float) -> str:
+    """Fall back to Playwright when httpx + parse returns 0 products —
+    almost always means the page is a JS-rendered storefront (Hydrogen,
+    Next.js + Storefront API, etc.) whose product data only appears
+    after the client-side framework hydrates. Reuses the operator's
+    exclude_selectors for parity with the httpx path.
+
+    Returns the rendered HTML after networkidle. Raises on failure;
+    the caller catches and reports the strategy as 'playwright_failed'."""
+    from playwright.sync_api import sync_playwright
+    timeout_ms = int(timeout_sec * 1000)
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            ctx = browser.new_context(user_agent="Mozilla/5.0 (compatible; jBKB-RAG/1.0)")
+            page = ctx.new_page()
+            page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+            # Some storefronts lazy-load product grids on scroll. A
+            # single scroll-to-bottom + brief wait is cheap and
+            # catches most lazy-grid cases without per-site tuning.
+            try:
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(800)
+            except Exception:
+                pass
+            # Strip selectors via DOM removal so the returned HTML
+            # matches what the operator told us to ignore. Mirrors
+            # the soup.decompose loop on the httpx path.
+            if exclude_selectors:
+                page.evaluate(
+                    """(sels) => {
+                        for (const sel of sels) {
+                            try {
+                                for (const el of document.querySelectorAll(sel)) el.remove();
+                            } catch { /* invalid selector — skip */ }
+                        }
+                    }""",
+                    [s for s in exclude_selectors if isinstance(s, str) and s.strip()],
+                )
+            html = page.content()
+            return html
+        finally:
+            browser.close()
+
+
 @router.post("/extract-collection-list", response_model=ExtractCollectionResponse)
 def execute_extract_collection_list(req: ExtractCollectionRequest):
     """Parse a collection page into a structured product list."""
@@ -2138,6 +2238,27 @@ def execute_extract_collection_list(req: ExtractCollectionRequest):
     except Exception as e:
         raise HTTPException(500, f"Missing deps: {e}")
 
+    def _parse(html: str) -> tuple[list[ExtractedProduct], str | None, str]:
+        """Run exclude_selectors + JSON-LD + heuristic against the
+        given HTML. Returns (products, jsonld_name, strategy_label)."""
+        s = BeautifulSoup(html, "html.parser")
+        for sel in req.exclude_selectors:
+            if not isinstance(sel, str) or not sel.strip():
+                continue
+            try:
+                for el in s.select(sel):
+                    el.decompose()
+            except Exception:
+                pass
+        prods, name = _extract_collection_jsonld(s, req.url)
+        if prods:
+            return prods, name, "jsonld"
+        prods = _extract_collection_heuristic(s, req.url)
+        if prods:
+            return prods, name, "heuristic"
+        return [], name, ""
+
+    # ── Stage 1: httpx (cheap, fast, works for SSR / static stores) ──
     try:
         with httpx.Client(
             timeout=req.timeout,
@@ -2156,31 +2277,36 @@ def execute_extract_collection_list(req: ExtractCollectionRequest):
             error=f"{e}",
         )
 
-    soup = BeautifulSoup(html, "html.parser")
+    products, jsonld_name, strategy = _parse(html)
 
-    # Apply exclude_selectors before heuristic parsing — operator's
-    # tuned cookie-banner / footer selectors get stripped so the
-    # heuristic doesn't pick up product-shaped noise from chrome.
-    for sel in req.exclude_selectors:
-        if not isinstance(sel, str) or not sel.strip():
-            continue
-        try:
-            for el in soup.select(sel):
-                el.decompose()
-        except Exception:
-            pass
-
-    # Strategy 1: JSON-LD
-    products, jsonld_name = _extract_collection_jsonld(soup, req.url)
-    strategy = "jsonld" if products else ""
-
-    # Strategy 2: Heuristic DOM walk
+    # ── Stage 2: Playwright fallback (when httpx parse yields nothing) ──
+    # Almost always a JS-rendered storefront. Pay the Playwright cost
+    # once per page; if it ALSO yields nothing, the page genuinely
+    # isn't a collection-shaped page (or uses non-standard markup
+    # neither JSON-LD nor heuristic detect).
     if not products:
-        products = _extract_collection_heuristic(soup, req.url)
-        if products:
-            strategy = "heuristic"
+        try:
+            rendered = _playwright_render_html(req.url, req.exclude_selectors, req.timeout * 2)
+            products, jsonld_name_pw, strategy_pw = _parse(rendered)
+            if products:
+                jsonld_name = jsonld_name or jsonld_name_pw
+                strategy = f"playwright_{strategy_pw}"
+            else:
+                # Capture the rendered HTML's collection name for the
+                # error response even on no-products.
+                s = BeautifulSoup(rendered, "html.parser")
+                pw_name = _collection_name_from_dom(s, req.url)
+                jsonld_name = jsonld_name or pw_name
+        except Exception as e:
+            return ExtractCollectionResponse(
+                collection_name=_collection_name_from_dom(BeautifulSoup(html, "html.parser"), req.url),
+                products=[],
+                summary_text="",
+                strategy="playwright_failed",
+                error=f"httpx parse found 0 products; Playwright fallback failed: {e}",
+            )
 
-    collection_name = jsonld_name or _collection_name_from_dom(soup, req.url)
+    collection_name = jsonld_name or _collection_name_from_dom(BeautifulSoup(html, "html.parser"), req.url)
 
     if not products:
         return ExtractCollectionResponse(
@@ -2188,7 +2314,7 @@ def execute_extract_collection_list(req: ExtractCollectionRequest):
             products=[],
             summary_text="",
             strategy="no_products_found",
-            error="Could not find product entries via JSON-LD or heuristic DOM walk. Page may not be a collection page, or its template uses non-standard markup.",
+            error="Could not find product entries via JSON-LD or heuristic DOM walk, even after Playwright rendering. Page may not be a collection page, or its template uses non-standard markup.",
         )
 
     # Build the embedded summary text — collection name, product
