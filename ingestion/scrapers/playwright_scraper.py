@@ -594,28 +594,69 @@ def _expand_accordion_per_item(page) -> list:
                         click_failed += 1
                         continue
                 # Give the panel time to mount + animate in. Radix
-                # uses ~150ms slide animations; 220ms is enough.
-                page.wait_for_timeout(220)
+                # uses ~150ms slide animations; some headless render
+                # paths AND some sub-resource loads push closer to
+                # 400ms. Bumped from 220 → 400 after Johan's HH test
+                # showed ~11 pairs missing per page — the prime
+                # suspect was the panel not having rendered yet when
+                # we sampled container text.
+                page.wait_for_timeout(400)
                 # Walk up from the button to the nearest enclosing
-                # AccordionItem-shaped container (the element whose
-                # data-state flipped to 'open' OR the closest parent
-                # whose innerText contains both Q + new content) and
-                # grab its full innerText.
-                container_text = btn.evaluate(
+                # AccordionItem-shaped container. Capture both the
+                # container text AND whether the click actually
+                # opened anything (data-state flipped to 'open' OR
+                # the container now contains an open child). We use
+                # the open-detection to decide whether to retry the
+                # click for items where the first attempt didn't land.
+                walk_result = btn.evaluate(
                     """(el) => {
-                        // Walk up to find the AccordionItem container.
                         let p = el;
                         for (let i = 0; i < 6 && p && p.tagName !== 'BODY'; i++) {
                             if (p.getAttribute && (p.getAttribute('data-state') === 'open'
                                 || p.querySelector('[data-state="open"]'))) {
-                                return p.innerText || '';
+                                return { text: p.innerText || '', opened: true };
                             }
                             p = p.parentElement;
                         }
                         // Fallback: button's parent's innerText (Q + A).
-                        return (el.parentElement && el.parentElement.innerText) || el.innerText || '';
+                        return {
+                            text: (el.parentElement && el.parentElement.innerText) || el.innerText || '',
+                            opened: false,
+                        };
                     }"""
                 )
+                container_text = walk_result.get("text") if isinstance(walk_result, dict) else (walk_result or "")
+                opened_ok = bool(walk_result.get("opened")) if isinstance(walk_result, dict) else False
+
+                # If the click didn't actually open anything (no
+                # data-state="open" found AND container is just the
+                # button), retry once with a fresh click + longer
+                # settle. Catches the small fraction of Radix items
+                # where the first click event lost the race with a
+                # competing focus / pointer handler.
+                if not opened_ok and container_text.strip() == question:
+                    try:
+                        btn.click(timeout=1500, no_wait_after=True, force=True)
+                    except Exception:
+                        pass
+                    page.wait_for_timeout(700)
+                    walk_result = btn.evaluate(
+                        """(el) => {
+                            let p = el;
+                            for (let i = 0; i < 6 && p && p.tagName !== 'BODY'; i++) {
+                                if (p.getAttribute && (p.getAttribute('data-state') === 'open'
+                                    || p.querySelector('[data-state="open"]'))) {
+                                    return { text: p.innerText || '', opened: true };
+                                }
+                                p = p.parentElement;
+                            }
+                            return {
+                                text: (el.parentElement && el.parentElement.innerText) || el.innerText || '',
+                                opened: false,
+                            };
+                        }"""
+                    )
+                    container_text = walk_result.get("text") if isinstance(walk_result, dict) else (walk_result or "")
                 if container_text and container_text.strip():
                     captured += 1
                     # Append "Q\nA\n\n" so the LLM sees a clean
