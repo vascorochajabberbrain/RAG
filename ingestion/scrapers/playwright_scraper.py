@@ -189,7 +189,7 @@ def _single_page_scrape(page, config: dict) -> tuple:
     url = config.get("url")
     if not url:
         return "Error: url required for scrape_mode=single_page.", []
-    text, text_baseline, cmp_text, outgoing_links = _fetch_and_extract_pair(page, url, config)
+    text, text_baseline, cmp_text, outgoing_links, structured_faq_pairs = _fetch_and_extract_pair(page, url, config)
     text = text or ""
     items = (
         [{
@@ -198,6 +198,13 @@ def _single_page_scrape(page, config: dict) -> tuple:
             "text_baseline": text_baseline or "",
             "cmp_text": cmp_text or "",
             "outgoing_links": outgoing_links or [],
+            # Structured Q+A pairs captured directly during the per-item
+            # accordion walk (only populated when scraper config has
+            # `accordion_per_item: true` AND the page actually has an
+            # accordion structure). Empty list otherwise. Consumed by
+            # the FAQ extraction path which prefers these over LLM
+            # extraction whenever they're available.
+            "structured_faq_pairs": structured_faq_pairs or [],
         }]
         if text else []
     )
@@ -213,7 +220,7 @@ def _fetch_and_extract(page, url: str, config: dict) -> str:
     that don't need the baseline pair. New code should prefer
     _fetch_and_extract_pair which returns (filtered, baseline,
     cmp_text)."""
-    filtered, _baseline, _cmp, _links = _fetch_and_extract_pair(page, url, config)
+    filtered, _baseline, _cmp, _links, _structured = _fetch_and_extract_pair(page, url, config)
     return filtered
 
 
@@ -263,13 +270,19 @@ def _extract_cmp_text(page, selectors: list) -> str:
 
 def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     """Navigate + extract text TWICE plus capture CMP text + links:
-      - filtered text  (baseline strip + user exclude_selectors applied)
-      - baseline text  (baseline strip only, no user exclude_selectors)
-      - cmp_text       (joined inner text from any CMP root, captured
-                        BEFORE stripping)
-      - outgoing_links (same-host absolute URLs from <a href>, captured
-                        BEFORE any stripping or annotation — feeds the
-                        orphan-detection BFS on the jBKB side)
+      - filtered text       (baseline strip + user exclude_selectors applied)
+      - baseline text       (baseline strip only, no user exclude_selectors)
+      - cmp_text            (joined inner text from any CMP root, captured
+                             BEFORE stripping)
+      - outgoing_links      (same-host absolute URLs from <a href>, captured
+                             BEFORE any stripping or annotation — feeds the
+                             orphan-detection BFS on the jBKB side)
+      - structured_faq_pairs (list of {question, answer} dicts captured
+                             during the per-item accordion walk when
+                             config.accordion_per_item is true and the
+                             page has an accordion structure. Empty
+                             otherwise. The FAQ extraction path uses
+                             these directly, bypassing the LLM.)
 
     Baseline text is the "truly raw" content that jBKB stores in
     content_raw for change-detection. cmp_text feeds the synthetic
@@ -290,7 +303,7 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
             page.goto(url, wait_until="commit", timeout=10000)
         except Exception as e2:
             print(f"[playwright_scraper] WARNING: Failed to load {url}: {e} (fallback also failed: {e2})")
-            return "", "", "", []
+            return "", "", "", [], []
 
     # Slightly longer default settle (was 0.5s) — Elementor + tracker
     # sites need ~1-2s to inject content after DCL.
@@ -302,10 +315,10 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     # specific structured data, not full-page boilerplate).
     if config.get("custom_js_extraction"):
         r = _extract_custom_js(page, url, config) or ""
-        return r, r, "", []
+        return r, r, "", [], []
     if config.get("structured_extraction"):
         r = _extract_structured(page, url, config) or ""
-        return r, r, "", []
+        return r, r, "", [], []
 
     # Expand FAQ accordions / <details> / Bootstrap collapsibles etc.
     # BEFORE text extraction so Pattern B/C sites (content hidden via
@@ -323,9 +336,12 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     # Activated by `accordion_per_item: true` in scraper config — set
     # by jBKB for FAQ-table sources where coverage matters more than
     # the ~15s extra cost per page. Appends a clean "Q\nA" buffer to
-    # the page that the subsequent inner_text() picks up.
+    # the page that the subsequent inner_text() picks up AND returns
+    # a structured list of {question, answer} pairs that the FAQ
+    # extraction path uses verbatim (bypassing the LLM entirely).
+    structured_faq_pairs: list = []
     if config.get("accordion_per_item", False):
-        _expand_accordion_per_item(page)
+        structured_faq_pairs = _expand_accordion_per_item(page) or []
 
     # Capture CMP text BEFORE stripping — once _BASELINE_STRIP runs
     # those elements are gone. Cheap (one querySelectorAll per page).
@@ -352,7 +368,7 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     _strip_selectors(page, user_selectors)
     filtered_text = _extract_with_selector(page, selector)
 
-    return filtered_text, baseline_text, cmp_text, outgoing_links
+    return filtered_text, baseline_text, cmp_text, outgoing_links, structured_faq_pairs
 
 
 def _extract_outgoing_links(page, page_url: str) -> list:
@@ -486,7 +502,7 @@ _EXPAND_SELECTORS = (
 )
 
 
-def _expand_accordion_per_item(page) -> None:
+def _expand_accordion_per_item(page) -> list:
     """For Radix / Headless UI / Shadcn-style Accordion components in
     `type="single"` mode where only one item per section can be open
     at a time, AND where the content panel is lazy-mounted (Svelte
@@ -506,14 +522,22 @@ def _expand_accordion_per_item(page) -> None:
     so the LLM extractor sees every Q+A pair regardless of which
     item happens to be expanded at snapshot time.
 
+    Also RETURNS a list of {"question": str, "answer": str} dicts
+    captured directly from the button + revealed-panel pair. The FAQ
+    extraction path can use these structured pairs verbatim, bypassing
+    the LLM entirely — deterministic by construction, no per-page
+    LLM cost. Sites without an accordion pattern produce [] and the
+    FAQ extraction falls back to the LLM path.
+
     Heyharper (Svelte + Radix-style Accordion, three CEs × 79 items
     per page) was the prompting case: bulk-click produced ~17 pairs;
-    per-item walk produces ~79.
+    per-item walk produces ~79 structured pairs.
 
     Cost: ~150-200ms per button (click + settle + extract). ~15s for
     a 75-item FAQ. Acceptable for the FAQ extraction path (manually
     triggered, not on every routine pipeline run).
     """
+    structured_pairs: list = []
     try:
         # Create a sentinel container at the bottom of <body>. Anything
         # we drop in here becomes part of the page's innerText at
@@ -617,6 +641,19 @@ def _expand_accordion_per_item(page) -> None:
                         }""",
                         text,
                     )
+                    # Capture a STRUCTURED pair (question, answer) so
+                    # the FAQ extraction path can use this directly
+                    # without an LLM call. Answer = the container text
+                    # with the question stripped from the front. The
+                    # text-buffer above is still populated as a backup
+                    # so the LLM path still works if anything in this
+                    # structured branch goes wrong downstream.
+                    answer = text[len(question):].lstrip() if text.startswith(question) else text
+                    # Only keep pairs with a meaningful answer (more
+                    # than just the question echoed back, no leading
+                    # navigation crumbs). A single-line answer is fine.
+                    if answer and answer != question and len(answer) >= 3:
+                        structured_pairs.append({"question": question, "answer": answer})
             except Exception:
                 # Per-button failures are tolerated — we want the
                 # rest of the buttons to still get processed.
@@ -624,9 +661,10 @@ def _expand_accordion_per_item(page) -> None:
         # One-line summary so operators can spot under-coverage in
         # the Python service logs (e.g. captured << processed means
         # something's off with the click-and-capture sequence).
-        print(f"[playwright_scraper] accordion_per_item: processed={processed} captured={captured} short={skipped_short} click_failed={click_failed}")
+        print(f"[playwright_scraper] accordion_per_item: processed={processed} captured={captured} structured={len(structured_pairs)} short={skipped_short} click_failed={click_failed}")
     except Exception as e:
         print(f"[playwright_scraper] WARNING: accordion_per_item failed: {e}")
+    return structured_pairs
 
 
 def _expand_collapsibles(page) -> None:

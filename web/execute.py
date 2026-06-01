@@ -97,6 +97,18 @@ class FetchResponse(BaseModel):
     # the per-item list. Empty when no scraper populated it
     # (sitemap / crawl modes that haven't been upgraded).
     outgoing_links: list[str] = Field(default_factory=list)
+    # Structured Q+A pairs captured during the per-item accordion
+    # walk (playwright_scraper._expand_accordion_per_item). Only
+    # populated when scraper config enabled `accordion_per_item:
+    # true` AND the page actually has an accordion structure
+    # (Radix / Shadcn / Headless UI / Bootstrap / <details>). Each
+    # item is {"question": str, "answer": str}. Unioned across
+    # scraped_items[].structured_faq_pairs.
+    #
+    # jBKB's FAQ extraction path prefers these over LLM extraction
+    # whenever they're non-empty — deterministic by construction,
+    # no per-page LLM cost, perfectly matches what's on the page.
+    accordion_qa_pairs: list[dict] = Field(default_factory=list)
 
 
 class ChunkingConfig(BaseModel):
@@ -353,6 +365,20 @@ def execute_fetch(req: FetchRequest):
             seen_links.add(link)
             outgoing_links.append(link)
 
+    # accordion_qa_pairs — union of scraped_items[].structured_faq_pairs.
+    # Only the per-item accordion walk (playwright_scraper with
+    # accordion_per_item=true) populates this; everything else gets
+    # an empty list. jBKB skips the LLM extraction step when this is
+    # non-empty.
+    accordion_qa_pairs: list = []
+    for it in (state.scraped_items or []):
+        for pair in (it.get("structured_faq_pairs") or []):
+            if isinstance(pair, dict) and pair.get("question") and pair.get("answer"):
+                accordion_qa_pairs.append({
+                    "question": str(pair["question"]),
+                    "answer": str(pair["answer"]),
+                })
+
     return FetchResponse(
         raw_text=state.raw_text or "",
         baseline_text=baseline_text,
@@ -364,6 +390,7 @@ def execute_fetch(req: FetchRequest):
         page_count=len(state.scraped_items) or len(state.pdf_pages),
         relevance_report=state.relevance_report,
         outgoing_links=outgoing_links,
+        accordion_qa_pairs=accordion_qa_pairs,
     )
 
 
@@ -1858,7 +1885,11 @@ def execute_faq_extract(req: FaqExtractRequest):
     union by normalized question. This avoids both the input cap AND the
     output-token cap a single big call would hit on long pages.
     """
-    from llms.openai_utils import openai_chat_completion
+    from llms.gemini_utils import gemini_chat_completion
+    # openai_chat_completion still imported elsewhere in this file for
+    # other LLM-driven endpoints (suggest exclude selectors, FAQ Q/A
+    # suggestion, etc.). We're only switching FAQ extraction to Gemini
+    # because that's the consistency-critical structured-output use case.
 
     text = (req.text or "").strip()
     if not text:
@@ -1884,11 +1915,29 @@ def execute_faq_extract(req: FaqExtractRequest):
     last_error: Optional[str] = None
     for chunk in chunks:
         try:
-            raw = openai_chat_completion(
+            # Gemini 2.5 Flash + temperature=0 for FAQ extraction
+            # (the LLM-fallback path — used when the structured-
+            # accordion walk in playwright_scraper didn't yield pre-
+            # extracted pairs).
+            #
+            #   Why Gemini over OpenAI here: gpt-4o-mini's "clearly
+            #   supported" judgment flipped inconsistently on borderline
+            #   pairs (33 / 58 / 68 pair counts for the same FAQ
+            #   content across 3 chat environments). Gemini 2.5 Flash
+            #   is materially more consistent on structured-output
+            #   tasks AND cheaper than gpt-4o-mini per token. jBKB
+            #   already uses gemini-2.5-flash for copilot-chat so the
+            #   API key + billing surface is shared.
+            #
+            #   Why temperature=0: greedy decode minimises per-run
+            #   variance. Gemini still isn't bit-exact (batched fp ops)
+            #   but the swing collapses dramatically vs the default 1.0.
+            raw = gemini_chat_completion(
                 system_prompt,
                 f"Text:\n{chunk}",
-                model="gpt-4o-mini",
+                model="gemini-2.5-flash",
                 max_tokens=FAQ_EXTRACT_MAX_TOKENS,
+                temperature=0,
             )
         except Exception as e:
             last_error = str(e)
