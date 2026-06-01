@@ -1905,3 +1905,309 @@ def execute_probe_pdf(req: ProbePdfRequest):
         previews.append(ProbePdfPagePreview(page=p["page"], first_line=first_line))
 
     return ProbePdfResponse(page_count=len(pages), page_previews=previews)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Collection-list extractor — parses a "collection / category / theme"
+# page (e.g. /collections/bracelets on a Shopify store) into a structured
+# list of products. Emits ONE chunk per page shaped for retrieval against
+# questions like "what bracelets do you sell?" — the chunk's embedded
+# text reads like a tidy product list, and the chunk's payload carries
+# the same data as JSON so downstream consumers (UI grid, faceted browse)
+# can use it directly.
+#
+# Strategy order — first one that yields a non-empty product list wins:
+#   1. JSON-LD ItemList of Product (Shopify, most stores with SEO theme)
+#   2. JSON-LD bare Product entries on the page (still semantic)
+#   3. Microdata itemtype=schema.org/Product
+#   4. Heuristic DOM walk: elements matching common product-card classes
+#      with both a link AND a price text
+#
+# Pagination: V1 reads page 1 only. Many collections have ≤30 products
+# on the first page (Shopify default); long collections will trail off.
+# Adding pagination is a sitemap-level concern (operator can already
+# pre-scan all paginated URLs into the sitemap's url list).
+# ═══════════════════════════════════════════════════════════════════════
+
+class ExtractCollectionRequest(BaseModel):
+    """Single-URL collection-page extraction."""
+    url: str
+    timeout: float = 15.0
+    # exclude_selectors passed through for parity with /fetch — we
+    # strip these elements before heuristic DOM walking so the same
+    # "remove cookie banner" config that the operator tuned for
+    # generic strip still applies. JSON-LD parsing ignores them.
+    exclude_selectors: list[str] = Field(default_factory=list)
+
+
+class ExtractedProduct(BaseModel):
+    name: str
+    price: str | None = None
+    price_currency: str | None = None
+    url: str | None = None       # absolute URL to the product detail page
+    image: str | None = None
+
+
+class ExtractCollectionResponse(BaseModel):
+    collection_name: str
+    products: list[ExtractedProduct] = Field(default_factory=list)
+    # Embed-friendly summary text. The Node API stores this as the
+    # chunk's text + as one of the payload fields; the structured
+    # `products` array is also placed in the payload.
+    summary_text: str = ""
+    # Diagnostic string for the operator — which strategy produced
+    # the list, or why it came back empty.
+    strategy: str = ""
+    error: str | None = None
+
+
+def _absolute_url(href: str | None, base: str) -> str | None:
+    if not href:
+        return None
+    import urllib.parse
+    try:
+        return urllib.parse.urljoin(base, href)
+    except Exception:
+        return None
+
+
+def _extract_collection_jsonld(soup, base_url: str) -> tuple[list[ExtractedProduct], str | None]:
+    """Returns (products, collection_name) parsed from JSON-LD blocks.
+    Empty list on no-match. Collection name comes from a sibling
+    @type=CollectionPage or BreadcrumbList tail when present."""
+    import json
+    products: list[ExtractedProduct] = []
+    collection_name: str | None = None
+    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = tag.string or tag.get_text() or ""
+        if not raw.strip():
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        # JSON-LD entries can be a single dict or a list of dicts;
+        # @graph wraps nested entries on some sites.
+        def walk(obj):
+            nonlocal collection_name
+            if isinstance(obj, list):
+                for item in obj:
+                    walk(item)
+                return
+            if not isinstance(obj, dict):
+                return
+            t = obj.get("@type")
+            if isinstance(t, list):
+                t_set = set(t)
+            else:
+                t_set = {t} if t else set()
+            # ItemList → walk itemListElement
+            if "ItemList" in t_set or "CollectionPage" in t_set:
+                if not collection_name and obj.get("name"):
+                    collection_name = str(obj["name"]).strip()
+                items = obj.get("itemListElement") or []
+                for el in items if isinstance(items, list) else []:
+                    if isinstance(el, dict):
+                        # ListItem wraps a Product in `item`
+                        if el.get("@type") == "ListItem" and isinstance(el.get("item"), dict):
+                            walk(el["item"])
+                        else:
+                            walk(el)
+            # Product → extract
+            if "Product" in t_set:
+                name = obj.get("name")
+                if not name:
+                    return
+                offers = obj.get("offers")
+                price = None
+                currency = None
+                if isinstance(offers, dict):
+                    price = offers.get("price") or offers.get("lowPrice")
+                    currency = offers.get("priceCurrency")
+                elif isinstance(offers, list) and offers:
+                    first = offers[0]
+                    if isinstance(first, dict):
+                        price = first.get("price") or first.get("lowPrice")
+                        currency = first.get("priceCurrency")
+                url = obj.get("url") or obj.get("@id")
+                image = obj.get("image")
+                if isinstance(image, list):
+                    image = image[0] if image else None
+                if isinstance(image, dict):
+                    image = image.get("url")
+                products.append(ExtractedProduct(
+                    name=str(name).strip(),
+                    price=str(price).strip() if price is not None else None,
+                    price_currency=str(currency).strip() if currency else None,
+                    url=_absolute_url(url, base_url) if isinstance(url, str) else None,
+                    image=_absolute_url(image, base_url) if isinstance(image, str) else None,
+                ))
+            # @graph wrapper
+            graph = obj.get("@graph")
+            if isinstance(graph, list):
+                walk(graph)
+        walk(data)
+    # Dedupe products by (name, url) — JSON-LD can list the same
+    # product under both ItemList and standalone Product.
+    seen: set[tuple[str, str | None]] = set()
+    deduped: list[ExtractedProduct] = []
+    for p in products:
+        key = (p.name, p.url)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(p)
+    return deduped, collection_name
+
+
+def _extract_collection_heuristic(soup, base_url: str) -> list[ExtractedProduct]:
+    """Fallback: look for elements matching common product-card class
+    patterns that contain both a link and a price-shaped text node."""
+    import re as _re
+    products: list[ExtractedProduct] = []
+    seen_urls: set[str] = set()
+    candidates = soup.select(
+        '[class*="product-card"], [class*="product-item"], '
+        '[class*="ProductCard"], [class*="ProductItem"], '
+        'li[class*="product"], article[class*="product"]'
+    )
+    price_re = _re.compile(r'(?:€|£|\$|USD|EUR|GBP)\s*\d[\d.,]*|\d[\d.,]*\s*(?:€|£|\$|USD|EUR|GBP)')
+    for el in candidates:
+        link = el.find("a", href=True)
+        if not link:
+            continue
+        url = _absolute_url(link.get("href"), base_url)
+        if not url or url in seen_urls:
+            continue
+        # Name = first non-empty text node (often the link text or an h2/h3)
+        name_el = el.find(["h1", "h2", "h3", "h4"]) or link
+        name = " ".join(name_el.get_text(separator=" ", strip=True).split())[:200]
+        if not name:
+            continue
+        # Price = first price-shaped match anywhere in the card text
+        card_text = " ".join(el.get_text(separator=" ", strip=True).split())
+        m = price_re.search(card_text)
+        price = m.group(0).strip() if m else None
+        # Image
+        img = el.find("img")
+        image = _absolute_url(img.get("src"), base_url) if img and img.get("src") else None
+        products.append(ExtractedProduct(
+            name=name,
+            price=price,
+            url=url,
+            image=image,
+        ))
+        seen_urls.add(url)
+    return products
+
+
+def _collection_name_from_dom(soup, url: str) -> str:
+    """Pick a sensible name for the collection from the page itself.
+    Priority: <h1> → <title> minus site name → URL slug."""
+    h1 = soup.find("h1")
+    if h1:
+        txt = " ".join(h1.get_text(separator=" ", strip=True).split())
+        if txt:
+            return txt[:200]
+    title = soup.find("title")
+    if title:
+        txt = " ".join(title.get_text(separator=" ", strip=True).split())
+        # Strip common "| Site Name" or "— Site Name" suffixes
+        for sep in [" | ", " — ", " - ", " · "]:
+            if sep in txt:
+                txt = txt.split(sep, 1)[0]
+                break
+        if txt:
+            return txt[:200]
+    # Slug fallback
+    import urllib.parse
+    try:
+        path = urllib.parse.urlparse(url).path.rstrip("/")
+        slug = path.rsplit("/", 1)[-1]
+        return slug.replace("-", " ").replace("_", " ").title() or url
+    except Exception:
+        return url
+
+
+@router.post("/extract-collection-list", response_model=ExtractCollectionResponse)
+def execute_extract_collection_list(req: ExtractCollectionRequest):
+    """Parse a collection page into a structured product list."""
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+    except Exception as e:
+        raise HTTPException(500, f"Missing deps: {e}")
+
+    try:
+        with httpx.Client(
+            timeout=req.timeout,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; jBKB-RAG/1.0)"},
+        ) as client:
+            resp = client.get(req.url)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as e:
+        return ExtractCollectionResponse(
+            collection_name="",
+            products=[],
+            summary_text="",
+            strategy="fetch_failed",
+            error=f"{e}",
+        )
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Apply exclude_selectors before heuristic parsing — operator's
+    # tuned cookie-banner / footer selectors get stripped so the
+    # heuristic doesn't pick up product-shaped noise from chrome.
+    for sel in req.exclude_selectors:
+        if not isinstance(sel, str) or not sel.strip():
+            continue
+        try:
+            for el in soup.select(sel):
+                el.decompose()
+        except Exception:
+            pass
+
+    # Strategy 1: JSON-LD
+    products, jsonld_name = _extract_collection_jsonld(soup, req.url)
+    strategy = "jsonld" if products else ""
+
+    # Strategy 2: Heuristic DOM walk
+    if not products:
+        products = _extract_collection_heuristic(soup, req.url)
+        if products:
+            strategy = "heuristic"
+
+    collection_name = jsonld_name or _collection_name_from_dom(soup, req.url)
+
+    if not products:
+        return ExtractCollectionResponse(
+            collection_name=collection_name,
+            products=[],
+            summary_text="",
+            strategy="no_products_found",
+            error="Could not find product entries via JSON-LD or heuristic DOM walk. Page may not be a collection page, or its template uses non-standard markup.",
+        )
+
+    # Build the embedded summary text — collection name, product
+    # count, then one line per product. Format optimised for the
+    # LLM-reading-it-back case AND for embedding the right keywords.
+    lines = [f"{collection_name} — {len(products)} product{'s' if len(products) != 1 else ''}:"]
+    for p in products:
+        bits = [p.name]
+        if p.price:
+            currency = p.price_currency or ""
+            bits.append(f"{currency}{p.price}".strip())
+        if p.url:
+            bits.append(p.url)
+        lines.append(" — ".join(bits))
+    summary_text = "\n".join(lines)
+
+    return ExtractCollectionResponse(
+        collection_name=collection_name,
+        products=products,
+        summary_text=summary_text,
+        strategy=strategy,
+    )
