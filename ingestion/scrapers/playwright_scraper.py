@@ -313,6 +313,20 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     if config.get("expand_collapsibles", True):
         _expand_collapsibles(page)
 
+    # Per-item click pass — catches Radix / Headless UI / Shadcn
+    # Accordion components in type="single" mode where only ONE item
+    # per section can be open at a time (clicking the next closes the
+    # previous). Bulk-click via _expand_collapsibles only reveals a
+    # handful of items in this pattern; we need to walk each button,
+    # capture the now-visible content panel, then move on.
+    #
+    # Activated by `accordion_per_item: true` in scraper config — set
+    # by jBKB for FAQ-table sources where coverage matters more than
+    # the ~15s extra cost per page. Appends a clean "Q\nA" buffer to
+    # the page that the subsequent inner_text() picks up.
+    if config.get("accordion_per_item", False):
+        _expand_accordion_per_item(page)
+
     # Capture CMP text BEFORE stripping — once _BASELINE_STRIP runs
     # those elements are gone. Cheap (one querySelectorAll per page).
     cmp_text = _extract_cmp_text(page, _BASELINE_CMP_STRIP)
@@ -470,6 +484,149 @@ _EXPAND_SELECTORS = (
     'h4[role="button"][aria-expanded]',
     'h5[role="button"][aria-expanded]',
 )
+
+
+def _expand_accordion_per_item(page) -> None:
+    """For Radix / Headless UI / Shadcn-style Accordion components in
+    `type="single"` mode where only one item per section can be open
+    at a time, AND where the content panel is lazy-mounted (Svelte
+    `{#if}`, React conditional render) rather than CSS-hidden.
+
+    Bulk .click() via _expand_collapsibles fails on these because:
+      1. Clicking item N closes item N-1 in the same section.
+      2. Content lives in a separate panel that only mounts after
+         the click event fires — CSS `display:revert` can't reveal
+         what isn't in the DOM yet.
+
+    Strategy: iterate every remaining [aria-expanded="false"] button
+    (or [data-state="closed"] trigger), click it, wait briefly for
+    the panel to mount, then DOM-inject the panel's text into a
+    sentinel <div id="__faq_accordion_buffer__"> at the bottom of
+    the page. Subsequent inner_text() on <body> includes this buffer,
+    so the LLM extractor sees every Q+A pair regardless of which
+    item happens to be expanded at snapshot time.
+
+    Heyharper (Svelte + Radix-style Accordion, three CEs × 79 items
+    per page) was the prompting case: bulk-click produced ~17 pairs;
+    per-item walk produces ~79.
+
+    Cost: ~150-200ms per button (click + settle + extract). ~15s for
+    a 75-item FAQ. Acceptable for the FAQ extraction path (manually
+    triggered, not on every routine pipeline run).
+    """
+    try:
+        # Create a sentinel container at the bottom of <body>. Anything
+        # we drop in here becomes part of the page's innerText at
+        # extraction time.
+        page.evaluate("""() => {
+            let buf = document.getElementById('__faq_accordion_buffer__');
+            if (!buf) {
+                buf = document.createElement('div');
+                buf.id = '__faq_accordion_buffer__';
+                buf.setAttribute('data-faq-buffer', 'true');
+                document.body.appendChild(buf);
+            } else {
+                buf.innerHTML = '';
+            }
+        }""")
+
+        # Snapshot button handles — live NodeList would change as we
+        # click, breaking the iteration. Use Playwright handles so we
+        # can use native .click() (correct event sequence) per item.
+        button_handles = page.locator(
+            '[aria-expanded="false"], [data-state="closed"]'
+        ).element_handles()
+        if not button_handles:
+            return
+        # Pre-fetch each button's question text so we can match the
+        # answer back even after clicks reorder data-state attributes.
+        processed = 0
+        captured = 0
+        skipped_short = 0
+        click_failed = 0
+        for btn in button_handles:
+            try:
+                # ElementHandle.inner_text() takes no kwargs — distinct
+                # from Locator.inner_text(timeout=...). Use the bare
+                # form so we don't bail out on every iteration.
+                question = btn.inner_text().strip()
+                if not question or len(question) < 4:
+                    skipped_short += 1
+                    continue
+                processed += 1
+                # Native click — fires focus + pointerdown + click,
+                # which Radix's onPointerDown handler listens for.
+                # force=True skips actionability checks (animation
+                # interceptions, focus stealing); no_wait_after avoids
+                # an extra animation-settle wait we don't need.
+                try:
+                    btn.click(timeout=1500, no_wait_after=True, force=True)
+                except Exception:
+                    # Some triggers refuse a programmatic click; try
+                    # dispatching pointerdown explicitly.
+                    try:
+                        btn.evaluate("(el) => { el.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true})); el.dispatchEvent(new MouseEvent('click', {bubbles: true})); }")
+                    except Exception:
+                        click_failed += 1
+                        continue
+                # Give the panel time to mount + animate in. Radix
+                # uses ~150ms slide animations; 220ms is enough.
+                page.wait_for_timeout(220)
+                # Walk up from the button to the nearest enclosing
+                # AccordionItem-shaped container (the element whose
+                # data-state flipped to 'open' OR the closest parent
+                # whose innerText contains both Q + new content) and
+                # grab its full innerText.
+                container_text = btn.evaluate(
+                    """(el) => {
+                        // Walk up to find the AccordionItem container.
+                        let p = el;
+                        for (let i = 0; i < 6 && p && p.tagName !== 'BODY'; i++) {
+                            if (p.getAttribute && (p.getAttribute('data-state') === 'open'
+                                || p.querySelector('[data-state="open"]'))) {
+                                return p.innerText || '';
+                            }
+                            p = p.parentElement;
+                        }
+                        // Fallback: button's parent's innerText (Q + A).
+                        return (el.parentElement && el.parentElement.innerText) || el.innerText || '';
+                    }"""
+                )
+                if container_text and container_text.strip():
+                    captured += 1
+                    # Append "Q\nA\n\n" so the LLM sees a clean
+                    # question-then-answer block per pair. The
+                    # container_text usually already contains the
+                    # question as its first line; if not, we prepend
+                    # it explicitly.
+                    text = container_text.strip()
+                    if not text.startswith(question):
+                        text = f"{question}\n{text}"
+                    # Inject into the sentinel buffer at the bottom
+                    # of <body> so the subsequent inner_text() picks
+                    # it up regardless of which items remain open in
+                    # the actual accordion DOM after we move on.
+                    page.evaluate(
+                        """(payload) => {
+                            const buf = document.getElementById('__faq_accordion_buffer__');
+                            if (buf) {
+                                const p = document.createElement('div');
+                                p.textContent = payload + '\\n\\n';
+                                buf.appendChild(p);
+                            }
+                        }""",
+                        text,
+                    )
+            except Exception:
+                # Per-button failures are tolerated — we want the
+                # rest of the buttons to still get processed.
+                continue
+        # One-line summary so operators can spot under-coverage in
+        # the Python service logs (e.g. captured << processed means
+        # something's off with the click-and-capture sequence).
+        print(f"[playwright_scraper] accordion_per_item: processed={processed} captured={captured} short={skipped_short} click_failed={click_failed}")
+    except Exception as e:
+        print(f"[playwright_scraper] WARNING: accordion_per_item failed: {e}")
 
 
 def _expand_collapsibles(page) -> None:
