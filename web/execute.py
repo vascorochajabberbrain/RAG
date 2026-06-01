@@ -1975,7 +1975,10 @@ def execute_probe_pdf(req: ProbePdfRequest):
 class ExtractCollectionRequest(BaseModel):
     """Single-URL collection-page extraction."""
     url: str
-    timeout: float = 15.0
+    # 30s for httpx; Playwright fallback uses timeout*2 = 60s. See
+    # ExtractProductRequest for the rationale (concurrent Chromium
+    # contention under batch runner).
+    timeout: float = 30.0
     # exclude_selectors passed through for parity with /fetch — we
     # strip these elements before heuristic DOM walking so the same
     # "remove cookie banner" config that the operator tuned for
@@ -2435,7 +2438,11 @@ def execute_extract_collection_list(req: ExtractCollectionRequest):
 
 class ExtractProductRequest(BaseModel):
     url: str
-    timeout: float = 15.0
+    # 30s for httpx; Playwright fallback uses timeout*2 = 60s. The
+    # previous defaults (15 + 30) starved heavy JS pages when several
+    # ran in parallel under the batch runner's concurrency=5 worker
+    # pool — Chromium contention plus first-byte delays added up.
+    timeout: float = 30.0
     exclude_selectors: list[str] = Field(default_factory=list)
 
 
@@ -2693,7 +2700,12 @@ def execute_extract_product_details(req: ExtractProductRequest):
 
     fields, strategy = _parse(html)
 
-    # Stage 2: Playwright fallback for JS-rendered storefronts
+    # Stage 2: Playwright fallback for JS-rendered storefronts. Soft
+    # failure mode — when Playwright times out (heavy page + Chromium
+    # contention under batch concurrency), fall through to a slug-
+    # derived name instead of failing the whole source. Operator gets
+    # SOMETHING in Qdrant (URL + slug-name chunk) which is better than
+    # a hard 'failed' that excludes the page from retrieval entirely.
     if not fields.get("name"):
         try:
             rendered = _playwright_render_html(req.url, req.exclude_selectors, req.timeout * 2)
@@ -2701,13 +2713,31 @@ def execute_extract_product_details(req: ExtractProductRequest):
             if fields.get("name"):
                 strategy = f"playwright_{strategy_pw}"
         except Exception as e:
-            return ExtractProductResponse(
-                name="",
-                url=req.url,
-                summary_text="",
-                strategy="playwright_failed",
-                error=f"httpx parse found no product; Playwright fallback failed: {e}",
-            )
+            # Try slug-derived name. If even that fails (no path) →
+            # hard fail.
+            import urllib.parse
+            try:
+                path = urllib.parse.urlparse(req.url).path.rstrip("/")
+                slug = path.rsplit("/", 1)[-1]
+                slug_name = slug.replace("-", " ").replace("_", " ").strip().title() if slug else ""
+            except Exception:
+                slug_name = ""
+            if slug_name:
+                fields = {"name": slug_name}
+                strategy = "playwright_failed_slug_fallback"
+                # Don't return error — let the source push with the
+                # slug-based name. Log the Playwright failure as a
+                # diagnostic in the strategy field so the operator can
+                # see it from the pipeline summary.
+                print(f"WARN: Playwright failed for {req.url} — using slug fallback. Error: {e}")
+            else:
+                return ExtractProductResponse(
+                    name="",
+                    url=req.url,
+                    summary_text="",
+                    strategy="playwright_failed",
+                    error=f"httpx parse found no product; Playwright fallback failed AND URL has no slug: {e}",
+                )
 
     if not fields.get("name"):
         return ExtractProductResponse(
