@@ -2623,17 +2623,50 @@ def _extract_product_heuristic(soup, base_url: str) -> dict:
         if desc:
             out["description"] = desc[:800]
 
-    # Image
-    img_el = soup.select_one(
-        '[class*="product-image"] img, [class*="ProductImage"] img, '
-        'picture img, [itemprop="image"]'
-    )
-    if img_el:
-        src = img_el.get("src") or img_el.get("data-src")
-        if not src and img_el.get("srcset"):
-            src = img_el["srcset"].split(",")[0].strip().split()[0]
-        if src:
-            out["image"] = _absolute_url(src, base_url)
+    # Image — try in priority order:
+    #   1. og:image meta tag (almost every modern product page has this,
+    #      lives in static HTML even on JS-rendered storefronts because
+    #      it's needed for social previews / SEO crawlers)
+    #   2. twitter:image meta tag (same logic; secondary fallback)
+    #   3. JSON-LD-style itemprop="image"
+    #   4. Common product-image class patterns (Shopify themes etc)
+    #   5. Generic <picture> or first <img> within <main>/<article>
+    og = soup.find("meta", attrs={"property": "og:image"})
+    if og and og.get("content"):
+        out["image"] = _absolute_url(og["content"], base_url)
+    if "image" not in out:
+        tw = soup.find("meta", attrs={"name": "twitter:image"})
+        if tw and tw.get("content"):
+            out["image"] = _absolute_url(tw["content"], base_url)
+    if "image" not in out:
+        ip = soup.select_one('[itemprop="image"]')
+        if ip:
+            src = ip.get("content") or ip.get("src") or ip.get("href")
+            if src:
+                out["image"] = _absolute_url(src, base_url)
+    if "image" not in out:
+        img_el = soup.select_one(
+            '[class*="product-image"] img, [class*="ProductImage"] img, '
+            '[class*="product__media"] img, [class*="product-gallery"] img, '
+            '[class*="ProductGallery"] img, [class*="product-media"] img, '
+            '[class*="featured-image"] img, [class*="hero-image"] img, '
+            'picture img'
+        )
+        if img_el:
+            src = img_el.get("src") or img_el.get("data-src")
+            if not src and img_el.get("srcset"):
+                src = img_el["srcset"].split(",")[0].strip().split()[0]
+            if src:
+                out["image"] = _absolute_url(src, base_url)
+    if "image" not in out:
+        # Last resort — first <img> within <main> or <article>
+        main_img = soup.select_one('main img, article img')
+        if main_img:
+            src = main_img.get("src") or main_img.get("data-src")
+            if not src and main_img.get("srcset"):
+                src = main_img["srcset"].split(",")[0].strip().split()[0]
+            if src:
+                out["image"] = _absolute_url(src, base_url)
     return out
 
 
