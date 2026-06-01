@@ -2444,6 +2444,16 @@ class ExtractProductRequest(BaseModel):
     # pool — Chromium contention plus first-byte delays added up.
     timeout: float = 30.0
     exclude_selectors: list[str] = Field(default_factory=list)
+    # When true AND httpx parse yields no image (or only a generic
+    # site-wide og:image — e.g. /og.png), escalate to a Playwright
+    # render to capture the per-product image after JS hydration.
+    # Cost: ~7-10s extra per product, paid at INGEST (one-time);
+    # ZERO retrieval cost since the image lands in the chunk payload.
+    # Driven per-kind by rag_page_kinds.playwright_for_image — Node
+    # passes through. Defaults false here so direct API callers don't
+    # accidentally pay the latency; jBKB's pipeline sets it from the
+    # kind config.
+    playwright_for_image: bool = False
 
 
 class ExtractedAttribute(BaseModel):
@@ -2780,6 +2790,97 @@ def execute_extract_product_details(req: ExtractProductRequest):
             strategy="no_product_found",
             error="Could not extract product name via JSON-LD or heuristic DOM walk, even after Playwright rendering. Page may not be a product page or its template uses non-standard markup.",
         )
+
+    # Stage 3: image-only Playwright escalation. When the request
+    # opts in (playwright_for_image=true, set per-kind via
+    # rag_page_kinds.playwright_for_image) AND httpx's parse left
+    # the image field empty OR landed on a generic site-wide
+    # og:image (filename doesn't contain the product slug — a
+    # common signal that the storefront serves a default social
+    # card instead of a per-product image), render the page in
+    # Chromium and re-run the image extraction.
+    #
+    # Why a separate stage: most stores serve per-product og:image
+    # in static HTML, so they exit at Stage 1 with the right image
+    # and zero Playwright cost. Custom Hydrogen/Svelte storefronts
+    # (Heyharper) only have the image post-JS, so they need this
+    # escalation. Operator controls via the per-kind flag.
+    if req.playwright_for_image:
+        import urllib.parse
+        try:
+            slug = urllib.parse.urlparse(req.url).path.rstrip("/").rsplit("/", 1)[-1].lower()
+        except Exception:
+            slug = ""
+        cur_img = fields.get("image") or ""
+        # Generic-image sniffer — image is suspect if the filename
+        # doesn't include the product slug. Heyharper's
+        # /og.png case + most "site-wide social card" cases match.
+        looks_generic = False
+        if cur_img:
+            try:
+                img_path = urllib.parse.urlparse(cur_img).path.lower()
+                img_filename = img_path.rsplit("/", 1)[-1]
+                # Common site-wide og:image filenames or default
+                # patterns. If the slug isn't a substring of the
+                # image filename / path, treat it as generic.
+                if slug and slug not in img_path:
+                    if any(token in img_filename for token in ("og.", "default", "share", "social")):
+                        looks_generic = True
+                    elif slug and slug not in img_filename:
+                        # Slug not in path at all — could still be
+                        # the right per-product image (Shopify CDN
+                        # uses hashed filenames). Don't escalate
+                        # unless there are also strong "generic"
+                        # signals; safer to keep what we have.
+                        pass
+            except Exception:
+                pass
+        needs_escalation = (not cur_img) or looks_generic
+        if needs_escalation:
+            try:
+                rendered = _playwright_render_html(req.url, req.exclude_selectors, req.timeout * 2)
+                rs = BeautifulSoup(rendered, "html.parser")
+                # SKIP og:image / twitter:image — they're static in
+                # <head> and don't change after JS renders. Look only
+                # at DOM-level <img> tags, which post-render contain
+                # the actual product image.
+                rendered_image: str | None = None
+                img_el = rs.select_one(
+                    '[class*="product-image"] img, [class*="ProductImage"] img, '
+                    '[class*="product__media"] img, [class*="product-gallery"] img, '
+                    '[class*="ProductGallery"] img, [class*="product-media"] img, '
+                    '[class*="featured-image"] img, [class*="hero-image"] img, '
+                    '[itemprop="image"]'
+                )
+                if img_el:
+                    src = img_el.get("src") or img_el.get("data-src") or img_el.get("content")
+                    if not src and img_el.get("srcset"):
+                        src = img_el["srcset"].split(",")[0].strip().split()[0]
+                    if src:
+                        rendered_image = _absolute_url(src, req.url)
+                if not rendered_image:
+                    # Fallback: first <img> within <main>/<article>/
+                    # <picture> whose src isn't a logo/icon/placeholder.
+                    candidates = rs.select('main img, article img, picture img')
+                    for cand in candidates:
+                        src = cand.get("src") or cand.get("data-src")
+                        if not src and cand.get("srcset"):
+                            src = cand["srcset"].split(",")[0].strip().split()[0]
+                        if not src:
+                            continue
+                        src_lower = src.lower()
+                        if any(t in src_lower for t in ("logo", "icon", "favicon", "sprite", "placeholder")):
+                            continue
+                        rendered_image = _absolute_url(src, req.url)
+                        break
+                if rendered_image:
+                    fields["image"] = rendered_image
+                    strategy = f"{strategy}+pw_image"
+            except Exception as e:
+                # Soft fail — keep the original (possibly generic)
+                # image rather than nuking it. Operator gets a WARN
+                # log; the source still pushes successfully.
+                print(f"WARN: Playwright image escalation failed for {req.url} — keeping httpx image. Error: {e}")
 
     # Build embed-friendly summary text. Format: name + price line,
     # then description, then any attributes joined as "key: value" lines.
