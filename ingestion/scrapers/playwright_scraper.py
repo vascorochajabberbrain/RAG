@@ -323,7 +323,16 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     # Expand FAQ accordions / <details> / Bootstrap collapsibles etc.
     # BEFORE text extraction so Pattern B/C sites (content hidden via
     # display:none or JS-loaded on click) contribute their answers too.
-    if config.get("expand_collapsibles", True):
+    #
+    # SKIPPED when accordion_per_item is enabled: the bulk pass would
+    # silently open ~15-20 items in Radix-style accordions, which then
+    # disappear from the per-item walk's enumeration (it filters for
+    # [aria-expanded="false"]). On HH that dropped per-item coverage
+    # from 77 to 62 pairs per page. The per-item walk handles the
+    # whole accordion universe by itself, so the bulk pass is redundant
+    # for FAQ extraction and harmful to coverage.
+    per_item_mode = config.get("accordion_per_item", False)
+    if config.get("expand_collapsibles", True) and not per_item_mode:
         _expand_collapsibles(page)
 
     # Per-item click pass — catches Radix / Headless UI / Shadcn
@@ -340,7 +349,7 @@ def _fetch_and_extract_pair(page, url: str, config: dict) -> tuple:
     # a structured list of {question, answer} pairs that the FAQ
     # extraction path uses verbatim (bypassing the LLM entirely).
     structured_faq_pairs: list = []
-    if config.get("accordion_per_item", False):
+    if per_item_mode:
         structured_faq_pairs = _expand_accordion_per_item(page) or []
 
     # Capture CMP text BEFORE stripping — once _BASELINE_STRIP runs
