@@ -2845,7 +2845,13 @@ def execute_extract_product_details(req: ExtractProductRequest):
                 # at DOM-level <img> tags, which post-render contain
                 # the actual product image.
                 rendered_image: str | None = None
+                # Primary selectors (cover common Shopify/WooCommerce
+                # patterns + Svelte galleries like Heyharper's
+                # `.gallery-container`). First match wins, so the
+                # in-page product gallery beats recommended-product
+                # carousels further down the DOM.
                 img_el = rs.select_one(
+                    '.gallery-container img, '
                     '[class*="product-image"] img, [class*="ProductImage"] img, '
                     '[class*="product__media"] img, [class*="product-gallery"] img, '
                     '[class*="ProductGallery"] img, [class*="product-media"] img, '
