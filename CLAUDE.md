@@ -139,6 +139,23 @@ Sites with Yoast SEO expose clean sitemaps. Use `sitemap.xml` to get all URLs, t
 ### Elementor sites (e.g. Peixe Fresco):
 Standard CSS selectors often don't work — content lives in separate Elementor widget containers. Use `custom_js_extraction` in the YAML config: provide a JS function that runs in the browser and returns a fields dict. See `peixefresco_recipes.yaml` as reference.
 
+### Per-source extraction overrides — long-tail client quirks
+> Architectural direction decided 2026-06-01. Implementation pending — see Open Questions.
+
+The default dispatch is **per-kind** (`general`/`collection`/`product`/`policy`) — generic extractors in `web/execute.py` keyed by `rag_page_kinds.extractor_name`. Covers most Shopify/WooCommerce/Webflow stores out of the box.
+
+The long-tail (custom headless storefronts, hydration races, non-standard markup, lazy galleries, auth-gated content) is handled with **per-source YAML overrides** in `ingestion/scrapers/configs/<site>.yaml`. A source in jBKB carries a `scraper_config_name` (or equivalent) pointing at one of these YAMLs; the Python dispatcher applies the YAML's overrides on top of the per-kind defaults at extract time.
+
+**What goes in the YAML** (extends the existing schema used by `peixe_fresco_products.yaml` etc.):
+- `structured_extraction:` — per-field CSS selectors that override the kind's defaults
+- `custom_js_extraction:` — JS snippet executed in the browser, returns fields dict (for sites where CSS can't reach the data)
+- `playwright_wait:` — per-site wait directives (e.g. `wait_for_selector: ".product-gallery img[src*='cdn.shopify']"`) to handle hydration races
+- `api_shortcut:` — declare a JSON endpoint (e.g. Shopify Storefront API) the extractor should hit instead of scraping HTML
+- `engine:` — force `playwright` / `httpx` / `shopify_json` for this source
+- `attribute_rows:` — table-row-to-field mapping (already used by Peixe Fresco)
+
+**Hard rule**: do NOT add `if host == "heyharper":` branches inside the generic per-kind extractors. Site-specific knowledge belongs in the YAML, not the Python.
+
 ---
 
 ## Peixe Fresco (store.peixefresco.com.pt) — Site Analysis
@@ -228,6 +245,8 @@ python -m workflow.cli     # Guided CLI workflow
 - [ ] Define API contract: how Session Engine calls this RAG layer (HTTP endpoint? direct Python import?)
 - [ ] Future: integrate two-step routing in Session Engine using jBKB routing metadata
 - [ ] Future: migrate Hey Harper collections to new scraper (currently legacy Selenium data)
+- [ ] **Per-source extraction overrides** (architectural direction set 2026-06-01) — add a `scraper_config_name` (or equivalent) field on jBKB's `rag_sources`, plumb it through `/api/execute/extract-*` request bodies, and have the Python dispatcher merge the named YAML's overrides on top of the per-kind defaults. Schema extensions to design: `playwright_wait`, `api_shortcut`, per-field `structured_extraction` override, etc. See "Per-source extraction overrides" in Scraping Strategy.
+- [ ] **Hey Harper product images via Shopify Storefront API** — HH is a SvelteKit-on-Vercel custom storefront fronting Shopify; their `/products/*.json` routes are intercepted and Playwright DOM snapshots race the client-side hydration that swaps gallery images. Stage 3 Playwright escalation (`playwright_for_image` on the product kind) lands a plausible image but it's not reliably the right one. Fix path: route HH's product extractor at the Shopify Storefront API (auth'd, deterministic, includes the canonical image set). Implement as a per-source override (`api_shortcut: shopify_storefront`) once the per-source override system is in place.
 - [ ] **Source grouping in Analyse Site wizard** — Add a "Source" layer inside collections so pages/URLs are grouped by source (e.g. one source per sitemap, PDF, or external website). Each source carries its own scraper config, engine, and login credentials. Enables multi-website collections with different auth. Auto-create a "Default" source when first assigning pages. Migration: wrap existing flat `collection.pages` arrays in a default source object in `.wizard_state_*.json`. No Qdrant reprocessing needed — data model change only. *(Parked 2026-03-04, revisit Saturday 2026-03-07)*
 
 ### Peixe Fresco — Collection Status (as of 2026-02-25)
@@ -258,6 +277,7 @@ wiping existing ones — used for Run 2 (PDF) after Run 1 (website scrape).
 - **New scrapers**: add a YAML in `ingestion/scrapers/configs/`, use Playwright (default) unless site is confirmed SSR.
 - **Selenium**: archived as `url_ingestion_legacy.py`. Do not use for new work.
 - **Elementor sites**: use `custom_js_extraction` in YAML — provide a JS function returning a fields dict.
+- **Client-specific quirks go in YAML, not Python**: per-kind extractors in `web/execute.py` stay generic. Site-specific selectors / waits / API shortcuts belong in a per-source YAML under `ingestion/scrapers/configs/`. Never branch on hostname inside an extractor. See "Per-source extraction overrides" in Scraping Strategy.
 - **Filters**: implement in `ingestion/scrapers/filters.py`, register by name, apply in CLEAN step.
 - **LLM models**: GPT-4o-mini for processing steps, GPT-4o for final answers.
 - **Versioning**: bump the `VERSION` file on meaningful changes. Major (`X.0.0`) for breaking/architectural changes. Minor (`0.X.0`) for new features or significant UI changes. Patch (`0.0.X`) for bug fixes, small tweaks, config changes. The version is displayed in the web UI header and exposed via `/api/version`.
