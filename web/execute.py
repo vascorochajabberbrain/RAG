@@ -166,6 +166,14 @@ class PushRequest(BaseModel):
     recreate_collection: bool = False  # True = delete + create fresh; False = append
     skip_urls: list[str] = Field(default_factory=list)  # URLs to skip (manually edited)
     excluded_urls: list[str] = Field(default_factory=list)  # URLs permanently excluded
+    # Per-chunk structured metadata stuffed into the Qdrant point's
+    # payload.metadata field. When provided, must have the same length
+    # as `chunks` (or be empty for the no-metadata case). Used by the
+    # structured extractors (collection_list, product_details) to ship
+    # the parsed product fields alongside the embedded text so jBSE
+    # can do faceted retrieval ("products under €30", "list bracelets
+    # in stock") without LLM prose parsing.
+    chunk_metadata: list[dict] = Field(default_factory=list)
 
 
 class PushResponse(BaseModel):
@@ -465,6 +473,41 @@ def execute_push(req: PushRequest):
     temp_coll = SCS_Collection(name)
     temp_coll.append_sentences(chunks, req.source_label, scraped_items=items)
     points = temp_coll.points_to_save(model_id=embedding_model)
+
+    # Attach structured per-chunk metadata (when provided by the
+    # caller — typically the kind=collection/product extractor branch
+    # in Node API). Stored under payload.metadata so jBSE retrieval
+    # can read structured fields (price, sku, in_stock, products list,
+    # etc.) without LLM prose parsing. The metadata list must align
+    # 1:1 with the post-filter chunks list — if scraped_items got
+    # filtered above (skip/excluded URLs), we filter the metadata
+    # the same way using the same predicate. For single-chunk
+    # extractor flows this is trivial (one chunk, one metadata dict);
+    # multi-chunk callers must pre-align.
+    if req.chunk_metadata:
+        # Filter metadata in lockstep with items/chunks if a skip
+        # filter was applied above.
+        if (req.skip_urls or req.excluded_urls) and req.scraped_items:
+            skip_set = set(req.skip_urls + req.excluded_urls)
+            md_filtered: list[dict] = []
+            for it, md in zip(req.scraped_items, req.chunk_metadata):
+                if it.get("url") not in skip_set:
+                    md_filtered.append(md)
+            metadata_list = md_filtered
+        else:
+            metadata_list = list(req.chunk_metadata)
+        # Attach: zip(points, metadata_list) — if lengths mismatch we
+        # attach what we can and skip the rest (caller bug; logged).
+        for pt, md in zip(points, metadata_list):
+            if isinstance(md, dict) and md:
+                # Existing payload is built by item.to_payload — we
+                # nest the structured metadata under a `metadata` key
+                # so it doesn't collide with the standard
+                # source_url/text/source fields jBSE already reads.
+                pt.payload = {**(pt.payload or {}), "metadata": md}
+        if len(points) != len(metadata_list):
+            print(f"WARN: chunks/metadata length mismatch — points={len(points)} metadata={len(metadata_list)}; extras ignored")
+
     tracker.append_points_to_collection(name, points)
 
     return PushResponse(
@@ -1959,6 +2002,11 @@ class ExtractCollectionResponse(BaseModel):
     # the list, or why it came back empty.
     strategy: str = ""
     error: str | None = None
+    # Structured metadata for the Qdrant point payload — same contract
+    # as the product extractor. jBSE reads point.payload.metadata to
+    # power list-shaped answers ("what bracelets do you sell?") without
+    # LLM prose parsing of the chunk text.
+    metadata: dict = Field(default_factory=dict)
 
 
 def _absolute_url(href: str | None, base: str) -> str | None:
@@ -2331,11 +2379,48 @@ def execute_extract_collection_list(req: ExtractCollectionRequest):
         lines.append(" — ".join(bits))
     summary_text = "\n".join(lines)
 
+    # Structured metadata — same shape concept as the product
+    # extractor's payload but with a products[] array instead of
+    # individual fields. jBSE reading point.payload.metadata.products
+    # gets a ready-to-render list of {name, price, url, image}.
+    import re as _re
+    def _price_numeric(p: str | None) -> float | None:
+        if not p:
+            return None
+        m = _re.search(r'\d[\d.,]*', p)
+        if not m:
+            return None
+        try:
+            return float(m.group(0).replace(",", "."))
+        except Exception:
+            return None
+
+    metadata = {
+        "kind": "collection",
+        "collection_name": collection_name,
+        "url": req.url,
+        "product_count": len(products),
+        "extractor_strategy": strategy,
+        "products": [
+            {
+                "name": p.name,
+                "price": p.price,
+                "price_numeric": _price_numeric(p.price),
+                "price_currency": p.price_currency,
+                "url": p.url,
+                "image": p.image,
+            }
+            for p in products
+        ],
+    }
+    metadata = {k: v for k, v in metadata.items() if v is not None}
+
     return ExtractCollectionResponse(
         collection_name=collection_name,
         products=products,
         summary_text=summary_text,
         strategy=strategy,
+        metadata=metadata,
     )
 
 
@@ -2378,6 +2463,13 @@ class ExtractProductResponse(BaseModel):
     summary_text: str = ""
     strategy: str = ""
     error: str | None = None
+    # Structured metadata ready for the Qdrant point payload. Node-API
+    # forwards this verbatim as chunk_metadata[0] when calling /push so
+    # the resulting Qdrant point carries point.payload.metadata = this
+    # dict. jBSE retrieval reads point.payload.metadata.* to power
+    # faceted answers without LLM prose parsing. Schema is intentionally
+    # flat + JSON-friendly (no nested objects beyond price_numeric).
+    metadata: dict = Field(default_factory=dict)
 
 
 def _extract_product_jsonld(soup, base_url: str) -> dict | None:
@@ -2648,9 +2740,44 @@ def execute_extract_product_details(req: ExtractProductRequest):
         lines.append(fields["description"])
     summary_text = "\n".join(lines)
 
+    # Try to coerce price → float for faceted filtering downstream
+    # (e.g. "products under €30"). Keep both: numeric for filter +
+    # original string for display. Best-effort — non-numeric prices
+    # (e.g. "From €25") skip the numeric field.
+    import re as _re
+    price_numeric: float | None = None
+    if fields.get("price"):
+        m = _re.search(r'\d[\d.,]*', str(fields["price"]))
+        if m:
+            try:
+                price_numeric = float(m.group(0).replace(",", "."))
+            except Exception:
+                price_numeric = None
+
+    handle = _handle_from_url(req.url)
+    metadata = {
+        "kind": "product",
+        "name": fields["name"],
+        "handle": handle,
+        "url": req.url,
+        "price": fields.get("price"),
+        "price_numeric": price_numeric,
+        "price_currency": fields.get("price_currency"),
+        "description": fields.get("description"),
+        "image": fields.get("image"),
+        "sku": fields.get("sku"),
+        "brand": fields.get("brand"),
+        "in_stock": fields.get("in_stock"),
+        "availability": fields.get("availability"),
+        "extractor_strategy": strategy,
+    }
+    # Drop None values so jBSE never has to type-guard `if x is not None`
+    # — only present keys are meaningful.
+    metadata = {k: v for k, v in metadata.items() if v is not None}
+
     return ExtractProductResponse(
         name=fields["name"],
-        handle=_handle_from_url(req.url),
+        handle=handle,
         price=fields.get("price"),
         price_currency=fields.get("price_currency"),
         description=fields.get("description"),
@@ -2663,4 +2790,5 @@ def execute_extract_product_details(req: ExtractProductRequest):
         url=req.url,
         summary_text=summary_text,
         strategy=strategy,
+        metadata=metadata,
     )
