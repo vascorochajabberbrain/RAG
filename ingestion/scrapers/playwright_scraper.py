@@ -556,13 +556,18 @@ def _expand_accordion_per_item(page) -> list:
     structured_pairs: list = []
     try:
         # Phase 1: ENUMERATE every accordion trigger's question text
-        # before any clicks happen. This gives us a fixed expected-
-        # count that we can compare against captured pairs at the end
-        # so under-coverage is visible in logs.
+        # before any clicks happen. Critically, we include ALREADY-
+        # OPEN triggers ([aria-expanded="true"] / [data-state="open"])
+        # too — some sites have one item per section open by default,
+        # and the previous closed-only filter dropped those entirely
+        # (Heyharper EU was missing "What currencies do you accept?"
+        # this way). Phase 2 handles already-open items by capturing
+        # content immediately instead of clicking.
         expected_questions = page.evaluate(
             """() => {
                 const triggers = Array.from(document.querySelectorAll(
-                    '[aria-expanded="false"], [data-state="closed"]'
+                    '[aria-expanded="false"], [aria-expanded="true"], '
+                    + '[data-state="closed"], [data-state="open"]'
                 ));
                 return triggers
                     .map(el => (el.innerText || '').trim())
@@ -605,8 +610,14 @@ def _expand_accordion_per_item(page) -> list:
                     buf.innerHTML = '';
                 }
 
+                // Match every accordion-shaped trigger regardless of
+                // its current state (open/closed). Items already in
+                // the open state are common — many sites default the
+                // first item of each section open. The previous closed-
+                // only enumeration silently dropped these.
                 const triggers = Array.from(document.querySelectorAll(
-                    '[aria-expanded="false"], [data-state="closed"]'
+                    '[aria-expanded="false"], [aria-expanded="true"], '
+                    + '[data-state="closed"], [data-state="open"]'
                 ));
 
                 const pairs = [];
@@ -615,62 +626,75 @@ def _expand_accordion_per_item(page) -> list:
                 let processed = 0;
                 let captured_to_buffer = 0;
                 let click_failed = 0;
+                let already_open = 0;
+
+                // Helper: walk up 6 levels looking for the
+                // AccordionItem container — the element whose
+                // data-state is 'open' (the click flipped it) or
+                // that already contains one.
+                const walkToContainer = (btn) => {
+                    let p = btn;
+                    for (let i = 0; i < 6 && p && p.tagName !== 'BODY'; i++) {
+                        if (p.getAttribute && (p.getAttribute('data-state') === 'open'
+                            || p.querySelector('[data-state="open"]'))) {
+                            return { container: p, opened: true };
+                        }
+                        p = p.parentElement;
+                    }
+                    return { container: btn.parentElement, opened: false };
+                };
 
                 for (const btn of triggers) {
                     const question = (btn.innerText || '').trim();
                     if (!question || question.length < 4) continue;
                     processed++;
 
-                    // Native click first; fall back to dispatched events
-                    // for stubborn triggers.
-                    try {
-                        btn.click();
-                    } catch (e) {
-                        try {
-                            btn.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
-                            btn.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-                        } catch (e2) {
-                            click_failed++;
-                            continue;
-                        }
-                    }
+                    const startState = btn.getAttribute('data-state')
+                        || (btn.getAttribute('aria-expanded') === 'true' ? 'open' : 'closed');
+                    const isAlreadyOpen = startState === 'open'
+                        || btn.getAttribute('aria-expanded') === 'true';
 
-                    // Poll until panel renders OR we hit MAX_WAIT.
                     let containerText = '';
                     let opened = false;
-                    let waited = 0;
-                    while (waited < MAX_WAIT) {
-                        await new Promise(r => setTimeout(r, POLL_INTERVAL));
-                        waited += POLL_INTERVAL;
 
-                        // Walk up 6 levels looking for a data-state='open'
-                        // ancestor (the AccordionItem container).
-                        let p = btn;
-                        let container = null;
-                        for (let i = 0; i < 6 && p && p.tagName !== 'BODY'; i++) {
-                            if (p.getAttribute && (p.getAttribute('data-state') === 'open'
-                                || p.querySelector('[data-state="open"]'))) {
-                                container = p; opened = true; break;
+                    if (isAlreadyOpen) {
+                        // Already open — skip the click, just read the
+                        // panel content directly. Counts as a "rescued"
+                        // item that the old closed-only enumeration
+                        // would have missed entirely.
+                        already_open++;
+                        // Tiny wait for any deferred renders to settle.
+                        await new Promise(r => setTimeout(r, 80));
+                        const { container, opened: o } = walkToContainer(btn);
+                        opened = o;
+                        if (container) containerText = (container.innerText || '').trim();
+                    } else {
+                        // Native click first; fall back to dispatched
+                        // events for stubborn triggers.
+                        try {
+                            btn.click();
+                        } catch (e) {
+                            try {
+                                btn.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
+                                btn.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+                            } catch (e2) {
+                                click_failed++;
+                                continue;
                             }
-                            p = p.parentElement;
                         }
-                        if (!container) container = btn.parentElement;
-                        if (!container) continue;
-                        containerText = (container.innerText || '').trim();
-                        // Exit once the panel has rendered with answer
-                        // body (more than just the question + whitespace).
-                        if (opened && containerText && containerText !== question
-                            && containerText.length > question.length + 3) {
-                            // Panel rendered with answer body — done.
-                            break;
-                        }
-                        if (opened && waited >= 250) {
-                            // Container opened but text is just the question
-                            // (or empty) after 250ms — likely a banner /
-                            // section divider with no answer body. Stop
-                            // polling and move on rather than waste the
-                            // full 800ms on it.
-                            break;
+                        // Poll until panel renders OR we hit MAX_WAIT.
+                        let waited = 0;
+                        while (waited < MAX_WAIT) {
+                            await new Promise(r => setTimeout(r, POLL_INTERVAL));
+                            waited += POLL_INTERVAL;
+                            const w = walkToContainer(btn);
+                            if (w.container) containerText = (w.container.innerText || '').trim();
+                            opened = w.opened;
+                            if (opened && containerText && containerText !== question
+                                && containerText.length > question.length + 3) {
+                                break;
+                            }
+                            if (opened && waited >= 250) break;
                         }
                     }
 
@@ -700,6 +724,7 @@ def _expand_accordion_per_item(page) -> list:
                     captured: pairs.length,
                     buffered: captured_to_buffer,
                     click_failed,
+                    already_open,
                     pairs,
                 };
             }"""
@@ -709,12 +734,15 @@ def _expand_accordion_per_item(page) -> list:
         # One-line summary so operators can spot under-coverage in
         # the Python service logs. expected vs captured is the key
         # diagnostic — gap reveals exactly how many items the click+
-        # poll loop failed to extract an answer for.
+        # poll loop failed to extract an answer for. already_open
+        # records the count of items we captured without needing
+        # to click (they started in the open state).
         print(
             f"[playwright_scraper] accordion_per_item: "
             f"expected={expected_count} "
             f"processed={result.get('processed', 0)} "
             f"captured={result.get('captured', 0)} "
+            f"already_open={result.get('already_open', 0)} "
             f"click_failed={result.get('click_failed', 0)}"
         )
         return structured_pairs or []
