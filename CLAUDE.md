@@ -2,6 +2,8 @@
 
 > This file is read automatically at the start of every Claude Code session.
 > Keep it updated as decisions are made. Last updated: 2026-02-25 (pipeline complete).
+>
+> **Build & deploy:** see [`knowledge_builder-dev/docs/DEPLOYMENT-PIPELINES.md`](../knowledge_builder-dev/docs/DEPLOYMENT-PIPELINES.md) — RAG runs as a Python service (restart from the jBKB RAG page); exact deploy host TBC.
 
 ---
 
